@@ -14,7 +14,7 @@ function getNameInput() {
   return screen.getByRole('textbox', { name: /name/i });
 }
 
-function getStartTimeInput() {
+function _getStartTimeInput() {
   // datetime-local inputs are not role="textbox"; query by label text directly.
   return document.querySelector('input[type="datetime-local"][required]') as HTMLInputElement;
 }

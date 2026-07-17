@@ -309,3 +309,89 @@ describe('tripStore — alternatives', () => {
     );
   });
 });
+
+describe('tripStore — reorderCheckpoints', () => {
+  function seedThreeCheckpoints() {
+    const a = makeCheckpoint({ id: 'cp-a', name: 'Alpha', startTime: '2026-10-01T08:00:00.000Z' });
+    const b = makeCheckpoint({ id: 'cp-b', name: 'Beta', startTime: '2026-10-02T08:00:00.000Z' });
+    const c = makeCheckpoint({ id: 'cp-c', name: 'Gamma', startTime: '2026-10-03T08:00:00.000Z' });
+    return [a, b, c];
+  }
+
+  it('swaps startTimes of the two affected checkpoints', async () => {
+    const repo = makeMockRepo();
+    const [a, b, c] = seedThreeCheckpoints();
+    useTripStore.setState({ repo, tripId: 'trip-1', checkpoints: [a, b, c] });
+
+    await useTripStore.getState().reorderCheckpoints(0, 2);
+
+    const { checkpoints } = useTripStore.getState();
+    // After swapping index 0 (Alpha) and 2 (Gamma), their startTimes are exchanged.
+    // Re-sorted by startTime: the checkpoint that was "Gamma" now has Alpha's early time
+    // and vice-versa, so the new order by name should be: Gamma, Beta, Alpha.
+    expect(checkpoints.map((c) => c.name)).toEqual(['Gamma', 'Beta', 'Alpha']);
+    // Confirm startTimes were actually swapped on the checkpoint objects
+    const alpha = checkpoints.find((c) => c.name === 'Alpha')!;
+    const gamma = checkpoints.find((c) => c.name === 'Gamma')!;
+    expect(alpha.startTime).toBe('2026-10-03T08:00:00.000Z');
+    expect(gamma.startTime).toBe('2026-10-01T08:00:00.000Z');
+  });
+
+  it('calls repo.updateCheckpoint for each changed checkpoint', async () => {
+    const repo = makeMockRepo();
+    const [a, b, c] = seedThreeCheckpoints();
+    useTripStore.setState({ repo, tripId: 'trip-1', checkpoints: [a, b, c] });
+
+    await useTripStore.getState().reorderCheckpoints(0, 1);
+
+    expect(repo.updateCheckpoint).toHaveBeenCalledTimes(2);
+    expect(repo.updateCheckpoint).toHaveBeenCalledWith(
+      'trip-1',
+      'cp-a',
+      expect.objectContaining({ startTime: '2026-10-02T08:00:00.000Z' })
+    );
+    expect(repo.updateCheckpoint).toHaveBeenCalledWith(
+      'trip-1',
+      'cp-b',
+      expect.objectContaining({ startTime: '2026-10-01T08:00:00.000Z' })
+    );
+  });
+
+  it('is a no-op when fromIndex === toIndex', async () => {
+    const repo = makeMockRepo();
+    const [a, b, c] = seedThreeCheckpoints();
+    useTripStore.setState({ repo, tripId: 'trip-1', checkpoints: [a, b, c] });
+
+    await useTripStore.getState().reorderCheckpoints(1, 1);
+
+    expect(repo.updateCheckpoint).not.toHaveBeenCalled();
+    const { checkpoints } = useTripStore.getState();
+    expect(checkpoints.map((c) => c.name)).toEqual(['Alpha', 'Beta', 'Gamma']);
+  });
+
+  it('optimistically updates state before repo resolves', async () => {
+    const resolvers: Array<() => void> = [];
+    const updateCheckpoint = vi.fn(
+      () =>
+        new Promise<void>((res) => {
+          resolvers.push(res);
+        })
+    );
+    const repo = makeMockRepo({ updateCheckpoint });
+    const [a, b] = seedThreeCheckpoints();
+    useTripStore.setState({ repo, tripId: 'trip-1', checkpoints: [a, b] });
+
+    const promise = useTripStore.getState().reorderCheckpoints(0, 1);
+
+    // State is updated optimistically before the repo resolves
+    const { checkpoints } = useTripStore.getState();
+    const alpha = checkpoints.find((c) => c.name === 'Alpha')!;
+    const beta = checkpoints.find((c) => c.name === 'Beta')!;
+    expect(alpha.startTime).toBe('2026-10-02T08:00:00.000Z');
+    expect(beta.startTime).toBe('2026-10-01T08:00:00.000Z');
+
+    // Resolve both pending repo calls so the promise completes
+    resolvers.forEach((res) => res());
+    await promise;
+  });
+});
