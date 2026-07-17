@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -42,13 +42,15 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    repo.listTrips().then(result => {
+    repo.listTrips().then((result) => {
       if (!cancelled) {
         setTrips(result);
         setLoading(false);
       }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [repo]);
 
   function handleTripClick(trip: Trip) {
@@ -123,13 +125,18 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
               No trips yet. Create your first trip below.
             </Typography>
           ) : (
-            <List disablePadding sx={{ bgcolor: 'background.paper', borderRadius: 2, mb: 3, border: '1px solid', borderColor: 'divider' }}>
+            <List
+              disablePadding
+              sx={{
+                bgcolor: 'background.paper',
+                borderRadius: 2,
+                mb: 3,
+                border: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
               {trips.map((trip, index) => (
-                <ListItem
-                  key={trip.id}
-                  disablePadding
-                  divider={index < trips.length - 1}
-                >
+                <ListItem key={trip.id} disablePadding divider={index < trips.length - 1}>
                   <ListItemButton onClick={() => handleTripClick(trip)} sx={{ py: 1.5 }}>
                     <ListItemText
                       primary={trip.name}
@@ -164,7 +171,7 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
             <TextField
               label="Trip name"
               value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               error={Boolean(errors.name)}
               helperText={errors.name}
               autoFocus
@@ -175,7 +182,7 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
               label="Start date"
               type="date"
               value={form.start}
-              onChange={e => setForm(f => ({ ...f, start: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))}
               fullWidth
               InputLabelProps={{ shrink: true }}
               inputProps={{ 'aria-label': 'Start date' }}
@@ -184,7 +191,7 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
               label="End date"
               type="date"
               value={form.end}
-              onChange={e => setForm(f => ({ ...f, end: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))}
               error={Boolean(errors.end)}
               helperText={errors.end}
               fullWidth
@@ -194,12 +201,10 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeDialog} disabled={submitting}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={submitting}
-          >
+          <Button onClick={closeDialog} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
             Create
           </Button>
         </DialogActions>

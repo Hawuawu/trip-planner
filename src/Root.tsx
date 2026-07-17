@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import App from './App';
 import { TripSelectorScreen } from './components/trips/TripSelectorScreen';
 import { useTripStore } from './store/tripStore';
