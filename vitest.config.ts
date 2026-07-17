@@ -10,9 +10,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      // Thresholds are enforced once the test suite reaches meaningful breadth.
-      // Re-enable when component and store tests are in place:
-      //   lines: 80, functions: 80, branches: 80
+      thresholds: {
+        lines: 85,
+        functions: 80,
+        branches: 80,
+        statements: 85,
+      },
     },
   },
 });
