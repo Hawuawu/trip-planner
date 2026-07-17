@@ -45,7 +45,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   },
 
   selectCheckpoint(id) {
-    set({ selectedId: id });
+    set((s) => ({ selectedId: s.selectedId === id ? null : id }));
   },
 
   async addCheckpoint(cp) {

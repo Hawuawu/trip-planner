@@ -76,6 +76,18 @@ describe('tripStore — selectCheckpoint', () => {
     useTripStore.getState().selectCheckpoint(null);
     expect(useTripStore.getState().selectedId).toBeNull();
   });
+
+  it('deselects (sets to null) when the same id is called again', () => {
+    useTripStore.getState().selectCheckpoint('cp-42');
+    useTripStore.getState().selectCheckpoint('cp-42');
+    expect(useTripStore.getState().selectedId).toBeNull();
+  });
+
+  it('switches to a different id', () => {
+    useTripStore.getState().selectCheckpoint('cp-1');
+    useTripStore.getState().selectCheckpoint('cp-2');
+    expect(useTripStore.getState().selectedId).toBe('cp-2');
+  });
 });
 
 describe('tripStore — addCheckpoint (optimistic)', () => {
