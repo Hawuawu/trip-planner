@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); content=$(echo \"$input\" | jq -r '(.tool_input.new_string // .tool_input.content // \"\")'); if echo \"$content\" | grep -qE 'eslint-disable|eslint-enable'; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"eslint-disable comments are not allowed. Fix the underlying lint issue instead.\"}}'; fi",
+            "statusMessage": "Checking for eslint-disable comments..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | { read -r f; case \"$f\" in *.ts|*.tsx|*.js|*.jsx|*.json|*.css|*.md) /Users/maya/Repositories/trip-planner/node_modules/.bin/prettier --write \"$f\"; case \"$f\" in *.ts|*.tsx|*.js|*.jsx) /Users/maya/Repositories/trip-planner/node_modules/.bin/eslint --fix --max-warnings 0 \"$f\" ;; esac ;; esac; } 2>/dev/null || true",
+            "statusMessage": "Linting and formatting..."
+          }
+        ]
+      }
+    ]
+  }
+}
