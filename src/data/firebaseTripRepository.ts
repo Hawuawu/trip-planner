@@ -7,7 +7,7 @@ import {
   serverTimestamp, Timestamp,
 } from 'firebase/firestore';
 import type { TripRepository } from './TripRepository';
-import type { Trip, Checkpoint, Alternative } from '../types';
+import type { Trip, Checkpoint, Alternative, Booking } from '../types';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -114,5 +114,23 @@ export class FirebaseTripRepository implements TripRepository {
       updatedAt: serverTimestamp(),
     });
     await deleteDoc(altRef);
+  }
+
+  // ── Bookings — to be implemented in the Firebase issue ───────────────────────
+
+  subscribeToBookings(_tripId: string, _cb: (bookings: Booking[]) => void): () => void {
+    throw new Error('Not implemented');
+  }
+
+  async addBooking(_tripId: string, _booking: Omit<Booking, 'id'>): Promise<Booking> {
+    throw new Error('Not implemented');
+  }
+
+  async updateBooking(_tripId: string, _id: string, _changes: Partial<Omit<Booking, 'id'>>): Promise<void> {
+    throw new Error('Not implemented');
+  }
+
+  async deleteBooking(_tripId: string, _id: string): Promise<void> {
+    throw new Error('Not implemented');
   }
 }

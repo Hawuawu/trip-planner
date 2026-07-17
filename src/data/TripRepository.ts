@@ -1,4 +1,4 @@
-import type { Trip, Checkpoint, Alternative } from '../types';
+import type { Trip, Checkpoint, Alternative, Booking } from '../types';
 
 export interface TripRepository {
   getTrip(tripId: string): Promise<Trip>;
@@ -12,4 +12,8 @@ export interface TripRepository {
   addAlternative(tripId: string, alt: Omit<Alternative, 'id'>): Promise<Alternative>;
   deleteAlternative(tripId: string, id: string): Promise<void>;
   promoteAlternative(tripId: string, alternativeId: string, startTime: string): Promise<void>;
+  subscribeToBookings(tripId: string, cb: (bookings: Booking[]) => void): () => void;
+  addBooking(tripId: string, booking: Omit<Booking, 'id'>): Promise<Booking>;
+  updateBooking(tripId: string, id: string, changes: Partial<Omit<Booking, 'id'>>): Promise<void>;
+  deleteBooking(tripId: string, id: string): Promise<void>;
 }

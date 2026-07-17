@@ -11,109 +11,9 @@ import {
 } from '@mui/material';
 import { Timeline } from '@mui/lab';
 import AddIcon from '@mui/icons-material/Add';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { useTripStore } from '../../store/tripStore';
 import { CheckpointItem } from './CheckpointItem';
 import { CheckpointForm } from './CheckpointForm';
-import type { Checkpoint } from '../../types';
-
-interface SortableCheckpointItemProps {
-  cp: Checkpoint;
-  isActive: boolean;
-  isSelected: boolean;
-  isLast: boolean;
-  onSelect: () => void;
-  onDelete: () => void;
-  onAddBetween: () => void;
-  itemRef: (el: HTMLElement | null) => void;
-}
-
-function SortableCheckpointItem({
-  cp,
-  isActive,
-  isSelected,
-  isLast,
-  onSelect,
-  onDelete,
-  onAddBetween,
-  itemRef,
-}: SortableCheckpointItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: cp.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <Box
-      ref={(el) => {
-        setNodeRef(el as HTMLElement | null);
-        itemRef(el as HTMLElement | null);
-      }}
-      style={style}
-      sx={{ display: 'flex', alignItems: 'flex-start' }}
-    >
-      <Box
-        role="button"
-        aria-label="drag handle"
-        tabIndex={0}
-        sx={{
-          display: { xs: 'none', sm: 'flex' },
-          alignItems: 'center',
-          pt: 1.5,
-          pl: 0.5,
-          cursor: 'grab',
-          color: 'text.disabled',
-          '&:active': { cursor: 'grabbing' },
-        }}
-        {...attributes}
-        {...listeners}
-      >
-        <DragIndicatorIcon fontSize="small" />
-      </Box>
-      <Box sx={{ flex: 1 }}>
-        <CheckpointItem
-          checkpoint={cp}
-          isActive={isActive}
-          isSelected={isSelected}
-          isLast={isLast}
-          onSelect={onSelect}
-          onDelete={onDelete}
-        />
-        {!isLast && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', my: -1 }}>
-            <Button
-              size="small"
-              sx={{
-                minWidth: 0,
-                px: 1,
-                py: 0,
-                opacity: 0,
-                '&:hover': { opacity: 1 },
-                fontSize: '0.7rem',
-                color: 'text.secondary',
-              }}
-              onClick={onAddBetween}
-            >
-              + add between
-            </Button>
-          </Box>
-        )}
-      </Box>
-    </Box>
-  );
-}
 
 export function TimelineView() {
   const theme = useTheme();
@@ -129,7 +29,6 @@ export function TimelineView() {
     undoDelete,
     undoCheckpoint,
     clearUndo,
-    reorderCheckpoints,
   } = useTripStore();
 
   const [adding, setAdding] = useState(false);
@@ -141,15 +40,16 @@ export function TimelineView() {
     checkpoints.find((c) => c.startTime > now.current)?.id ??
     checkpoints[checkpoints.length - 1]?.id;
 
-  // Capture activeId at mount so the scroll-on-mount effect has a stable ref dep
-  const activeIdAtMount = useRef(activeId);
+  // Capture the initial active id in a ref so the scroll effect can include
+  // it in the dependency array without re-triggering on checkpoint changes.
+  const initialActiveId = useRef(activeId);
 
   useEffect(() => {
-    const id = activeIdAtMount.current;
+    const id = initialActiveId.current;
     if (id) {
       itemRefs.current.get(id)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
-  }, [activeIdAtMount]); // ref is stable — effect runs once on mount
+  }, []); // runs once on mount — initialActiveId.current is stable
 
   function defaultStartForInsert(afterIndex: number | null): string {
     if (afterIndex === null || checkpoints.length === 0) return now.current;
@@ -158,16 +58,6 @@ export function TimelineView() {
     if (!before) return after.startTime;
     const midMs = (new Date(after.startTime).getTime() + new Date(before.startTime).getTime()) / 2;
     return new Date(midMs).toISOString();
-  }
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const fromIndex = checkpoints.findIndex((c) => c.id === active.id);
-    const toIndex = checkpoints.findIndex((c) => c.id === over.id);
-    if (fromIndex !== -1 && toIndex !== -1) {
-      void reorderCheckpoints(fromIndex, toIndex);
-    }
   }
 
   const editing = selectedId ? checkpoints.find((c) => c.id === selectedId) : null;
@@ -221,34 +111,46 @@ export function TimelineView() {
           </Button>
         </Box>
       ) : (
-        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext
-            items={checkpoints.map((c) => c.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <Timeline sx={{ p: 0, m: 0, pt: 2 }}>
-              {checkpoints.map((cp, i) => (
-                <SortableCheckpointItem
-                  key={cp.id}
-                  cp={cp}
-                  isActive={cp.id === activeId}
-                  isSelected={cp.id === selectedId}
-                  isLast={i === checkpoints.length - 1}
-                  onSelect={() => selectCheckpoint(cp.id === selectedId ? null : cp.id)}
-                  onDelete={() => deleteCheckpoint(cp.id)}
-                  onAddBetween={() => {
+        <Timeline sx={{ p: 0, m: 0, pt: 2 }}>
+          {checkpoints.map((cp, i) => (
+            <Box
+              key={cp.id}
+              ref={(el) => {
+                if (el) itemRefs.current.set(cp.id, el as HTMLElement);
+                else itemRefs.current.delete(cp.id);
+              }}
+            >
+              <CheckpointItem
+                checkpoint={cp}
+                isActive={cp.id === activeId}
+                isSelected={cp.id === selectedId}
+                isLast={i === checkpoints.length - 1}
+                onSelect={() => selectCheckpoint(cp.id === selectedId ? null : cp.id)}
+                onDelete={() => deleteCheckpoint(cp.id)}
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: -1 }}>
+                <Button
+                  size="small"
+                  sx={{
+                    minWidth: 0,
+                    px: 1,
+                    py: 0,
+                    opacity: 0,
+                    '&:hover': { opacity: 1 },
+                    fontSize: '0.7rem',
+                    color: 'text.secondary',
+                  }}
+                  onClick={() => {
                     setInsertAfterIndex(i);
                     setAdding(true);
                   }}
-                  itemRef={(el) => {
-                    if (el) itemRefs.current.set(cp.id, el);
-                    else itemRefs.current.delete(cp.id);
-                  }}
-                />
-              ))}
-            </Timeline>
-          </SortableContext>
-        </DndContext>
+                >
+                  + add between
+                </Button>
+              </Box>
+            </Box>
+          ))}
+        </Timeline>
       )}
 
       {checkpoints.length > 0 && (

@@ -1,5 +1,5 @@
 import type { TripRepository } from './TripRepository';
-import type { Trip, Checkpoint, Alternative } from '../types';
+import type { Trip, Checkpoint, Alternative, Booking } from '../types';
 
 const DEMO_TRIP: Trip = {
   id: 'demo',
@@ -26,7 +26,7 @@ const SEED_ALTERNATIVES: Alternative[] = [
 
 const LS_CP = 'trip-planner:checkpoints';
 const LS_ALT = 'trip-planner:alternatives';
-const LS_TRIPS = 'trip-planner:trips';
+const LS_BOOKINGS = 'trip-planner:bookings';
 
 function loadCp(): Checkpoint[] {
   try {
@@ -50,50 +50,24 @@ function loadAlt(): Alternative[] {
 
 function saveAlt(a: Alternative[]) { localStorage.setItem(LS_ALT, JSON.stringify(a)); }
 
-function loadTrips(): Trip[] {
+function loadBookings(): Booking[] {
   try {
-    const raw = localStorage.getItem(LS_TRIPS);
-    return raw ? (JSON.parse(raw) as Trip[]) : [];
+    const raw = localStorage.getItem(LS_BOOKINGS);
+    return raw ? (JSON.parse(raw) as Booking[]) : [];
   } catch {
     return [];
   }
 }
 
-function saveTrips(trips: Trip[]) { localStorage.setItem(LS_TRIPS, JSON.stringify(trips)); }
+function saveBookings(b: Booking[]) { localStorage.setItem(LS_BOOKINGS, JSON.stringify(b)); }
 
 export class LocalTripRepository implements TripRepository {
   private cpSubs = new Map<string, Set<(c: Checkpoint[]) => void>>();
   private altSubs = new Map<string, Set<(a: Alternative[]) => void>>();
+  private bookingSubs = new Map<string, Set<(b: Booking[]) => void>>();
 
   async getTrip(tripId: string): Promise<Trip> {
-    const trips = loadTrips();
-    const found = trips.find(t => t.id === tripId);
-    if (found) return { ...found };
-    // Fall back to demo trip shape for backward compatibility
     return { ...DEMO_TRIP, id: tripId };
-  }
-
-  async listTrips(): Promise<Trip[]> {
-    const trips = loadTrips();
-    return trips.length > 0 ? [...trips] : [{ ...DEMO_TRIP }];
-  }
-
-  async createTrip(name: string, dateRange: { start: string; end: string }): Promise<Trip> {
-    const newTrip: Trip = {
-      id: `trip-${Date.now()}`,
-      name,
-      dateRange,
-      memberIds: ['local-user'],
-    };
-    const trips = loadTrips();
-    // If no trips were persisted yet (first time), also include the demo trip
-    // so that listTrips doesn't lose it after the first createTrip call.
-    if (trips.length === 0) {
-      saveTrips([{ ...DEMO_TRIP }, newTrip]);
-    } else {
-      saveTrips([...trips, newTrip]);
-    }
-    return { ...newTrip };
   }
 
   subscribeToCheckpoints(tripId: string, cb: (c: Checkpoint[]) => void): () => void {
@@ -156,5 +130,33 @@ export class LocalTripRepository implements TripRepository {
     if (!alt) throw new Error('Alternative not found');
     await this.addCheckpoint(tripId, { type: alt.type, name: alt.name, startTime, location: alt.location, notes: alt.notes });
     await this.deleteAlternative(tripId, alternativeId);
+  }
+
+  subscribeToBookings(tripId: string, cb: (b: Booking[]) => void): () => void {
+    if (!this.bookingSubs.has(tripId)) this.bookingSubs.set(tripId, new Set());
+    this.bookingSubs.get(tripId)!.add(cb);
+    cb(loadBookings());
+    return () => { this.bookingSubs.get(tripId)?.delete(cb); };
+  }
+
+  private notifyBookings(tripId: string) {
+    this.bookingSubs.get(tripId)?.forEach(cb => cb(loadBookings()));
+  }
+
+  async addBooking(tripId: string, booking: Omit<Booking, 'id'>): Promise<Booking> {
+    const saved: Booking = { ...booking, id: `local-booking-${Date.now()}` };
+    saveBookings([...loadBookings(), saved]);
+    this.notifyBookings(tripId);
+    return saved;
+  }
+
+  async updateBooking(tripId: string, id: string, changes: Partial<Omit<Booking, 'id'>>): Promise<void> {
+    saveBookings(loadBookings().map(b => b.id === id ? { ...b, ...changes } : b));
+    this.notifyBookings(tripId);
+  }
+
+  async deleteBooking(tripId: string, id: string): Promise<void> {
+    saveBookings(loadBookings().filter(b => b.id !== id));
+    this.notifyBookings(tripId);
   }
 }

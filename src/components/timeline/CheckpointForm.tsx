@@ -3,6 +3,7 @@ import {
   Box, TextField, MenuItem, Button, Stack, Typography,
 } from '@mui/material';
 import type { Checkpoint, CheckpointType } from '../../types';
+import { BookingPanel } from './BookingPanel';
 
 const TYPES: { value: CheckpointType; label: string }[] = [
   { value: 'flight', label: 'Flight' },
@@ -16,7 +17,7 @@ const TYPES: { value: CheckpointType; label: string }[] = [
 type FormData = Omit<Checkpoint, 'id' | 'updatedAt'>;
 
 interface Props {
-  initial?: Partial<FormData>;
+  initial?: Partial<FormData> & { id?: string };
   defaultStartTime?: string;
   onSave(data: FormData): void;
   onCancel(): void;
@@ -153,6 +154,13 @@ export function CheckpointForm({ initial, defaultStartTime, onSave, onCancel, ti
           <Button type="submit" variant="contained" size="small">Save</Button>
         </Stack>
       </Stack>
+
+      {initial?.id && (
+        <BookingPanel
+          checkpointId={initial.id}
+          linkedBookingId={initial.linkedBookingId}
+        />
+      )}
     </Box>
   );
 }
