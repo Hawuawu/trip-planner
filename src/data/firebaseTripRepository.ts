@@ -39,6 +39,14 @@ export class FirebaseTripRepository implements TripRepository {
     return { id: snap.id, name: d.name, dateRange: d.dateRange, memberIds: d.memberIds ?? [] };
   }
 
+  async listTrips(): Promise<Trip[]> {
+    throw new Error('Not implemented');
+  }
+
+  async createTrip(_name: string, _dateRange: { start: string; end: string }): Promise<Trip> {
+    throw new Error('Not implemented');
+  }
+
   subscribeToCheckpoints(tripId: string, cb: (checkpoints: Checkpoint[]) => void): () => void {
     return onSnapshot(collection(this.db, 'trips', tripId, 'checkpoints'), snap => {
       const checkpoints: Checkpoint[] = snap.docs.map(d => ({
