@@ -1,8 +1,20 @@
 import { useState } from 'react';
 import {
-  Box, Typography, List, ListItem, ListItemIcon, ListItemText,
-  IconButton, Button, Dialog, DialogTitle, DialogContent, TextField,
-  DialogActions, MenuItem, Stack,
+  Box,
+  Typography,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  IconButton,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  TextField,
+  DialogActions,
+  MenuItem,
+  Stack,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
@@ -12,11 +24,11 @@ import type { CheckpointType } from '../../types';
 
 const TYPES: { value: CheckpointType; label: string }[] = [
   { value: 'flight', label: 'Flight' },
-  { value: 'train',  label: 'Train' },
-  { value: 'metro',  label: 'Metro' },
-  { value: 'hotel',  label: 'Hotel' },
-  { value: 'poi',    label: 'Point of Interest' },
-  { value: 'other',  label: 'Other' },
+  { value: 'train', label: 'Train' },
+  { value: 'metro', label: 'Metro' },
+  { value: 'hotel', label: 'Hotel' },
+  { value: 'poi', label: 'Point of Interest' },
+  { value: 'other', label: 'Other' },
 ];
 
 interface AddFormState {
@@ -44,7 +56,7 @@ export function AlternativesShelf() {
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState<AddFormState>(EMPTY_FORM);
 
-  const promoting = alternatives.find(a => a.id === promoteId);
+  const promoting = alternatives.find((a) => a.id === promoteId);
 
   function handlePromote() {
     if (!promoteId || !promoteTime) return;
@@ -83,7 +95,9 @@ export function AlternativesShelf() {
 
   return (
     <Box sx={{ p: 2, height: '100%', overflowY: 'auto' }}>
-      <Typography variant="h6" gutterBottom>Alternatives</Typography>
+      <Typography variant="h6" gutterBottom>
+        Alternatives
+      </Typography>
       <Typography variant="body2" color="text.secondary" mb={2}>
         Shortlisted places — not on the timeline yet.
       </Typography>
@@ -99,10 +113,12 @@ export function AlternativesShelf() {
       </Button>
 
       {alternatives.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">No alternatives saved.</Typography>
+        <Typography variant="body2" color="text.secondary">
+          No alternatives saved.
+        </Typography>
       ) : (
         <List disablePadding>
-          {alternatives.map(alt => (
+          {alternatives.map((alt) => (
             <ListItem
               key={alt.id}
               disableGutters
@@ -116,10 +132,18 @@ export function AlternativesShelf() {
               }}
               secondaryAction={
                 <Box>
-                  <IconButton size="small" onClick={() => setPromoteId(alt.id)} title="Add to timeline">
+                  <IconButton
+                    size="small"
+                    onClick={() => setPromoteId(alt.id)}
+                    title="Add to timeline"
+                  >
                     <AddCircleOutlineIcon fontSize="small" />
                   </IconButton>
-                  <IconButton size="small" onClick={() => deleteAlternative(alt.id)}>
+                  <IconButton
+                    size="small"
+                    aria-label="Delete alternative"
+                    onClick={() => deleteAlternative(alt.id)}
+                  >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
                 </Box>
@@ -148,19 +172,21 @@ export function AlternativesShelf() {
               select
               label="Type"
               value={form.type}
-              onChange={e => setForm(f => ({ ...f, type: e.target.value as CheckpointType }))}
+              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as CheckpointType }))}
               size="small"
               fullWidth
             >
-              {TYPES.map(t => (
-                <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+              {TYPES.map((t) => (
+                <MenuItem key={t.value} value={t.value}>
+                  {t.label}
+                </MenuItem>
               ))}
             </TextField>
 
             <TextField
               label="Name"
               value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               size="small"
               fullWidth
               required
@@ -171,7 +197,7 @@ export function AlternativesShelf() {
             <TextField
               label="Location label"
               value={form.locLabel}
-              onChange={e => setForm(f => ({ ...f, locLabel: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, locLabel: e.target.value }))}
               size="small"
               fullWidth
               placeholder="e.g. Shinjuku, Tokyo"
@@ -181,7 +207,7 @@ export function AlternativesShelf() {
               <TextField
                 label="Lat"
                 value={form.locLat}
-                onChange={e => setForm(f => ({ ...f, locLat: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, locLat: e.target.value }))}
                 size="small"
                 type="number"
                 inputProps={{ step: 'any' }}
@@ -189,7 +215,7 @@ export function AlternativesShelf() {
               <TextField
                 label="Lng"
                 value={form.locLng}
-                onChange={e => setForm(f => ({ ...f, locLng: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, locLng: e.target.value }))}
                 size="small"
                 type="number"
                 inputProps={{ step: 'any' }}
@@ -199,7 +225,7 @@ export function AlternativesShelf() {
             <TextField
               label="Notes"
               value={form.notes}
-              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               size="small"
               fullWidth
               multiline
@@ -223,7 +249,7 @@ export function AlternativesShelf() {
             label="Start time"
             type="datetime-local"
             value={promoteTime}
-            onChange={e => setPromoteTime(e.target.value)}
+            onChange={(e) => setPromoteTime(e.target.value)}
             fullWidth
             size="small"
             InputLabelProps={{ shrink: true }}
@@ -232,7 +258,9 @@ export function AlternativesShelf() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPromoteId(null)}>Cancel</Button>
-          <Button onClick={handlePromote} variant="contained" disabled={!promoteTime}>Add</Button>
+          <Button onClick={handlePromote} variant="contained" disabled={!promoteTime}>
+            Add
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

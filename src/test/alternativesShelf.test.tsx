@@ -72,12 +72,8 @@ describe('AlternativesShelf', () => {
 
     renderWithProviders(<AlternativesShelf />);
 
-    // There are two icon buttons per item: promote and delete.
-    // The delete button has no title; the promote button has title "Add to timeline".
-    const iconButtons = screen.getAllByRole('button');
-    const deleteBtn = iconButtons.find((b) => !b.getAttribute('title'));
-    expect(deleteBtn).toBeTruthy();
-    fireEvent.click(deleteBtn!);
+    const deleteBtn = screen.getByRole('button', { name: /delete alternative/i });
+    fireEvent.click(deleteBtn);
     expect(spy).toHaveBeenCalledWith('a1');
     spy.mockRestore();
   });
