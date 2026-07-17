@@ -49,6 +49,8 @@ const authInitialState = {
 };
 
 export function resetStores() {
-  useTripStore.setState(tripInitialState, true);
-  useAuthStore.setState(authInitialState, true);
+  // Use merge mode (no replace flag) so action functions defined in the store
+  // are preserved. Only the data slices are reset between tests.
+  useTripStore.setState(tripInitialState);
+  useAuthStore.setState(authInitialState);
 }
