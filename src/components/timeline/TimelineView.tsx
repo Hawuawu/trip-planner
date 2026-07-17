@@ -1,5 +1,14 @@
-import { useState, useRef } from 'react';
-import { Box, Button, Fab, Snackbar, Typography, Drawer, useMediaQuery, useTheme } from '@mui/material';
+import { useState, useRef, useEffect } from 'react';
+import {
+  Box,
+  Button,
+  Fab,
+  Snackbar,
+  Typography,
+  Drawer,
+  useMediaQuery,
+  useTheme,
+} from '@mui/material';
 import { Timeline } from '@mui/lab';
 import AddIcon from '@mui/icons-material/Add';
 import { useTripStore } from '../../store/tripStore';
@@ -10,13 +19,32 @@ export function TimelineView() {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const { checkpoints, selectedId, selectCheckpoint, addCheckpoint, updateCheckpoint, deleteCheckpoint, undoDelete, undoCheckpoint, clearUndo } = useTripStore();
+  const {
+    checkpoints,
+    selectedId,
+    selectCheckpoint,
+    addCheckpoint,
+    updateCheckpoint,
+    deleteCheckpoint,
+    undoDelete,
+    undoCheckpoint,
+    clearUndo,
+  } = useTripStore();
 
   const [adding, setAdding] = useState(false);
   const [insertAfterIndex, setInsertAfterIndex] = useState<number | null>(null);
   const now = useRef(new Date().toISOString());
+  const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
 
-  const activeId = checkpoints.find(c => c.startTime > now.current)?.id ?? checkpoints[checkpoints.length - 1]?.id;
+  const activeId =
+    checkpoints.find((c) => c.startTime > now.current)?.id ??
+    checkpoints[checkpoints.length - 1]?.id;
+
+  useEffect(() => {
+    if (activeId) {
+      itemRefs.current.get(activeId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, []); // intentionally empty — scroll once on mount only
 
   function defaultStartForInsert(afterIndex: number | null): string {
     if (afterIndex === null || checkpoints.length === 0) return now.current;
@@ -27,20 +55,26 @@ export function TimelineView() {
     return new Date(midMs).toISOString();
   }
 
-  const editing = selectedId ? checkpoints.find(c => c.id === selectedId) : null;
+  const editing = selectedId ? checkpoints.find((c) => c.id === selectedId) : null;
 
   const drawerContent = adding ? (
     <CheckpointForm
       title="Add checkpoint"
       defaultStartTime={defaultStartForInsert(insertAfterIndex)}
-      onSave={async data => { await addCheckpoint(data); setAdding(false); }}
+      onSave={async (data) => {
+        await addCheckpoint(data);
+        setAdding(false);
+      }}
       onCancel={() => setAdding(false)}
     />
   ) : editing ? (
     <CheckpointForm
       title="Edit checkpoint"
       initial={editing}
-      onSave={async data => { await updateCheckpoint(editing.id, data); selectCheckpoint(null); }}
+      onSave={async (data) => {
+        await updateCheckpoint(editing.id, data);
+        selectCheckpoint(null);
+      }}
       onCancel={() => selectCheckpoint(null)}
     />
   ) : null;
@@ -48,16 +82,39 @@ export function TimelineView() {
   return (
     <Box sx={{ position: 'relative', height: '100%', overflowY: 'auto' }}>
       {checkpoints.length === 0 ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '80%', gap: 2, color: 'text.secondary' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '80%',
+            gap: 2,
+            color: 'text.secondary',
+          }}
+        >
           <Typography variant="h6">No checkpoints yet</Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setInsertAfterIndex(null); setAdding(true); }}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setInsertAfterIndex(null);
+              setAdding(true);
+            }}
+          >
             Add first checkpoint
           </Button>
         </Box>
       ) : (
         <Timeline sx={{ p: 0, m: 0, pt: 2 }}>
           {checkpoints.map((cp, i) => (
-            <Box key={cp.id}>
+            <Box
+              key={cp.id}
+              ref={(el) => {
+                if (el) itemRefs.current.set(cp.id, el as HTMLElement);
+                else itemRefs.current.delete(cp.id);
+              }}
+            >
               <CheckpointItem
                 checkpoint={cp}
                 isActive={cp.id === activeId}
@@ -69,8 +126,19 @@ export function TimelineView() {
               <Box sx={{ display: 'flex', justifyContent: 'center', my: -1 }}>
                 <Button
                   size="small"
-                  sx={{ minWidth: 0, px: 1, py: 0, opacity: 0, '&:hover': { opacity: 1 }, fontSize: '0.7rem', color: 'text.secondary' }}
-                  onClick={() => { setInsertAfterIndex(i); setAdding(true); }}
+                  sx={{
+                    minWidth: 0,
+                    px: 1,
+                    py: 0,
+                    opacity: 0,
+                    '&:hover': { opacity: 1 },
+                    fontSize: '0.7rem',
+                    color: 'text.secondary',
+                  }}
+                  onClick={() => {
+                    setInsertAfterIndex(i);
+                    setAdding(true);
+                  }}
                 >
                   + add between
                 </Button>
@@ -85,7 +153,10 @@ export function TimelineView() {
           color="secondary"
           size="medium"
           sx={{ position: 'fixed', bottom: isPhone ? 72 : 24, right: 24 }}
-          onClick={() => { setInsertAfterIndex(checkpoints.length - 1); setAdding(true); }}
+          onClick={() => {
+            setInsertAfterIndex(checkpoints.length - 1);
+            setAdding(true);
+          }}
         >
           <AddIcon />
         </Fab>
@@ -94,8 +165,18 @@ export function TimelineView() {
       <Drawer
         anchor={isPhone ? 'bottom' : 'right'}
         open={!!(adding || (selectedId && editing))}
-        onClose={() => { setAdding(false); selectCheckpoint(null); }}
-        PaperProps={{ sx: { width: isPhone ? '100%' : 380, borderTopLeftRadius: isPhone ? 12 : 0, borderTopRightRadius: isPhone ? 12 : 0, maxHeight: isPhone ? '85vh' : '100vh' } }}
+        onClose={() => {
+          setAdding(false);
+          selectCheckpoint(null);
+        }}
+        PaperProps={{
+          sx: {
+            width: isPhone ? '100%' : 380,
+            borderTopLeftRadius: isPhone ? 12 : 0,
+            borderTopRightRadius: isPhone ? 12 : 0,
+            maxHeight: isPhone ? '85vh' : '100vh',
+          },
+        }}
       >
         {drawerContent}
       </Drawer>
