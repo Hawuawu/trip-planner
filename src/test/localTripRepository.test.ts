@@ -288,3 +288,73 @@ describe('LocalTripRepository — alternatives', () => {
     ).rejects.toThrow('Alternative not found');
   });
 });
+
+// ── error recovery (catch branches) ──────────────────────────────────────────
+
+describe('LocalTripRepository — corrupted localStorage recovery', () => {
+  it('falls back to seed checkpoints when stored checkpoint JSON is invalid', () => {
+    // Corrupt the checkpoints entry before the repo reads it
+    localStorage.setItem('trip-planner:checkpoints', 'NOT_VALID_JSON{{{');
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToCheckpoints('t1', cb);
+    const cps = cb.mock.calls[0][0];
+    // Should recover with seed data (non-empty array of valid checkpoints)
+    expect(Array.isArray(cps)).toBe(true);
+    expect(cps.length).toBeGreaterThan(0);
+  });
+
+  it('falls back to seed alternatives when stored alternatives JSON is invalid', () => {
+    // Corrupt the alternatives entry before the repo reads it
+    localStorage.setItem('trip-planner:alternatives', 'NOT_VALID_JSON{{{');
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToAlternatives('t1', cb);
+    const alts = cb.mock.calls[0][0];
+    // Should recover with seed data (non-empty array of valid alternatives)
+    expect(Array.isArray(alts)).toBe(true);
+    expect(alts.length).toBeGreaterThan(0);
+  });
+});
+
+// ── multiple subscribers (covers the "already has tripId" branch) ─────────────
+
+describe('LocalTripRepository — multiple subscribers', () => {
+  it('notifies a second checkpoint subscriber on the same tripId', async () => {
+    const repo = makeRepo();
+    const cb1 = vi.fn();
+    const cb2 = vi.fn();
+    // First subscribe populates the cpSubs Map entry
+    repo.subscribeToCheckpoints('t1', cb1);
+    // Second subscribe hits the else branch (Map already has 't1')
+    repo.subscribeToCheckpoints('t1', cb2);
+    expect(cb2).toHaveBeenCalledTimes(1);
+    await repo.addCheckpoint('t1', {
+      type: 'poi',
+      name: 'Arashiyama',
+      startTime: '2026-10-07T11:00:00.000Z',
+    });
+    // Both callbacks must have been notified about the new checkpoint
+    const latest1 = cb1.mock.calls[cb1.mock.calls.length - 1][0];
+    const latest2 = cb2.mock.calls[cb2.mock.calls.length - 1][0];
+    expect(latest1.some((c: { name: string }) => c.name === 'Arashiyama')).toBe(true);
+    expect(latest2.some((c: { name: string }) => c.name === 'Arashiyama')).toBe(true);
+  });
+
+  it('notifies a second alternatives subscriber on the same tripId', async () => {
+    const repo = makeRepo();
+    const cb1 = vi.fn();
+    const cb2 = vi.fn();
+    // First subscribe populates the altSubs Map entry
+    repo.subscribeToAlternatives('t1', cb1);
+    // Second subscribe hits the else branch (Map already has 't1')
+    repo.subscribeToAlternatives('t1', cb2);
+    expect(cb2).toHaveBeenCalledTimes(1);
+    await repo.addAlternative('t1', { type: 'poi', name: 'Gion Corner' });
+    // Both callbacks must have been notified about the new alternative
+    const latest1 = cb1.mock.calls[cb1.mock.calls.length - 1][0];
+    const latest2 = cb2.mock.calls[cb2.mock.calls.length - 1][0];
+    expect(latest1.some((a: { name: string }) => a.name === 'Gion Corner')).toBe(true);
+    expect(latest2.some((a: { name: string }) => a.name === 'Gion Corner')).toBe(true);
+  });
+});
