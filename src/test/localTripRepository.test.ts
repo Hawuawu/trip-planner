@@ -358,3 +358,56 @@ describe('LocalTripRepository — multiple subscribers', () => {
     expect(latest2.some((a: { name: string }) => a.name === 'Gion Corner')).toBe(true);
   });
 });
+
+// ── createTrip and listTrips ──────────────────────────────────────────────────
+
+describe('LocalTripRepository — createTrip', () => {
+  it('returns a Trip with a generated id and the provided name and dateRange', async () => {
+    const repo = makeRepo();
+    const trip = await repo.createTrip('Osaka Adventure', { start: '2027-03-01', end: '2027-03-07' });
+    expect(trip.id).toMatch(/^trip-\d+$/);
+    expect(trip.name).toBe('Osaka Adventure');
+    expect(trip.dateRange.start).toBe('2027-03-01');
+    expect(trip.dateRange.end).toBe('2027-03-07');
+  });
+
+  it('persists the new trip so listTrips includes it', async () => {
+    const repo = makeRepo();
+    await repo.createTrip('Osaka Adventure', { start: '2027-03-01', end: '2027-03-07' });
+    const trips = await repo.listTrips();
+    expect(trips.some(t => t.name === 'Osaka Adventure')).toBe(true);
+  });
+
+  it('persists across repo instances (via localStorage)', async () => {
+    const repo1 = makeRepo();
+    await repo1.createTrip('Seoul Spring', { start: '2027-04-01', end: '2027-04-10' });
+    const repo2 = makeRepo();
+    const trips = await repo2.listTrips();
+    expect(trips.some(t => t.name === 'Seoul Spring')).toBe(true);
+  });
+});
+
+describe('LocalTripRepository — listTrips', () => {
+  it('returns the demo trip when localStorage is empty', async () => {
+    const repo = makeRepo();
+    const trips = await repo.listTrips();
+    expect(trips.length).toBeGreaterThanOrEqual(1);
+    expect(trips.some(t => t.name === 'Japan 2026')).toBe(true);
+  });
+
+  it('includes newly created trips after createTrip', async () => {
+    const repo = makeRepo();
+    await repo.createTrip('New Adventure', { start: '2028-01-01', end: '2028-01-05' });
+    const trips = await repo.listTrips();
+    expect(trips.some(t => t.name === 'New Adventure')).toBe(true);
+  });
+
+  it('returns multiple trips when several have been created', async () => {
+    const repo = makeRepo();
+    await repo.createTrip('Trip A', { start: '2027-01-01', end: '2027-01-05' });
+    await repo.createTrip('Trip B', { start: '2027-02-01', end: '2027-02-05' });
+    const trips = await repo.listTrips();
+    expect(trips.some(t => t.name === 'Trip A')).toBe(true);
+    expect(trips.some(t => t.name === 'Trip B')).toBe(true);
+  });
+});

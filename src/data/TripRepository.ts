@@ -2,6 +2,8 @@ import type { Trip, Checkpoint, Alternative } from '../types';
 
 export interface TripRepository {
   getTrip(tripId: string): Promise<Trip>;
+  listTrips(): Promise<Trip[]>;
+  createTrip(name: string, dateRange: { start: string; end: string }): Promise<Trip>;
   subscribeToCheckpoints(tripId: string, cb: (checkpoints: Checkpoint[]) => void): () => void;
   addCheckpoint(tripId: string, cp: Omit<Checkpoint, 'id' | 'updatedAt'>): Promise<Checkpoint>;
   updateCheckpoint(tripId: string, id: string, changes: Partial<Omit<Checkpoint, 'id' | 'updatedAt'>>): Promise<void>;
