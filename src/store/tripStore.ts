@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import type { TripRepository } from '../data/TripRepository';
-import type { Trip, Checkpoint, Alternative } from '../types';
+import type { Trip, Checkpoint, Alternative, Booking } from '../types';
 
 interface TripState {
   trip: Trip | null;
   checkpoints: Checkpoint[];
   alternatives: Alternative[];
+  bookings: Booking[];
   selectedId: string | null;
   undoCheckpoint: Checkpoint | null;
   repo: TripRepository | null;
@@ -26,12 +27,17 @@ interface TripState {
   addAlternative(alt: Omit<Alternative, 'id'>): Promise<void>;
   deleteAlternative(id: string): Promise<void>;
   promoteAlternative(alternativeId: string, startTime: string): Promise<void>;
+
+  addBooking(booking: Omit<Booking, 'id'>): Promise<Booking>;
+  updateBooking(id: string, changes: Partial<Omit<Booking, 'id'>>): Promise<void>;
+  deleteBooking(id: string): Promise<void>;
 }
 
 export const useTripStore = create<TripState>((set, get) => ({
   trip: null,
   checkpoints: [],
   alternatives: [],
+  bookings: [],
   selectedId: null,
   undoCheckpoint: null,
   repo: null,
@@ -42,10 +48,12 @@ export const useTripStore = create<TripState>((set, get) => ({
     repo.getTrip(tripId).then((trip) => set({ trip }));
     repo.subscribeToCheckpoints(tripId, (checkpoints) => set({ checkpoints }));
     repo.subscribeToAlternatives(tripId, (alternatives) => set({ alternatives }));
+    repo.subscribeToBookings(tripId, (bookings) => set({ bookings }));
   },
 
   selectCheckpoint(id) {
-    set((s) => ({ selectedId: s.selectedId === id ? null : id }));
+    const { selectedId } = get();
+    set({ selectedId: selectedId === id ? null : id });
   },
 
   async addCheckpoint(cp) {
@@ -135,5 +143,36 @@ export const useTripStore = create<TripState>((set, get) => ({
     if (!repo || !tripId) return;
     set((s) => ({ alternatives: s.alternatives.filter((a) => a.id !== alternativeId) }));
     await repo.promoteAlternative(tripId, alternativeId, startTime);
+  },
+
+  async addBooking(booking) {
+    const { repo, tripId, bookings } = get();
+    if (!repo || !tripId) throw new Error('No repo or tripId');
+    const optimistic: Booking = { ...booking, id: `__optimistic-booking-${Date.now()}` };
+    set({ bookings: [...bookings, optimistic] });
+    const saved = await repo.addBooking(tripId, booking);
+    set((s) => ({ bookings: s.bookings.map((b) => (b.id === optimistic.id ? saved : b)) }));
+    return saved;
+  },
+
+  async updateBooking(id, changes) {
+    const { repo, tripId, bookings } = get();
+    if (!repo || !tripId) return;
+    const prev = bookings.find((b) => b.id === id);
+    set({
+      bookings: bookings.map((b) => (b.id === id ? { ...b, ...changes } : b)),
+    });
+    try {
+      await repo.updateBooking(tripId, id, changes);
+    } catch {
+      if (prev) set((s) => ({ bookings: s.bookings.map((b) => (b.id === id ? prev : b)) }));
+    }
+  },
+
+  async deleteBooking(id) {
+    const { repo, tripId, bookings } = get();
+    if (!repo || !tripId) return;
+    set({ bookings: bookings.filter((b) => b.id !== id) });
+    await repo.deleteBooking(tripId, id);
   },
 }));

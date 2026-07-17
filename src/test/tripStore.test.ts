@@ -37,6 +37,10 @@ function makeMockRepo(overrides: Partial<TripRepository> = {}): TripRepository {
     addAlternative: vi.fn().mockResolvedValue({ id: 'alt-saved-1', type: 'poi', name: 'New Alt' }),
     deleteAlternative: vi.fn().mockResolvedValue(undefined),
     promoteAlternative: vi.fn().mockResolvedValue(undefined),
+    subscribeToBookings: vi.fn().mockReturnValue(() => {}),
+    addBooking: vi.fn().mockResolvedValue({ id: 'bk-saved-1', provider: 'Japan Airlines', confirmationNumber: 'JL-001' }),
+    updateBooking: vi.fn().mockResolvedValue(undefined),
+    deleteBooking: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -307,5 +311,113 @@ describe('tripStore — alternatives', () => {
       'alt-1',
       '2026-10-06T10:00:00.000Z'
     );
+  });
+});
+
+describe('tripStore — bookings', () => {
+  it('addBooking inserts optimistically then replaces with saved booking', async () => {
+    let resolveAdd!: (b: import('../types').Booking) => void;
+    const addBooking = vi.fn(
+      () =>
+        new Promise<import('../types').Booking>((res) => {
+          resolveAdd = res;
+        })
+    );
+    const repo = makeMockRepo({ addBooking });
+    useTripStore.setState({ repo, tripId: 'trip-1', bookings: [] });
+
+    const promise = useTripStore.getState().addBooking({
+      provider: 'Japan Airlines',
+      confirmationNumber: 'JL-001',
+    });
+
+    // Optimistic entry is in state immediately
+    const { bookings } = useTripStore.getState();
+    expect(bookings).toHaveLength(1);
+    expect(bookings[0].id).toMatch(/__optimistic-booking/);
+    expect(bookings[0].provider).toBe('Japan Airlines');
+
+    // Resolve with saved
+    resolveAdd({ id: 'booking-saved-1', provider: 'Japan Airlines', confirmationNumber: 'JL-001' });
+    await promise;
+
+    const after = useTripStore.getState().bookings;
+    expect(after).toHaveLength(1);
+    expect(after[0].id).toBe('booking-saved-1');
+  });
+
+  it('addBooking returns the saved booking', async () => {
+    const savedBooking = { id: 'bk-1', provider: 'ANA', confirmationNumber: 'ANA-999' };
+    const repo = makeMockRepo({
+      addBooking: vi.fn().mockResolvedValue(savedBooking),
+    });
+    useTripStore.setState({ repo, tripId: 'trip-1', bookings: [] });
+
+    const result = await useTripStore.getState().addBooking({
+      provider: 'ANA',
+      confirmationNumber: 'ANA-999',
+    });
+
+    expect(result).toEqual(savedBooking);
+  });
+
+  it('updateBooking applies changes optimistically', async () => {
+    let resolveUpdate!: () => void;
+    const updateBooking = vi.fn(
+      () =>
+        new Promise<void>((res) => {
+          resolveUpdate = res;
+        })
+    );
+    const repo = makeMockRepo({ updateBooking });
+    const original = { id: 'bk-1', provider: 'JAL', confirmationNumber: 'OLD-123' };
+    useTripStore.setState({ repo, tripId: 'trip-1', bookings: [original] });
+
+    const promise = useTripStore.getState().updateBooking('bk-1', { confirmationNumber: 'NEW-456' });
+
+    // Optimistic update already applied
+    expect(useTripStore.getState().bookings[0].confirmationNumber).toBe('NEW-456');
+
+    resolveUpdate();
+    await promise;
+    expect(useTripStore.getState().bookings[0].confirmationNumber).toBe('NEW-456');
+  });
+
+  it('updateBooking rolls back when repo throws', async () => {
+    const updateBooking = vi.fn().mockRejectedValue(new Error('network'));
+    const repo = makeMockRepo({ updateBooking });
+    const original = { id: 'bk-1', provider: 'JAL', confirmationNumber: 'OLD-123' };
+    useTripStore.setState({ repo, tripId: 'trip-1', bookings: [original] });
+
+    await useTripStore.getState().updateBooking('bk-1', { confirmationNumber: 'FAILED' });
+
+    expect(useTripStore.getState().bookings[0].confirmationNumber).toBe('OLD-123');
+  });
+
+  it('deleteBooking removes the booking immediately', async () => {
+    let resolveDelete!: () => void;
+    const deleteBooking = vi.fn(
+      () =>
+        new Promise<void>((res) => {
+          resolveDelete = res;
+        })
+    );
+    const repo = makeMockRepo({ deleteBooking });
+    const booking = { id: 'bk-1', provider: 'Marriott', confirmationNumber: 'MAR-001' };
+    useTripStore.setState({ repo, tripId: 'trip-1', bookings: [booking] });
+
+    const promise = useTripStore.getState().deleteBooking('bk-1');
+
+    expect(useTripStore.getState().bookings).toHaveLength(0);
+
+    resolveDelete();
+    await promise;
+    expect(repo.deleteBooking).toHaveBeenCalledWith('trip-1', 'bk-1');
+  });
+
+  it('init subscribes to bookings via repo.subscribeToBookings', () => {
+    const repo = makeMockRepo();
+    useTripStore.getState().init('trip-1', repo);
+    expect(repo.subscribeToBookings).toHaveBeenCalledWith('trip-1', expect.any(Function));
   });
 });

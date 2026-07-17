@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { screen } from '@testing-library/react';
 import { CheckpointIcon } from '../components/timeline/CheckpointIcon';
 import { renderWithProviders } from './helpers';
 import type { CheckpointType } from '../types';

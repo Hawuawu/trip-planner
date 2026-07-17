@@ -40,11 +40,16 @@ export function TimelineView() {
     checkpoints.find((c) => c.startTime > now.current)?.id ??
     checkpoints[checkpoints.length - 1]?.id;
 
+  // Capture the initial active id in a ref so the scroll effect can include
+  // it in the dependency array without re-triggering on checkpoint changes.
+  const initialActiveId = useRef(activeId);
+
   useEffect(() => {
-    if (activeId) {
-      itemRefs.current.get(activeId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const id = initialActiveId.current;
+    if (id) {
+      itemRefs.current.get(id)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
-  }, []); // intentionally empty — scroll once on mount only
+  }, []); // runs once on mount — initialActiveId.current is stable
 
   function defaultStartForInsert(afterIndex: number | null): string {
     if (afterIndex === null || checkpoints.length === 0) return now.current;

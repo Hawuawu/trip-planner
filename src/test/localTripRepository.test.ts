@@ -358,3 +358,107 @@ describe('LocalTripRepository — multiple subscribers', () => {
     expect(latest2.some((a: { name: string }) => a.name === 'Gion Corner')).toBe(true);
   });
 });
+
+// ── bookings ──────────────────────────────────────────────────────────────────
+
+describe('LocalTripRepository — bookings', () => {
+  it('addBooking persists and returns with a generated id', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBooking('t1', {
+      provider: 'Japan Airlines',
+      confirmationNumber: 'JL12345',
+    });
+    expect(saved.id).toBeTruthy();
+    expect(saved.id).toMatch(/^local-booking-/);
+    expect(saved.provider).toBe('Japan Airlines');
+    expect(saved.confirmationNumber).toBe('JL12345');
+  });
+
+  it('addBooking persists across a new repo instance (via localStorage)', async () => {
+    const repo1 = makeRepo();
+    await repo1.addBooking('t1', { provider: 'ANA', confirmationNumber: 'ANA999' });
+    const repo2 = makeRepo();
+    const cb = vi.fn();
+    repo2.subscribeToBookings('t1', cb);
+    const bookings = cb.mock.calls[0][0];
+    expect(bookings.some((b: { provider: string }) => b.provider === 'ANA')).toBe(true);
+  });
+
+  it('updateBooking merges changes', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBooking('t1', {
+      provider: 'JAL',
+      confirmationNumber: 'OLD-123',
+    });
+    await repo.updateBooking('t1', saved.id, { confirmationNumber: 'NEW-456' });
+    const cb = vi.fn();
+    repo.subscribeToBookings('t1', cb);
+    const bookings = cb.mock.calls[0][0];
+    const updated = bookings.find((b: { id: string }) => b.id === saved.id);
+    expect(updated?.confirmationNumber).toBe('NEW-456');
+    expect(updated?.provider).toBe('JAL');
+  });
+
+  it('deleteBooking removes the booking', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBooking('t1', {
+      provider: 'Marriott',
+      confirmationNumber: 'MAR-789',
+    });
+    await repo.deleteBooking('t1', saved.id);
+    const cb = vi.fn();
+    repo.subscribeToBookings('t1', cb);
+    const bookings = cb.mock.calls[0][0];
+    expect(bookings.find((b: { id: string }) => b.id === saved.id)).toBeUndefined();
+  });
+
+  it('subscribeToBookings immediately calls the callback', () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToBookings('t1', cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(Array.isArray(cb.mock.calls[0][0])).toBe(true);
+  });
+
+  it('subscribeToBookings notifies on addBooking mutation', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToBookings('t1', cb);
+    const callsBefore = cb.mock.calls.length;
+    await repo.addBooking('t1', { provider: 'Hilton', confirmationNumber: 'HLT-001' });
+    expect(cb.mock.calls.length).toBeGreaterThan(callsBefore);
+    const latest = cb.mock.calls[cb.mock.calls.length - 1][0];
+    expect(latest.some((b: { provider: string }) => b.provider === 'Hilton')).toBe(true);
+  });
+
+  it('subscribeToBookings notifies on updateBooking mutation', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBooking('t1', { provider: 'Hyatt', confirmationNumber: 'HYT-001' });
+    const cb = vi.fn();
+    repo.subscribeToBookings('t1', cb);
+    const callsBefore = cb.mock.calls.length;
+    await repo.updateBooking('t1', saved.id, { confirmationNumber: 'HYT-002' });
+    expect(cb.mock.calls.length).toBeGreaterThan(callsBefore);
+  });
+
+  it('subscribeToBookings notifies on deleteBooking mutation', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBooking('t1', { provider: 'IHG', confirmationNumber: 'IHG-001' });
+    const cb = vi.fn();
+    repo.subscribeToBookings('t1', cb);
+    const callsBefore = cb.mock.calls.length;
+    await repo.deleteBooking('t1', saved.id);
+    expect(cb.mock.calls.length).toBeGreaterThan(callsBefore);
+    const latest = cb.mock.calls[cb.mock.calls.length - 1][0];
+    expect(latest.find((b: { id: string }) => b.id === saved.id)).toBeUndefined();
+  });
+
+  it('subscribeToBookings unsubscribe stops future notifications', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    const unsub = repo.subscribeToBookings('t1', cb);
+    unsub();
+    await repo.addBooking('t1', { provider: 'After Unsub', confirmationNumber: 'X-001' });
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+});
