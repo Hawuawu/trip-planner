@@ -90,7 +90,7 @@ describe('CheckpointItem', () => {
     const onDelete = vi.fn();
     renderItem({ onSelect, onDelete });
     // The delete button exists in the DOM (just hidden via opacity)
-    const deleteBtn = document.querySelector('button[aria-label], button') as HTMLButtonElement;
+    const _deleteBtn = document.querySelector('button[aria-label], button') as HTMLButtonElement;
     // Find the delete button by locating one that has the DeleteIcon inside it
     const buttons = Array.from(document.querySelectorAll('button'));
     const delBtn = buttons.find((b) => b.querySelector('svg'));
@@ -106,7 +106,7 @@ describe('CheckpointItem', () => {
     // font-weight 600 is applied via fontWeight prop when isActive
     expect(nameEl).toBeInTheDocument();
     // Check it has the correct font-weight style (MUI applies it inline or via class)
-    const style = window.getComputedStyle(nameEl);
+    const _style = window.getComputedStyle(nameEl);
     // MUI applies fontWeight via sx — it renders as a style attribute or class
     expect(nameEl.style.fontWeight || nameEl.getAttribute('class')).toBeTruthy();
     // More pragmatic: the container should not throw and the element is present

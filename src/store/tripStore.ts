@@ -23,6 +23,8 @@ interface TripState {
   undoDelete(): Promise<void>;
   clearUndo(): void;
 
+  reorderCheckpoints(fromIndex: number, toIndex: number): Promise<void>;
+
   addAlternative(alt: Omit<Alternative, 'id'>): Promise<void>;
   deleteAlternative(id: string): Promise<void>;
   promoteAlternative(alternativeId: string, startTime: string): Promise<void>;
@@ -112,6 +114,43 @@ export const useTripStore = create<TripState>((set, get) => ({
 
   clearUndo() {
     set({ undoCheckpoint: null });
+  },
+
+  async reorderCheckpoints(fromIndex, toIndex) {
+    if (fromIndex === toIndex) return;
+    const { repo, tripId, checkpoints } = get();
+    if (!repo || !tripId) return;
+
+    const updated = [...checkpoints];
+    const fromStartTime = updated[fromIndex].startTime;
+    const toStartTime = updated[toIndex].startTime;
+
+    // Swap startTimes so sort order reflects the new visual order
+    updated[fromIndex] = {
+      ...updated[fromIndex],
+      startTime: toStartTime,
+      updatedAt: new Date().toISOString(),
+    };
+    updated[toIndex] = {
+      ...updated[toIndex],
+      startTime: fromStartTime,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Apply optimistically, re-sort so state stays consistent
+    set({
+      checkpoints: [...updated].sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    });
+
+    // Persist both changes
+    await Promise.all([
+      repo.updateCheckpoint(tripId, updated[fromIndex].id, {
+        startTime: toStartTime,
+      }),
+      repo.updateCheckpoint(tripId, updated[toIndex].id, {
+        startTime: fromStartTime,
+      }),
+    ]);
   },
 
   async addAlternative(alt) {
