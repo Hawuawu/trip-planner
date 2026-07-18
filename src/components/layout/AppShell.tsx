@@ -56,7 +56,7 @@ function PanelToggle({
         [side]: 0,
         top: '50%',
         transform: 'translateY(-50%)',
-        zIndex: 10,
+        zIndex: 1000,
       }}
     >
       <IconButton
@@ -150,8 +150,8 @@ export function AppShell() {
             </Box>
           )}
 
-          {/* Map + toggle buttons */}
-          <Box sx={{ flex: 1, position: 'relative' }}>
+          {/* Map with toggle buttons anchored to its edges */}
+          <Box sx={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
             <MapView />
 
             <PanelToggle

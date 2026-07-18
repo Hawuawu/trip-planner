@@ -1,6 +1,5 @@
-import { Marker, Popup } from 'react-leaflet';
-import { divIcon } from 'leaflet';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { useState } from 'react';
+import { Marker, Popup } from 'react-map-gl/maplibre';
 import { CheckpointIcon } from '../timeline/CheckpointIcon';
 import type { Checkpoint } from '../../types';
 
@@ -10,32 +9,59 @@ interface Props {
   onSelect(): void;
 }
 
-function makeIcon(checkpoint: Checkpoint, isSelected: boolean) {
-  const color = isSelected ? '#e94560' : '#1a1a2e';
-  const svg = renderToStaticMarkup(
-    <CheckpointIcon type={checkpoint.type} style={{ color, width: 20, height: 20 }} />
-  );
-  return divIcon({
-    html: `<div style="background:${isSelected ? '#e94560' : '#fff'};border:2px solid ${color};border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:${isSelected ? '#fff' : color}">${svg}</div>`,
-    className: '',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-  });
-}
-
 export function CheckpointMarker({ checkpoint, isSelected, onSelect }: Props) {
+  const [showPopup, setShowPopup] = useState(false);
   if (!checkpoint.location) return null;
 
+  const color = isSelected ? '#e94560' : '#1a1a2e';
+
   return (
-    <Marker
-      position={[checkpoint.location.lat, checkpoint.location.lng]}
-      icon={makeIcon(checkpoint, isSelected)}
-      eventHandlers={{ click: onSelect }}
-    >
-      <Popup>
-        <strong>{checkpoint.name}</strong>
-        {checkpoint.location.label && <><br />{checkpoint.location.label}</>}
-      </Popup>
-    </Marker>
+    <>
+      <Marker
+        longitude={checkpoint.location.lng}
+        latitude={checkpoint.location.lat}
+        anchor="center"
+        onClick={(e) => {
+          e.originalEvent.stopPropagation();
+          onSelect();
+          setShowPopup(true);
+        }}
+      >
+        <div
+          style={{
+            background: isSelected ? '#e94560' : '#fff',
+            border: `2px solid ${color}`,
+            borderRadius: '50%',
+            width: 28,
+            height: 28,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: isSelected ? '#fff' : color,
+            cursor: 'pointer',
+          }}
+        >
+          <CheckpointIcon type={checkpoint.type} style={{ width: 20, height: 20 }} />
+        </div>
+      </Marker>
+
+      {showPopup && (
+        <Popup
+          longitude={checkpoint.location.lng}
+          latitude={checkpoint.location.lat}
+          anchor="bottom"
+          onClose={() => setShowPopup(false)}
+          closeOnClick={false}
+        >
+          <strong>{checkpoint.name}</strong>
+          {checkpoint.location.label && (
+            <>
+              <br />
+              {checkpoint.location.label}
+            </>
+          )}
+        </Popup>
+      )}
+    </>
   );
 }

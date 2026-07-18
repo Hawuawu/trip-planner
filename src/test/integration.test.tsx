@@ -27,20 +27,22 @@ import { renderWithProviders, resetStores } from './helpers';
 import { AppShell } from '../components/layout/AppShell';
 
 // ---------------------------------------------------------------------------
-// react-leaflet / leaflet mocks — these use browser APIs unavailable in jsdom
+// react-map-gl / maplibre-gl mocks — these use WebGL unavailable in jsdom
 // ---------------------------------------------------------------------------
-vi.mock('react-leaflet', () => ({
-  MapContainer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="map">{children}</div>
+vi.mock('react-map-gl/maplibre', () => ({
+  __esModule: true,
+  default: ({ children }: { children: React.ReactNode }) => <div data-testid="map">{children}</div>,
+  NavigationControl: () => null,
+  Source: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Layer: () => null,
+  Marker: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
+    <div onClick={onClick}>{children}</div>
   ),
-  TileLayer: () => null,
-  Polyline: () => null,
-  Marker: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  useMap: () => ({ panTo: vi.fn(), setView: vi.fn() }),
+  useMap: () => ({ current: { easeTo: vi.fn(), panTo: vi.fn() } }),
 }));
 
-vi.mock('leaflet', () => ({ divIcon: () => ({}) }));
+vi.mock('maplibre-gl', () => ({ __esModule: true, default: {} }));
 
 // ---------------------------------------------------------------------------
 // localStorage mock (Node 26 compatibility)
@@ -49,10 +51,18 @@ function makeLocalStorageMock() {
   const store = new Map<string, string>();
   return {
     getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => { store.set(k, v); },
-    removeItem: (k: string) => { store.delete(k); },
-    clear: () => { store.clear(); },
-    get length() { return store.size; },
+    setItem: (k: string, v: string) => {
+      store.set(k, v);
+    },
+    removeItem: (k: string) => {
+      store.delete(k);
+    },
+    clear: () => {
+      store.clear();
+    },
+    get length() {
+      return store.size;
+    },
     key: (i: number) => Array.from(store.keys())[i] ?? null,
   };
 }
@@ -210,9 +220,7 @@ describe('Flow 2: Edit checkpoint', () => {
 
     // Original name should no longer appear as a visible list item
     await waitFor(() => {
-      const matches = screen
-        .queryAllByText('JFK → NRT')
-        .filter((el) => el.tagName !== 'INPUT');
+      const matches = screen.queryAllByText('JFK → NRT').filter((el) => el.tagName !== 'INPUT');
       expect(matches.length).toBe(0);
     });
   });
@@ -232,9 +240,7 @@ describe('Flow 3: Delete and undo', () => {
 
     // Find the first non-FAB icon button on the page — that is the delete button
     // for the first checkpoint in the timeline (renders a DeleteOutline svg).
-    const allButtons = Array.from(
-      document.querySelectorAll<HTMLButtonElement>('button')
-    );
+    const allButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'));
     const deleteBtn = allButtons.find(
       (b) =>
         !b.classList.contains('MuiFab-root') &&
@@ -295,9 +301,7 @@ describe('Flow 4: Promote alternative to timeline', () => {
 
     // The promote dialog should appear
     await waitFor(() => {
-      expect(
-        screen.getByText(/add "teamLab Borderless" to timeline/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/add "teamLab Borderless" to timeline/i)).toBeInTheDocument();
     });
 
     // Fill in the start time
