@@ -18,6 +18,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import type { TripRepository } from '../../data/TripRepository';
 import type { Trip } from '../../types';
+import emptyStateBanner from '../../assets/empty-state-banner.svg';
 
 interface Props {
   repo: TripRepository;
@@ -106,7 +107,6 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
         justifyContent: 'flex-start',
         pt: { xs: 6, sm: 10 },
         px: 2,
-        bgcolor: 'background.default',
       }}
     >
       <Typography variant="h5" fontWeight={700} mb={1}>
@@ -121,9 +121,17 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
       ) : (
         <Box sx={{ width: '100%', maxWidth: 480 }}>
           {trips.length === 0 ? (
-            <Typography color="text.secondary" textAlign="center" py={4}>
-              No trips yet. Create your first trip below.
-            </Typography>
+            <Box textAlign="center" py={2}>
+              <Box
+                component="img"
+                src={emptyStateBanner}
+                alt=""
+                sx={{ width: '100%', maxWidth: 280, mb: 2 }}
+              />
+              <Typography color="text.secondary" textAlign="center" py={2}>
+                No trips yet. Create your first trip below.
+              </Typography>
+            </Box>
           ) : (
             <List
               disablePadding

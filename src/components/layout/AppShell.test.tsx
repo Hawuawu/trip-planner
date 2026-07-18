@@ -114,9 +114,9 @@ describe('AppShell — phone layout', () => {
 });
 
 describe('AppShell — app bar', () => {
-  it('falls back to "Trip Planner" when no trip is loaded', () => {
+  it('falls back to "Maiyun\'s Trip Planner" when no trip is loaded', () => {
     renderWithProviders(<AppShell />);
-    expect(screen.getByText('Trip Planner')).toBeInTheDocument();
+    expect(screen.getByText("Maiyun's Trip Planner")).toBeInTheDocument();
   });
 
   it("shows the trip's name once one is loaded", () => {
