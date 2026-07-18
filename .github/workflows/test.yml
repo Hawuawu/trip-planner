@@ -44,13 +44,17 @@ jobs:
         uses: davelosert/vitest-coverage-report-action@v2
 
       # Feeds GitHub's native code_coverage ruleset rule (separate from our
-      # own threshold gate above and from the PR comment).
+      # own threshold gate above and from the PR comment). fail-on-error is
+      # false because this 404s until "Code Coverage" is enabled in repo
+      # settings (Settings > Code security > Code Coverage) — a manual
+      # toggle for this preview feature, not something this step can do.
       - name: Upload coverage for the code_coverage ruleset rule
         if: always()
         uses: actions/upload-code-coverage@v1
         with:
           file: coverage/cobertura-coverage.xml
           language: JavaScript
+          fail-on-error: false
 
   e2e-firebase:
     name: End-to-end tests (Firebase emulators)
