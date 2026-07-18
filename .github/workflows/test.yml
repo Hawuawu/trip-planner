@@ -20,7 +20,7 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npx tsc --noEmit
       - run: npm run lint
-      - run: npm run test:coverage
+      - run: npm run test
 
   e2e-firebase:
     name: End-to-end tests (Firebase emulators)
@@ -36,7 +36,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - run: npm ci --legacy-peer-deps
       - run: npm run test:firebase
