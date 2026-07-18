@@ -14,7 +14,9 @@ module.exports = {
   rules: {
     'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     '@typescript-eslint/no-unused-vars': ['error', { varsIgnorePattern: '^_', argsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_' }],
-    'no-secrets/no-secrets': 'error',
+    // tolerance 4.2 avoids false positives on short random strings (ids,
+    // hashes in test fixtures) while still catching real keys/tokens.
+    'no-secrets/no-secrets': ['error', { tolerance: 4.2 }],
     // Flags any obj[x] where x isn't a literal, including plain array
     // indexing (arr[i]) — extremely high false-positive rate on ordinary
     // TypeScript and not useful signal here.

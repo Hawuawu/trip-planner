@@ -18,6 +18,11 @@
             "type": "command",
             "command": "input=$(cat); content=$(echo \"$input\" | jq -r '(.tool_input.new_string // .tool_input.content // \"\")'); if echo \"$content\" | grep -qE 'eslint-disable|eslint-enable'; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"eslint-disable comments are not allowed. Fix the underlying lint issue instead.\"}}'; fi",
             "statusMessage": "Checking for eslint-disable comments..."
+          },
+          {
+            "type": "command",
+            "command": "node /Users/maya/Repositories/trip-planner/scripts/sast-gate-hook.mjs",
+            "statusMessage": "Running SAST gate..."
           }
         ]
       }
