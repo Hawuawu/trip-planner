@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Fab,
+  IconButton,
   Snackbar,
   Typography,
   Drawer,
@@ -111,7 +112,7 @@ export function TimelineView() {
           </Button>
         </Box>
       ) : (
-        <Timeline sx={{ p: 0, m: 0, pt: 2 }}>
+        <Timeline sx={{ p: 0, m: 0, pt: 2, pl: 2 }}>
           {checkpoints.map((cp, i) => (
             <Box
               key={cp.id}
@@ -129,24 +130,25 @@ export function TimelineView() {
                 onDelete={() => deleteCheckpoint(cp.id)}
               />
               <Box sx={{ display: 'flex', justifyContent: 'center', my: -1 }}>
-                <Button
+                <IconButton
                   size="small"
+                  aria-label="Add checkpoint here"
                   sx={{
-                    minWidth: 0,
-                    px: 1,
-                    py: 0,
+                    width: 20,
+                    height: 20,
                     opacity: 0,
                     '&:hover': { opacity: 1 },
-                    fontSize: '0.7rem',
                     color: 'text.secondary',
+                    border: '1px solid',
+                    borderColor: 'divider',
                   }}
                   onClick={() => {
                     setInsertAfterIndex(i);
                     setAdding(true);
                   }}
                 >
-                  + add between
-                </Button>
+                  <AddIcon sx={{ fontSize: 14 }} />
+                </IconButton>
               </Box>
             </Box>
           ))}
