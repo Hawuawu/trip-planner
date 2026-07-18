@@ -144,7 +144,7 @@ describe('TimelineView — with checkpoints', () => {
     spy.mockRestore();
   });
 
-  it('renders "add between" buttons between checkpoints', () => {
+  it('renders "add checkpoint here" buttons between checkpoints', () => {
     seedCheckpoints([
       makeCheckpoint({ id: 'a', name: 'First', startTime: '2026-10-01T14:00:00.000Z' }),
       makeCheckpoint({
@@ -155,7 +155,9 @@ describe('TimelineView — with checkpoints', () => {
       }),
     ]);
     renderWithProviders(<TimelineView />);
-    expect(screen.getAllByText(/add between/i).length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByRole('button', { name: /add checkpoint here/i }).length
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it('opens the add form when FAB is clicked', () => {
@@ -175,7 +177,7 @@ describe('TimelineView — with checkpoints', () => {
     expect(screen.queryByText('Add checkpoint')).not.toBeInTheDocument();
   });
 
-  it('"add between" button opens add form with a midpoint start time', () => {
+  it('"add checkpoint here" button opens add form with a midpoint start time', () => {
     // Two checkpoints 2 hours apart — the inserted default should be midpoint
     seedCheckpoints([
       makeCheckpoint({ id: 'a', name: 'First', startTime: '2026-10-05T10:00:00.000Z' }),
@@ -187,8 +189,8 @@ describe('TimelineView — with checkpoints', () => {
       }),
     ]);
     renderWithProviders(<TimelineView />);
-    // Click the "add between" button (appears between the two items)
-    const addBetweenBtn = screen.getAllByText(/add between/i)[0];
+    // Click the "add checkpoint here" button (appears between the two items)
+    const addBetweenBtn = screen.getAllByRole('button', { name: /add checkpoint here/i })[0];
     fireEvent.click(addBetweenBtn);
     // The drawer form opens
     expect(screen.getByText('Add checkpoint')).toBeInTheDocument();

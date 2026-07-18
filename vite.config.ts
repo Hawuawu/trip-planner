@@ -8,7 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Trip Planner',
+        name: "Maiyun's Trip Planner",
         short_name: 'Trips',
         description: 'Personal travel itinerary companion',
         theme_color: '#1976d2',

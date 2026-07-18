@@ -103,7 +103,7 @@ export function AlternativesShelf() {
       </Typography>
 
       <Button
-        variant="outlined"
+        variant="contained"
         size="small"
         startIcon={<AddCircleOutlineIcon />}
         onClick={handleAddOpen}

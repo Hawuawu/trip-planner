@@ -22,6 +22,7 @@ import { AlternativesShelf } from '../alternatives/AlternativesShelf';
 import { OfflineBanner } from './OfflineBanner';
 import { useTripStore } from '../../store/tripStore';
 import { useAuthStore } from '../../store/authStore';
+import appIcon from '../../assets/app-icon.svg';
 
 // Pill-shaped toggle tab stuck to the edge of the map container.
 // `side` controls which edge it sits on and which border-radius corners are rounded.
@@ -103,8 +104,14 @@ export function AppShell() {
         sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
       >
         <Toolbar variant="dense">
+          <Box
+            component="img"
+            src={appIcon}
+            alt=""
+            sx={{ width: 32, height: 32, borderRadius: 0, mr: 1.5, objectFit: 'cover' }}
+          />
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            {trip?.name ?? 'Trip Planner'}
+            {trip?.name ?? "Maiyun's Trip Planner"}
           </Typography>
           {service && (
             <IconButton size="small" onClick={signOut} title="Sign out">

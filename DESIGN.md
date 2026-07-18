@@ -104,24 +104,24 @@ There is no separate "mobile design" and "desktop design."
 - Avoid decorative imagery competing with the timeline's actual job:
   showing what happens next.
 
-## Planned: anime-styled MUI theme (not yet implemented)
+## Anime-styled MUI theme (in progress)
 
 Direction: reskin the app with an anime-styled MUI theme (custom palette,
 typography, shape, and component overrides via `ThemeProvider`), applied
-app-wide. Still open — decide when picking this back up, don't assume an
-answer:
+app-wide.
 
-- **Scope**: theme-only (re-skin existing MUI usage, no new components) vs.
-  theme + a few new/adapted components (e.g. a stylized timeline connector)
-  where MUI overrides alone can't get the look.
-- **Sub-style**: modern shounen/action (bold, saturated, high-contrast,
-  angular) vs. soft shoujo/slice-of-life (pastel, rounded, soft gradients)
-  vs. retro 90s anime/VHS (muted grain, retro grading) vs. a custom
-  reference the user provides.
+- **Scope**: theme + a few new/adapted components where MUI overrides alone
+  can't get the look (e.g. a stylized timeline connector, checkpoint
+  markers styled to match the accent, the collapsible-panel toggle pill).
+- **Sub-style**: soft shoujo/slice-of-life — pastel palette, rounded
+  shapes, soft gradients, gentle motion (Ghibli / slice-of-life register,
+  not high-contrast shounen or retro VHS grading).
 
-Whatever the sub-style, it must still satisfy "Design priorities, in order"
-above — legibility in bright sunlight comes first, decorative styling
-second.
+This still must satisfy "Design priorities, in order" above — legibility
+in bright sunlight comes first, decorative styling second. Concretely: the
+pastel palette applies to surfaces/backgrounds and secondary chrome, not to
+body text contrast or the current/next-checkpoint accent, which stay at
+full contrast regardless of the softer palette around them.
 
 ### Asset inventory for Recraft generation
 
