@@ -1,13 +1,17 @@
 name: Test
 
 on:
+  # develop is intentionally excluded here: it's always the head branch of
+  # an open PR into main, so `pull_request` below already validates every
+  # commit pushed there. Adding `develop` to push too would fire a second,
+  # identically-named check run per commit — and a cancelled duplicate
+  # blocks the PR's merge gate even when its sibling run succeeded.
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
 
-# A push to a branch with an open PR fires both `push` and the PR's
-# `synchronize` event for the same commit. Group by commit SHA so the
-# second trigger cancels the first instead of both running to completion.
+# Dedupe rapid consecutive pushes to the same PR (e.g. force-pushes) so only
+# the latest commit's run completes.
 concurrency:
   group: test-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
