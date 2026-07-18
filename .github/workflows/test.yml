@@ -17,7 +17,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm run test:coverage
@@ -38,5 +38,5 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - run: npm run test:firebase
