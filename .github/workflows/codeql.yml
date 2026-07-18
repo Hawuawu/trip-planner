@@ -1,0 +1,35 @@
+name: CodeQL
+
+on:
+  # develop excluded from push for the same reason as test.yml: it's always
+  # the head of an open PR into main, so pull_request already covers it —
+  # adding push too would create a second, identically-named check run that
+  # can block the PR's merge gate if it doesn't finish before the other one.
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 3 * * 1' # weekly, catches newly disclosed query patterns
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'

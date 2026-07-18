@@ -1,0 +1,89 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Chrome (dev)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/src",
+      "sourceMapPathOverrides": {
+        "/@fs/*": "${workspaceFolder}/*",
+        "/*": "${workspaceFolder}/src/*"
+      },
+      "preLaunchTask": "Start Dev Server",
+      "presentation": {
+        "group": "frontend",
+        "order": 1
+      }
+    },
+    {
+      "name": "Launch Edge (dev)",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/src",
+      "sourceMapPathOverrides": {
+        "/@fs/*": "${workspaceFolder}/*",
+        "/*": "${workspaceFolder}/src/*"
+      },
+      "preLaunchTask": "Start Dev Server",
+      "presentation": {
+        "group": "frontend",
+        "order": 2
+      }
+    },
+    {
+      "name": "Attach to Chrome (dev already running)",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "url": "http://localhost:5173/*",
+      "webRoot": "${workspaceFolder}/src",
+      "sourceMapPathOverrides": {
+        "/@fs/*": "${workspaceFolder}/*",
+        "/*": "${workspaceFolder}/src/*"
+      },
+      "presentation": {
+        "group": "frontend",
+        "order": 3
+      }
+    },
+    {
+      "name": "Run Tests (Vitest)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": ["run"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "presentation": {
+        "group": "tests",
+        "order": 1
+      }
+    },
+    {
+      "name": "Debug Current Test File",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": ["run", "${relativeFile}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "presentation": {
+        "group": "tests",
+        "order": 2
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Dev + Tests",
+      "configurations": ["Launch Chrome (dev)", "Run Tests (Vitest)"],
+      "presentation": {
+        "group": "compound",
+        "order": 1
+      }
+    }
+  ]
+}
