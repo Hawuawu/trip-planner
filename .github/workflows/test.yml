@@ -5,6 +5,13 @@ on:
     branches: [main, develop]
   pull_request:
 
+# A push to a branch with an open PR fires both `push` and the PR's
+# `synchronize` event for the same commit. Group by commit SHA so the
+# second trigger cancels the first instead of both running to completion.
+concurrency:
+  group: test-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   unit-integration:
     name: Unit & integration tests
