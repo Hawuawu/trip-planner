@@ -42,7 +42,7 @@ try {
   const response = await page.goto(BASE);
   const headers = response.headers();
 
-  const required = ['x-frame-options', 'x-content-type-options'];
+  const required = ['x-frame-options', 'x-content-type-options', 'content-security-policy'];
   for (const h of required) {
     if (headers[h]) {
       pass(`Header present: ${h}`);

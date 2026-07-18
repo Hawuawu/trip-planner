@@ -4,3 +4,4 @@ coverage
 .claude/worktrees/
 coverage/
 .env
+sast-gate-tmp-*
