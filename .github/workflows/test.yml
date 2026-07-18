@@ -16,6 +16,9 @@ jobs:
   unit-integration:
     name: Unit & integration tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +31,12 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm run test:coverage
+
+      # Runs even if the coverage step above failed the threshold check, so
+      # the PR still shows what the actual numbers were, not just a red X.
+      - name: Report coverage on the PR
+        if: always()
+        uses: davelosert/vitest-coverage-report-action@v2
 
   e2e-firebase:
     name: End-to-end tests (Firebase emulators)

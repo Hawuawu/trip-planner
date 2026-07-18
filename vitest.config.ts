@@ -7,10 +7,15 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['src/test/setup.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.claude/worktrees/**', '**/*.firebase.test.ts'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.claude/worktrees/**',
+      '**/*.firebase.test.ts',
+    ],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'lcov'],
+      reporter: ['text', 'lcov', 'json-summary'],
       thresholds: {
         lines: 85,
         functions: 80,
