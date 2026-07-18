@@ -1,10 +1,19 @@
 import { initializeApp, getApps } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
 import {
   getFirestore,
-  doc, getDoc,
-  collection, onSnapshot,
-  addDoc, updateDoc, deleteDoc,
-  serverTimestamp, Timestamp,
+  doc,
+  getDoc,
+  collection,
+  onSnapshot,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import type { TripRepository } from './TripRepository';
 import type { Trip, Checkpoint, Alternative, Booking } from '../types';
@@ -40,16 +49,33 @@ export class FirebaseTripRepository implements TripRepository {
   }
 
   async listTrips(): Promise<Trip[]> {
-    throw new Error('Not implemented');
+    const uid = getAuth().currentUser?.uid;
+    if (!uid) return [];
+    const snap = await getDocs(
+      query(collection(this.db, 'trips'), where('memberIds', 'array-contains', uid))
+    );
+    return snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        name: data.name,
+        dateRange: data.dateRange,
+        memberIds: data.memberIds ?? [],
+      };
+    });
   }
 
-  async createTrip(_name: string, _dateRange: { start: string; end: string }): Promise<Trip> {
-    throw new Error('Not implemented');
+  async createTrip(name: string, dateRange: { start: string; end: string }): Promise<Trip> {
+    const uid = getAuth().currentUser?.uid;
+    if (!uid) throw new Error('Must be signed in to create a trip');
+    const memberIds = [uid];
+    const ref = await addDoc(collection(this.db, 'trips'), { name, dateRange, memberIds });
+    return { id: ref.id, name, dateRange, memberIds };
   }
 
   subscribeToCheckpoints(tripId: string, cb: (checkpoints: Checkpoint[]) => void): () => void {
-    return onSnapshot(collection(this.db, 'trips', tripId, 'checkpoints'), snap => {
-      const checkpoints: Checkpoint[] = snap.docs.map(d => ({
+    return onSnapshot(collection(this.db, 'trips', tripId, 'checkpoints'), (snap) => {
+      const checkpoints: Checkpoint[] = snap.docs.map((d) => ({
         id: d.id,
         type: d.data().type,
         name: d.data().name,
@@ -65,7 +91,10 @@ export class FirebaseTripRepository implements TripRepository {
     });
   }
 
-  async addCheckpoint(tripId: string, cp: Omit<Checkpoint, 'id' | 'updatedAt'>): Promise<Checkpoint> {
+  async addCheckpoint(
+    tripId: string,
+    cp: Omit<Checkpoint, 'id' | 'updatedAt'>
+  ): Promise<Checkpoint> {
     const now = new Date().toISOString();
     const ref = await addDoc(collection(this.db, 'trips', tripId, 'checkpoints'), {
       ...cp,
@@ -74,7 +103,11 @@ export class FirebaseTripRepository implements TripRepository {
     return { ...cp, id: ref.id, updatedAt: now };
   }
 
-  async updateCheckpoint(tripId: string, id: string, changes: Partial<Omit<Checkpoint, 'id' | 'updatedAt'>>): Promise<void> {
+  async updateCheckpoint(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<Checkpoint, 'id' | 'updatedAt'>>
+  ): Promise<void> {
     await updateDoc(doc(this.db, 'trips', tripId, 'checkpoints', id), {
       ...changes,
       updatedAt: serverTimestamp(),
@@ -86,8 +119,8 @@ export class FirebaseTripRepository implements TripRepository {
   }
 
   subscribeToAlternatives(tripId: string, cb: (alternatives: Alternative[]) => void): () => void {
-    return onSnapshot(collection(this.db, 'trips', tripId, 'alternatives'), snap => {
-      cb(snap.docs.map(d => ({ id: d.id, ...d.data() } as Alternative)));
+    return onSnapshot(collection(this.db, 'trips', tripId, 'alternatives'), (snap) => {
+      cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Alternative));
     });
   }
 
@@ -100,7 +133,11 @@ export class FirebaseTripRepository implements TripRepository {
     await deleteDoc(doc(this.db, 'trips', tripId, 'alternatives', id));
   }
 
-  async promoteAlternative(tripId: string, alternativeId: string, startTime: string): Promise<void> {
+  async promoteAlternative(
+    tripId: string,
+    alternativeId: string,
+    startTime: string
+  ): Promise<void> {
     const altRef = doc(this.db, 'trips', tripId, 'alternatives', alternativeId);
     const altSnap = await getDoc(altRef);
     if (!altSnap.exists()) throw new Error('Alternative not found');
@@ -118,15 +155,20 @@ export class FirebaseTripRepository implements TripRepository {
 
   // ── Bookings — to be implemented in the Firebase issue ───────────────────────
 
-  subscribeToBookings(_tripId: string, _cb: (bookings: Booking[]) => void): () => void {
-    throw new Error('Not implemented');
+  subscribeToBookings(_tripId: string, cb: (bookings: Booking[]) => void): () => void {
+    cb([]);
+    return () => {};
   }
 
   async addBooking(_tripId: string, _booking: Omit<Booking, 'id'>): Promise<Booking> {
     throw new Error('Not implemented');
   }
 
-  async updateBooking(_tripId: string, _id: string, _changes: Partial<Omit<Booking, 'id'>>): Promise<void> {
+  async updateBooking(
+    _tripId: string,
+    _id: string,
+    _changes: Partial<Omit<Booking, 'id'>>
+  ): Promise<void> {
     throw new Error('Not implemented');
   }
 

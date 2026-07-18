@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import { Box, CircularProgress } from '@mui/material';
 import App from './App';
+import { SignInPage } from './components/auth/SignInPage';
 import { TripSelectorScreen } from './components/trips/TripSelectorScreen';
+import { useAuthStore } from './store/authStore';
 import { useTripStore } from './store/tripStore';
 import type { TripRepository } from './data/TripRepository';
 
@@ -9,6 +12,7 @@ interface Props {
 }
 
 export function Root({ tripRepo }: Props) {
+  const { user, loading } = useAuthStore();
   const storedTripId = localStorage.getItem('trip-planner:activeTripId');
   const [activeTripId, setActiveTripId] = useState<string | null>(storedTripId);
 
@@ -16,6 +20,20 @@ export function Root({ tripRepo }: Props) {
     localStorage.setItem('trip-planner:activeTripId', tripId);
     useTripStore.getState().init(tripId, tripRepo);
     setActiveTripId(tripId);
+  }
+
+  if (loading) {
+    return (
+      <Box
+        sx={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <CircularProgress size={32} />
+      </Box>
+    );
+  }
+
+  if (!user) {
+    return <SignInPage />;
   }
 
   if (!activeTripId) {

@@ -16,11 +16,11 @@ independent of implementation details (those live in `CLAUDE.md`).
 
 ## Layout by breakpoint
 
-| Breakpoint | Layout |
-|---|---|
-| Phone (< 600px) | Single column. Bottom tab bar switches between Timeline, Map, and Alternatives. A floating action button for "add checkpoint" is always present on the Timeline tab. |
-| Tablet / small desktop (600–1200px) | Two-pane split: a narrower timeline rail on the left, map filling the right. Alternatives accessible as a slide-over panel. |
-| Desktop (> 1200px) | Same two-pane split with more breathing room; alternatives can sit as a persistent third column rather than a slide-over. |
+| Breakpoint                          | Layout                                                                                                                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phone (< 600px)                     | Single column. Bottom tab bar switches between Timeline, Map, and Alternatives. A floating action button for "add checkpoint" is always present on the Timeline tab. |
+| Tablet / small desktop (600–1200px) | Two-pane split: a narrower timeline rail on the left, map filling the right. Alternatives accessible as a slide-over panel.                                          |
+| Desktop (> 1200px)                  | Same two-pane split with more breathing room; alternatives can sit as a persistent third column rather than a slide-over.                                            |
 
 The same components render in all three — only their arrangement changes.
 There is no separate "mobile design" and "desktop design."
@@ -34,7 +34,7 @@ There is no separate "mobile design" and "desktop design."
 - **Type is communicated by icon shape, not color** — a plane, a train, a
   building, a pin. Color-coding by type breaks down past 3–4 categories and
   fails colorblind users; icon shape doesn't.
-- Color is reserved for *state*, not category: the current or next
+- Color is reserved for _state_, not category: the current or next
   checkpoint gets the one accent-filled treatment on the timeline. Every
   other checkpoint is visually neutral. This keeps "what's next" scannable
   at a glance without the whole timeline turning into a rainbow.
@@ -103,3 +103,66 @@ There is no separate "mobile design" and "desktop design."
   mood board.
 - Avoid decorative imagery competing with the timeline's actual job:
   showing what happens next.
+
+## Planned: anime-styled MUI theme (not yet implemented)
+
+Direction: reskin the app with an anime-styled MUI theme (custom palette,
+typography, shape, and component overrides via `ThemeProvider`), applied
+app-wide. Still open — decide when picking this back up, don't assume an
+answer:
+
+- **Scope**: theme-only (re-skin existing MUI usage, no new components) vs.
+  theme + a few new/adapted components (e.g. a stylized timeline connector)
+  where MUI overrides alone can't get the look.
+- **Sub-style**: modern shounen/action (bold, saturated, high-contrast,
+  angular) vs. soft shoujo/slice-of-life (pastel, rounded, soft gradients)
+  vs. retro 90s anime/VHS (muted grain, retro grading) vs. a custom
+  reference the user provides.
+
+Whatever the sub-style, it must still satisfy "Design priorities, in order"
+above — legibility in bright sunlight comes first, decorative styling
+second.
+
+### Asset inventory for Recraft generation
+
+Compiled by scanning current icon/image usage in `src/` — nothing below
+exists as custom art yet, all currently fall back to MUI defaults or are
+entirely absent.
+
+**Checkpoint type icons** (highest priority — this is the app's core
+iconography per "type is communicated by icon shape, not color" above).
+Defined in `src/components/timeline/CheckpointIcon.tsx`, used on both the
+timeline and the map pins, so they must work at both scales:
+
+- `flight` (currently MUI `Flight`)
+- `train` (MUI `Train`)
+- `metro` (MUI `Subway`)
+- `hotel` (MUI `Hotel`)
+- `poi` (MUI `Place`)
+- `other` (MUI `RadioButtonUnchecked` — fallback/default)
+
+Needs: one consistent set, simple silhouettes (not overly detailed), a
+single line weight, and both a neutral and an accent-filled variant per
+icon (for the current/next state described under "The timeline").
+
+**App icon / favicon / PWA icons** — currently missing entirely; no
+`public/` directory and no `icons` array in the PWA manifest
+(`vite.config.ts`):
+
+- App icon, 192×192 and 512×512, plus a maskable variant
+- Favicon
+- Apple touch icon
+
+**Banner / hero art** — both currently plain MUI text, no imagery:
+
+- `src/components/auth/SignInPage.tsx` — sign-in card; a hero
+  illustration/banner above or behind it is the natural slot.
+- `src/components/trips/TripSelectorScreen.tsx` — trip list screen; also
+  covers the "empty trip" state (see "States worth designing deliberately"
+  above), which should get a deliberate illustration rather than a blank
+  screen.
+
+**Out of scope for the reskin**: generic UI/action icons (nav tabs,
+delete, add, layers, chevrons, offline-wifi, logout) and the Google brand
+icon — leave these as MUI defaults unless the icon language is redone
+wholesale.

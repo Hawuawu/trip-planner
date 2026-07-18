@@ -1,15 +1,17 @@
 # trip-planner
 
+[![Test](https://github.com/Hawuawu/trip-planner/actions/workflows/test.yml/badge.svg)](https://github.com/Hawuawu/trip-planner/actions/workflows/test.yml)
+
 A personal travel itinerary PWA — build a trip's timeline before departure and edit it freely during travel. Flights, layovers, hotel stays, trains, and points of interest visualized as a checkpoint timeline paired with a map.
 
 ## Documentation
 
-| File | Purpose |
-|---|---|
-| [DESIGN.md](DESIGN.md) | UX direction: layout, visual conventions, editing model, states |
-| [WORKFLOW.md](WORKFLOW.md) | End-to-end user workflows: planning, sharing, travel, post-trip |
-| [MCP.md](MCP.md) | MCP server design: Claude ↔ trip data integration |
-| [CLAUDE.md](CLAUDE.md) | Implementation spec: stack, architecture rules, data model, conventions |
+| File                       | Purpose                                                                 |
+| -------------------------- | ----------------------------------------------------------------------- |
+| [DESIGN.md](DESIGN.md)     | UX direction: layout, visual conventions, editing model, states         |
+| [WORKFLOW.md](WORKFLOW.md) | End-to-end user workflows: planning, sharing, travel, post-trip         |
+| [MCP.md](MCP.md)           | MCP server design: Claude ↔ trip data integration                       |
+| [CLAUDE.md](CLAUDE.md)     | Implementation spec: stack, architecture rules, data model, conventions |
 
 ## Stack
 
