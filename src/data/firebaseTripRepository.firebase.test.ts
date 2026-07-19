@@ -396,6 +396,93 @@ describe('Security rules — trips/{tripId}/bookings', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 2b. Batch writes (writeBatch) — backs addCheckpoints/addAlternatives
+// ---------------------------------------------------------------------------
+describe('Batch writes — trips/{tripId}/checkpoints and alternatives', () => {
+  it('member CAN batch-write multiple checkpoints in one writeBatch (all committed)', async () => {
+    const TRIP_ID = 'trip-batch-cp';
+    const MEMBER_UID = 'member-batch-cp';
+    await seedTrip(TRIP_ID, [MEMBER_UID]);
+
+    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const cpCollection = db.collection('trips').doc(TRIP_ID).collection('checkpoints');
+    const ref1 = cpCollection.doc();
+    const ref2 = cpCollection.doc();
+
+    const batch = db.batch();
+    batch.set(ref1, {
+      type: 'poi',
+      name: 'Batch A',
+      startTime: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    batch.set(ref2, {
+      type: 'poi',
+      name: 'Batch B',
+      startTime: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    await assertSucceeds(batch.commit());
+
+    const snap = await cpCollection.get();
+    expect(snap.docs.map((d) => d.data().name).sort()).toEqual(['Batch A', 'Batch B']);
+  });
+
+  it('member CAN batch-write multiple alternatives in one writeBatch (all committed)', async () => {
+    const TRIP_ID = 'trip-batch-alt';
+    const MEMBER_UID = 'member-batch-alt';
+    await seedTrip(TRIP_ID, [MEMBER_UID]);
+
+    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const altCollection = db.collection('trips').doc(TRIP_ID).collection('alternatives');
+    const ref1 = altCollection.doc();
+    const ref2 = altCollection.doc();
+
+    const batch = db.batch();
+    batch.set(ref1, { type: 'poi', name: 'Alt Batch A' });
+    batch.set(ref2, { type: 'poi', name: 'Alt Batch B' });
+    await assertSucceeds(batch.commit());
+
+    const snap = await altCollection.get();
+    expect(snap.docs.map((d) => d.data().name).sort()).toEqual(['Alt Batch A', 'Alt Batch B']);
+  });
+
+  it('a batch containing one write to a trip the user is not a member of fails entirely (atomic)', async () => {
+    const OWN_TRIP_ID = 'trip-batch-own';
+    const OTHER_TRIP_ID = 'trip-batch-other';
+    const MEMBER_UID = 'member-batch-atomic';
+    await seedTrip(OWN_TRIP_ID, [MEMBER_UID]);
+    await seedTrip(OTHER_TRIP_ID, ['someone-else']);
+
+    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const ownCollection = db.collection('trips').doc(OWN_TRIP_ID).collection('checkpoints');
+    const otherCollection = db.collection('trips').doc(OTHER_TRIP_ID).collection('checkpoints');
+    const ownRef = ownCollection.doc();
+    const otherRef = otherCollection.doc();
+
+    const batch = db.batch();
+    batch.set(ownRef, {
+      type: 'poi',
+      name: 'Should not persist',
+      startTime: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    batch.set(otherRef, {
+      type: 'poi',
+      name: 'Not a member here',
+      startTime: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    await assertFails(batch.commit());
+
+    // The whole batch is rejected — the write to the trip the user DOES belong
+    // to must not have been partially committed either.
+    const ownSnap = await ownCollection.get();
+    expect(ownSnap.empty).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 3. toIso conversion (repeated here alongside emulator tests for completeness)
 //    The standalone suite lives in firebaseTripRepository.test.ts
 // ---------------------------------------------------------------------------

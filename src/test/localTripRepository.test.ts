@@ -138,6 +138,55 @@ describe('LocalTripRepository — addCheckpoint', () => {
   });
 });
 
+// ── addCheckpoints (batch) ───────────────────────────────────────────────────
+
+describe('LocalTripRepository — addCheckpoints (batch)', () => {
+  it('returns all saved checkpoints with ids and updatedAt', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addCheckpoints('t1', [
+      { type: 'poi', name: 'Batch A', startTime: '2026-10-07T09:00:00.000Z' },
+      { type: 'poi', name: 'Batch B', startTime: '2026-10-07T10:00:00.000Z' },
+    ]);
+    expect(saved).toHaveLength(2);
+    expect(saved[0].id).toBeTruthy();
+    expect(saved[1].id).toBeTruthy();
+    expect(saved[0].id).not.toBe(saved[1].id);
+    expect(saved.every((c) => typeof c.updatedAt === 'string')).toBe(true);
+  });
+
+  it('notifies subscribers exactly once for the whole batch', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToCheckpoints('t1', cb);
+    const callsBefore = cb.mock.calls.length;
+    await repo.addCheckpoints('t1', [
+      { type: 'poi', name: 'Batch A', startTime: '2026-10-07T09:00:00.000Z' },
+      { type: 'poi', name: 'Batch B', startTime: '2026-10-07T10:00:00.000Z' },
+    ]);
+    expect(cb.mock.calls.length).toBe(callsBefore + 1);
+    const latest = cb.mock.calls[cb.mock.calls.length - 1][0];
+    expect(latest.some((c: { name: string }) => c.name === 'Batch A')).toBe(true);
+    expect(latest.some((c: { name: string }) => c.name === 'Batch B')).toBe(true);
+  });
+
+  it('appends to existing checkpoints rather than replacing them', async () => {
+    const repo = makeRepo();
+    await repo.addCheckpoint('t1', {
+      type: 'poi',
+      name: 'Existing',
+      startTime: '2026-10-06T09:00:00.000Z',
+    });
+    await repo.addCheckpoints('t1', [
+      { type: 'poi', name: 'New Batch Item', startTime: '2026-10-07T09:00:00.000Z' },
+    ]);
+    const cb = vi.fn();
+    repo.subscribeToCheckpoints('t1', cb);
+    const names = cb.mock.calls[0][0].map((c: { name: string }) => c.name);
+    expect(names).toContain('Existing');
+    expect(names).toContain('New Batch Item');
+  });
+});
+
 // ── updateCheckpoint ──────────────────────────────────────────────────────────
 
 describe('LocalTripRepository — updateCheckpoint', () => {
@@ -286,6 +335,37 @@ describe('LocalTripRepository — alternatives', () => {
     await expect(
       repo.promoteAlternative('t1', 'nonexistent-id', '2026-10-06T10:00:00.000Z')
     ).rejects.toThrow('Alternative not found');
+  });
+});
+
+// ── addAlternatives (batch) ──────────────────────────────────────────────────
+
+describe('LocalTripRepository — addAlternatives (batch)', () => {
+  it('returns all saved alternatives with ids', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addAlternatives('t1', [
+      { type: 'poi', name: 'Batch Alt A' },
+      { type: 'poi', name: 'Batch Alt B' },
+    ]);
+    expect(saved).toHaveLength(2);
+    expect(saved[0].id).toBeTruthy();
+    expect(saved[1].id).toBeTruthy();
+    expect(saved[0].id).not.toBe(saved[1].id);
+  });
+
+  it('notifies subscribers exactly once for the whole batch', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToAlternatives('t1', cb);
+    const callsBefore = cb.mock.calls.length;
+    await repo.addAlternatives('t1', [
+      { type: 'poi', name: 'Batch Alt A' },
+      { type: 'poi', name: 'Batch Alt B' },
+    ]);
+    expect(cb.mock.calls.length).toBe(callsBefore + 1);
+    const latest = cb.mock.calls[cb.mock.calls.length - 1][0];
+    expect(latest.some((a: { name: string }) => a.name === 'Batch Alt A')).toBe(true);
+    expect(latest.some((a: { name: string }) => a.name === 'Batch Alt B')).toBe(true);
   });
 });
 

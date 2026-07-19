@@ -5,8 +5,14 @@ import { TripSelectorScreen } from './TripSelectorScreen';
 import { renderWithProviders, resetStores } from '../../test/helpers';
 import { useAuthStore } from '../../store/authStore';
 import type { TripRepository } from '../../data/TripRepository';
-import type { Trip } from '../../types';
+import type { Trip, Checkpoint, Alternative } from '../../types';
 import type { AuthService } from '../../data/AuthService';
+import { downloadTextFile } from '../../utils/fileTransfer';
+
+vi.mock('../../utils/fileTransfer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../utils/fileTransfer')>();
+  return { ...actual, downloadTextFile: vi.fn() };
+});
 
 // ── localStorage mock ─────────────────────────────────────────────────────────
 
@@ -36,10 +42,12 @@ beforeEach(() => {
   storageMock = makeLocalStorageMock();
   vi.stubGlobal('localStorage', storageMock);
   resetStores();
+  vi.mocked(downloadTextFile).mockClear();
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  document.querySelectorAll('input[type="file"]').forEach((el) => el.remove());
 });
 
 // ── Mock repo factory ─────────────────────────────────────────────────────────
@@ -71,14 +79,28 @@ function makeRepo(overrides: Partial<TripRepository> = {}): TripRepository {
     deleteTrip: vi.fn().mockResolvedValue(undefined),
     subscribeToCheckpoints: vi.fn().mockReturnValue(() => {}),
     addCheckpoint: vi.fn(),
+    addCheckpoints: vi.fn().mockResolvedValue([]),
     updateCheckpoint: vi.fn(),
     deleteCheckpoint: vi.fn(),
     subscribeToAlternatives: vi.fn().mockReturnValue(() => {}),
     addAlternative: vi.fn(),
+    addAlternatives: vi.fn().mockResolvedValue([]),
     deleteAlternative: vi.fn(),
     promoteAlternative: vi.fn(),
     ...overrides,
   } as TripRepository;
+}
+
+async function uploadYamlFile(content: string, fileName = 'trip.yaml') {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: /choose yaml file/i }));
+
+  const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+  const file = new File([content], fileName, { type: 'text/yaml' });
+  Object.defineProperty(input, 'files', { value: [file] });
+  input.dispatchEvent(new Event('change'));
+  // readUploadedFileText/FileReader resolves asynchronously
+  await new Promise((r) => setTimeout(r, 0));
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -227,6 +249,16 @@ describe('TripSelectorScreen — owner-gated rename/delete visibility', () => {
     expect(screen.queryByLabelText('Rename Japan 2026')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Delete Japan 2026')).not.toBeInTheDocument();
   });
+
+  it('still shows the export icon when the current user does not own the trip', async () => {
+    useAuthStore.setState({ user: { uid: 'someone-else', email: null, displayName: null } });
+    const owned: Trip = { ...TRIP_A, ownerId: 'owner-1' };
+    const repo = makeRepo({ listTrips: vi.fn().mockResolvedValue([owned]) });
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    expect(screen.getByLabelText('Export Japan 2026')).toBeInTheDocument();
+  });
 });
 
 describe('TripSelectorScreen — rename dialog', () => {
@@ -300,6 +332,166 @@ describe('TripSelectorScreen — delete dialog', () => {
 
     expect(repo.deleteTrip).not.toHaveBeenCalled();
     expect(screen.getByText('Japan 2026')).toBeInTheDocument();
+  });
+});
+
+describe('TripSelectorScreen — export trip', () => {
+  const CHECKPOINTS: Checkpoint[] = [
+    {
+      id: 'cp-1',
+      type: 'poi',
+      name: 'Nara Deer Park',
+      startTime: '2026-10-09T09:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ];
+  const ALTERNATIVES: Alternative[] = [{ id: 'alt-1', type: 'poi', name: 'Todai-ji Temple' }];
+
+  it('fetches checkpoints/alternatives once and downloads a serialized YAML file', async () => {
+    const user = userEvent.setup();
+    const repo = makeRepo({
+      listTrips: vi.fn().mockResolvedValue([TRIP_A]),
+      subscribeToCheckpoints: vi.fn((_tripId, cb) => {
+        cb(CHECKPOINTS);
+        return vi.fn();
+      }),
+      subscribeToAlternatives: vi.fn((_tripId, cb) => {
+        cb(ALTERNATIVES);
+        return vi.fn();
+      }),
+    });
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    await user.click(screen.getByLabelText('Export Japan 2026'));
+
+    await waitFor(() => {
+      expect(downloadTextFile).toHaveBeenCalledTimes(1);
+    });
+    const [filename, yamlText] = vi.mocked(downloadTextFile).mock.calls[0];
+    expect(filename).toBe('japan-2026.yaml');
+    expect(yamlText).toContain('Japan 2026');
+    expect(yamlText).toContain('Nara Deer Park');
+    expect(yamlText).toContain('Todai-ji Temple');
+  });
+});
+
+describe('TripSelectorScreen — import trip', () => {
+  it('"Import trip" button opens the import dialog', async () => {
+    const user = userEvent.setup();
+    const repo = makeRepo();
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Import trip'));
+    await user.click(screen.getByText('Import trip'));
+
+    expect(screen.getByText('Import trip', { selector: 'h2' })).toBeInTheDocument();
+  });
+
+  it('creates a new trip, batch-adds items, and selects it on a valid import', async () => {
+    const user = userEvent.setup();
+    const newTrip: Trip = {
+      id: 'trip-imported',
+      name: 'Imported Trip',
+      dateRange: { start: '2026-11-01', end: '2026-11-05' },
+      memberIds: [],
+    };
+    const repo = makeRepo({ createTrip: vi.fn().mockResolvedValue(newTrip) });
+    const onSelect = vi.fn();
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={onSelect} />);
+
+    await waitFor(() => screen.getByText('Import trip'));
+    await user.click(screen.getByText('Import trip'));
+
+    const yaml = `
+name: Imported Trip
+dateRange:
+  start: "2026-11-01"
+  end: "2026-11-05"
+checkpoints:
+  - type: poi
+    name: Nara Deer Park
+    startTime: "2026-11-02T09:00:00.000Z"
+alternatives:
+  - type: poi
+    name: Todai-ji Temple
+`;
+    await uploadYamlFile(yaml);
+    await waitFor(() => screen.getByRole('button', { name: /^import$/i }));
+    await user.click(screen.getByRole('button', { name: /^import$/i }));
+
+    await waitFor(() => {
+      expect(repo.createTrip).toHaveBeenCalledWith('Imported Trip', {
+        start: '2026-11-01',
+        end: '2026-11-05',
+      });
+      expect(repo.addCheckpoints).toHaveBeenCalledWith(
+        'trip-imported',
+        expect.arrayContaining([expect.objectContaining({ name: 'Nara Deer Park' })])
+      );
+      expect(repo.addAlternatives).toHaveBeenCalledWith(
+        'trip-imported',
+        expect.arrayContaining([expect.objectContaining({ name: 'Todai-ji Temple' })])
+      );
+      expect(onSelect).toHaveBeenCalledWith('trip-imported');
+    });
+    expect(storageMock.getItem('trip-planner:activeTripId')).toBe('trip-imported');
+  });
+
+  it('deletes the orphaned trip and does not select it when the batch add fails', async () => {
+    const user = userEvent.setup();
+    const newTrip: Trip = {
+      id: 'trip-orphan',
+      name: 'Orphan Trip',
+      dateRange: { start: '2026-11-01', end: '2026-11-05' },
+      memberIds: [],
+    };
+    const repo = makeRepo({
+      createTrip: vi.fn().mockResolvedValue(newTrip),
+      addCheckpoints: vi.fn().mockRejectedValue(new Error('network error')),
+    });
+    const onSelect = vi.fn();
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={onSelect} />);
+
+    await waitFor(() => screen.getByText('Import trip'));
+    await user.click(screen.getByText('Import trip'));
+
+    const yaml = `
+name: Orphan Trip
+dateRange:
+  start: "2026-11-01"
+  end: "2026-11-05"
+checkpoints:
+  - type: poi
+    name: Nara Deer Park
+    startTime: "2026-11-02T09:00:00.000Z"
+`;
+    await uploadYamlFile(yaml);
+    await waitFor(() => screen.getByRole('button', { name: /^import$/i }));
+    await user.click(screen.getByRole('button', { name: /^import$/i }));
+
+    await waitFor(() => {
+      expect(repo.deleteTrip).toHaveBeenCalledWith('trip-orphan');
+    });
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(storageMock.getItem('trip-planner:activeTripId')).toBeNull();
+    expect(screen.getByText('network error')).toBeInTheDocument();
+  });
+
+  it('shows the validation error list and does not call repo.createTrip for an invalid file', async () => {
+    const user = userEvent.setup();
+    const repo = makeRepo();
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Import trip'));
+    await user.click(screen.getByText('Import trip'));
+
+    await uploadYamlFile('name: Missing dateRange\n');
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 validation error/i)).toBeInTheDocument();
+    });
+    expect(repo.createTrip).not.toHaveBeenCalled();
   });
 });
 
