@@ -1,5 +1,23 @@
-import { Box, Typography, IconButton, useTheme } from '@mui/material';
-import { TimelineItem, TimelineSeparator, TimelineConnector, TimelineContent, TimelineDot } from '@mui/lab';
+import { useState } from 'react';
+import {
+  Box,
+  Typography,
+  IconButton,
+  useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
+} from '@mui/material';
+import {
+  TimelineItem,
+  TimelineSeparator,
+  TimelineConnector,
+  TimelineContent,
+  TimelineDot,
+} from '@mui/lab';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import type { Checkpoint } from '../../types';
 import { CheckpointIcon } from './CheckpointIcon';
@@ -21,8 +39,16 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-export function CheckpointItem({ checkpoint, isActive, isSelected, isLast, onSelect, onDelete }: Props) {
+export function CheckpointItem({
+  checkpoint,
+  isActive,
+  isSelected,
+  isLast,
+  onSelect,
+  onDelete,
+}: Props) {
   const theme = useTheme();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
     <TimelineItem
@@ -55,14 +81,17 @@ export function CheckpointItem({ checkpoint, isActive, isSelected, isLast, onSel
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
-            bgcolor: isSelected ? 'action.selected' : 'transparent',
+            gap: 1,
+            bgcolor: 'background.paper',
+            border: '1px solid',
+            borderColor: isSelected ? 'primary.main' : 'divider',
             borderRadius: 1,
-            px: isSelected ? 1 : 0,
-            py: isSelected ? 0.5 : 0,
-            transition: 'background-color 0.15s',
+            px: 1.5,
+            py: 1,
+            transition: 'border-color 0.15s',
           }}
         >
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Typography variant="body1" fontWeight={isActive ? 600 : 400} lineHeight={1.3}>
               {checkpoint.name}
             </Typography>
@@ -71,20 +100,54 @@ export function CheckpointItem({ checkpoint, isActive, isSelected, isLast, onSel
               {checkpoint.endTime && ` – ${formatTime(checkpoint.endTime)}`}
             </Typography>
             {checkpoint.notes && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, fontStyle: 'italic' }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.25, fontStyle: 'italic' }}
+              >
                 {checkpoint.notes}
               </Typography>
             )}
           </Box>
           <IconButton
             size="small"
-            onClick={e => { e.stopPropagation(); onDelete(); }}
-            sx={{ opacity: 0, '.MuiTimelineItem-root:hover &': { opacity: 1 }, ml: 1, flexShrink: 0 }}
+            aria-label="Delete checkpoint"
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmOpen(true);
+            }}
+            sx={{ ml: 1, flexShrink: 0 }}
           >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Box>
       </TimelineContent>
+
+      <Dialog
+        open={confirmOpen}
+        onClose={(_e, _reason) => setConfirmOpen(false)}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <DialogTitle>Delete checkpoint?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Delete "{checkpoint.name}"? You can undo this right after.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => {
+              setConfirmOpen(false);
+              onDelete();
+            }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </TimelineItem>
   );
 }

@@ -155,10 +155,9 @@ describe('Flow 1: Add checkpoint', () => {
       expect(screen.getByText('JFK → NRT')).toBeInTheDocument();
     });
 
-    // Open the add form via the FAB (present when checkpoints exist)
-    const fab = document.querySelector<HTMLButtonElement>('.MuiFab-root');
-    expect(fab).toBeTruthy();
-    fireEvent.click(fab!);
+    // Open the add form via the hamburger drawer menu's "Add checkpoint" item
+    fireEvent.click(screen.getByRole('button', { name: /^menu$/i }));
+    fireEvent.click(screen.getByText('Add checkpoint'));
 
     // The add form drawer should be open
     await waitFor(() => {
@@ -253,6 +252,12 @@ describe('Flow 3: Delete and undo', () => {
     );
     expect(deleteBtn).toBeTruthy();
     fireEvent.click(deleteBtn!);
+
+    // Confirm the deletion in the confirmation dialog
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
 
     // The checkpoint should disappear from the list
     await waitFor(() => {

@@ -60,7 +60,7 @@ describe('AlternativesShelf', () => {
     expect(svgs.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('calls deleteAlternative when delete button is clicked', async () => {
+  it('calls deleteAlternative when delete button is clicked and confirmed', async () => {
     seedAlternatives([ALT1]);
     // Spy on the real store action rather than replacing it via setState
     const spy = vi.spyOn(useTripStore.getState(), 'deleteAlternative').mockResolvedValue();
@@ -69,7 +69,20 @@ describe('AlternativesShelf', () => {
 
     const deleteBtn = screen.getByRole('button', { name: /delete alternative/i });
     fireEvent.click(deleteBtn);
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
     expect(spy).toHaveBeenCalledWith('a1');
+    spy.mockRestore();
+  });
+
+  it('does not call deleteAlternative when the confirmation dialog is cancelled', async () => {
+    seedAlternatives([ALT1]);
+    const spy = vi.spyOn(useTripStore.getState(), 'deleteAlternative').mockResolvedValue();
+
+    renderWithProviders(<AlternativesShelf />);
+
+    fireEvent.click(screen.getByRole('button', { name: /delete alternative/i }));
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
 

@@ -9,7 +9,14 @@ import {
   useMediaQuery,
   useTheme,
   IconButton,
-  Button,
+  Drawer,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
 import MapIcon from '@mui/icons-material/Map';
@@ -17,6 +24,11 @@ import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import MenuIcon from '@mui/icons-material/Menu';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import AddIcon from '@mui/icons-material/Add';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { TimelineView } from '../timeline/TimelineView';
 import { MapView } from '../map/MapView';
 import { AlternativesShelf } from '../alternatives/AlternativesShelf';
@@ -25,6 +37,13 @@ import { useTripStore } from '../../store/tripStore';
 import appIcon from '../../assets/app-icon.svg';
 import sakuraPattern from '../../assets/sakura-pattern.svg';
 import sakuraBranch from '../../assets/sakura-branch.svg';
+import {
+  serializeTrip,
+  parseCheckpointsYaml,
+  type ParsedCheckpointsYaml,
+} from '../../data/tripYaml';
+import { downloadTextFile, slugifyFilename } from '../../utils/fileTransfer';
+import { YamlImportDialog } from '../trips/YamlImportDialog';
 
 interface Props {
   onBack: () => void;
@@ -153,6 +172,48 @@ export function AppShell({ onBack }: Props) {
   const [showTimeline, setShowTimeline] = useState(true);
   const [showAlternatives, setShowAlternatives] = useState(true);
   const trip = useTripStore((s) => s.trip);
+  const checkpoints = useTripStore((s) => s.checkpoints);
+  const alternatives = useTripStore((s) => s.alternatives);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [snackbar, setSnackbar] = useState<string | null>(null);
+  const [addCheckpointSignal, setAddCheckpointSignal] = useState(0);
+  const [addAlternativeSignal, setAddAlternativeSignal] = useState(0);
+
+  const panelWidth = isWide ? 380 : 320;
+
+  function handleExportTrip() {
+    setMenuOpen(false);
+    if (!trip) return;
+    const yamlText = serializeTrip(trip, checkpoints, alternatives);
+    downloadTextFile(`${slugifyFilename(trip.name, 'trip')}.yaml`, yamlText);
+    setSnackbar('Trip exported.');
+  }
+
+  function handleAddCheckpoint() {
+    setMenuOpen(false);
+    if (isPhone) setTab(0);
+    setAddCheckpointSignal((n) => n + 1);
+  }
+
+  function handleAddAlternative() {
+    setMenuOpen(false);
+    if (isPhone) setTab(2);
+    setAddAlternativeSignal((n) => n + 1);
+  }
+
+  async function handleImportCheckpointsConfirm(parsed: ParsedCheckpointsYaml) {
+    await useTripStore.getState().importCheckpoints({
+      checkpoints: parsed.checkpoints,
+      alternatives: parsed.alternatives,
+    });
+    setSnackbar(
+      `Imported ${parsed.checkpoints.length} checkpoint${parsed.checkpoints.length === 1 ? '' : 's'} and ${
+        parsed.alternatives.length
+      } alternative${parsed.alternatives.length === 1 ? '' : 's'}.`
+    );
+  }
 
   return (
     <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column' }}>
@@ -163,6 +224,15 @@ export function AppShell({ onBack }: Props) {
         sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
       >
         <Toolbar variant="dense">
+          <IconButton
+            size="small"
+            aria-label="Menu"
+            title="Menu"
+            onClick={() => setMenuOpen(true)}
+            sx={{ mr: 1 }}
+          >
+            <MenuIcon fontSize="small" />
+          </IconButton>
           <Box
             component="img"
             src={appIcon}
@@ -172,14 +242,56 @@ export function AppShell({ onBack }: Props) {
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             {trip?.name ?? "Maiyun's Trip Planner"}
           </Typography>
-          <Button
-            size="small"
-            onClick={onBack}
-            title="Back to trips"
-            startIcon={<ArrowBackIcon fontSize="small" />}
-          >
-            Back to trips
-          </Button>
+
+          <Drawer anchor="left" open={menuOpen} onClose={() => setMenuOpen(false)}>
+            <Box sx={{ width: 280 }} role="presentation" data-testid="app-menu">
+              <List>
+                <ListItemButton onClick={handleAddCheckpoint}>
+                  <ListItemIcon>
+                    <AddIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Add checkpoint</ListItemText>
+                </ListItemButton>
+                <ListItemButton onClick={handleAddAlternative}>
+                  <ListItemIcon>
+                    <AddCircleOutlineIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Add alternative</ListItemText>
+                </ListItemButton>
+              </List>
+              <Divider />
+              <List>
+                <ListItemButton
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onBack();
+                  }}
+                >
+                  <ListItemIcon>
+                    <ArrowBackIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Back to trips</ListItemText>
+                </ListItemButton>
+                <ListItemButton onClick={handleExportTrip}>
+                  <ListItemIcon>
+                    <FileDownloadIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Export trip (.yaml)</ListItemText>
+                </ListItemButton>
+                <ListItemButton
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setImportDialogOpen(true);
+                  }}
+                >
+                  <ListItemIcon>
+                    <UploadFileIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Import checkpoints…</ListItemText>
+                </ListItemButton>
+              </List>
+            </Box>
+          </Drawer>
         </Toolbar>
       </AppBar>
 
@@ -195,13 +307,13 @@ export function AppShell({ onBack }: Props) {
                 size="contain"
                 position="top center"
               >
-                <TimelineView />
+                <TimelineView openAddSignal={addCheckpointSignal || undefined} />
               </TexturedPanel>
             )}
             {tab === 1 && <MapView />}
             {tab === 2 && (
               <TexturedPanel image={sakuraPattern} repeat="repeat" size="360px 360px">
-                <AlternativesShelf />
+                <AlternativesShelf openAddSignal={addAlternativeSignal || undefined} />
               </TexturedPanel>
             )}
           </Box>
@@ -220,8 +332,9 @@ export function AppShell({ onBack }: Props) {
           {/* Left panel — Timeline */}
           {showTimeline && (
             <Box
+              data-testid="timeline-panel"
               sx={{
-                width: isWide ? 380 : 320,
+                width: panelWidth,
                 flexShrink: 0,
                 borderRight: '1px solid',
                 borderColor: 'divider',
@@ -234,7 +347,7 @@ export function AppShell({ onBack }: Props) {
                 size="contain"
                 position="top center"
               >
-                <TimelineView />
+                <TimelineView openAddSignal={addCheckpointSignal || undefined} />
               </TexturedPanel>
             </Box>
           )}
@@ -261,8 +374,9 @@ export function AppShell({ onBack }: Props) {
           {/* Right panel — Alternatives (tablet/desktop split view) */}
           {showAlternatives && (
             <Box
+              data-testid="alternatives-panel"
               sx={{
-                width: 300,
+                width: panelWidth,
                 flexShrink: 0,
                 borderLeft: '1px solid',
                 borderColor: 'divider',
@@ -270,12 +384,27 @@ export function AppShell({ onBack }: Props) {
               }}
             >
               <TexturedPanel image={sakuraPattern} repeat="repeat" size="360px 360px">
-                <AlternativesShelf />
+                <AlternativesShelf openAddSignal={addAlternativeSignal || undefined} />
               </TexturedPanel>
             </Box>
           )}
         </Box>
       )}
+
+      <YamlImportDialog
+        open={importDialogOpen}
+        title="Import checkpoints"
+        description="Import checkpoints and alternatives into the current trip. A full trip export file also works — only its checkpoints/alternatives are used."
+        onClose={() => setImportDialogOpen(false)}
+        parse={parseCheckpointsYaml}
+        onConfirm={handleImportCheckpointsConfirm}
+      />
+
+      <Snackbar open={Boolean(snackbar)} autoHideDuration={4000} onClose={() => setSnackbar(null)}>
+        <Alert onClose={() => setSnackbar(null)} severity="success" sx={{ width: '100%' }}>
+          {snackbar}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

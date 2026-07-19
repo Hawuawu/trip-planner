@@ -85,19 +85,33 @@ describe('CheckpointItem', () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onDelete when delete button is clicked and does not propagate', () => {
+  it('clicking delete opens a confirmation dialog without calling onDelete yet', () => {
     const onSelect = vi.fn();
     const onDelete = vi.fn();
     renderItem({ onSelect, onDelete });
-    // The delete button exists in the DOM (just hidden via opacity)
-    const _deleteBtn = document.querySelector('button[aria-label], button') as HTMLButtonElement;
-    // Find the delete button by locating one that has the DeleteIcon inside it
-    const buttons = Array.from(document.querySelectorAll('button'));
-    const delBtn = buttons.find((b) => b.querySelector('svg'));
-    expect(delBtn).toBeTruthy();
-    fireEvent.click(delBtn!);
+    const delBtn = screen.getByRole('button', { name: /delete checkpoint/i });
+    fireEvent.click(delBtn);
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByText(/delete checkpoint\?/i)).toBeInTheDocument();
+  });
+
+  it('calls onDelete when the confirmation dialog is confirmed and does not propagate', () => {
+    const onSelect = vi.fn();
+    const onDelete = vi.fn();
+    renderItem({ onSelect, onDelete });
+    fireEvent.click(screen.getByRole('button', { name: /delete checkpoint/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('does not call onDelete when the confirmation dialog is cancelled', () => {
+    const onDelete = vi.fn();
+    renderItem({ onDelete });
+    fireEvent.click(screen.getByRole('button', { name: /delete checkpoint/i }));
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(onDelete).not.toHaveBeenCalled();
   });
 
   it('uses bold typography when isActive', () => {

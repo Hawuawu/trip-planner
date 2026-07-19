@@ -8,6 +8,10 @@ export interface TripRepository {
   deleteTrip(tripId: string): Promise<void>;
   subscribeToCheckpoints(tripId: string, cb: (checkpoints: Checkpoint[]) => void): () => void;
   addCheckpoint(tripId: string, cp: Omit<Checkpoint, 'id' | 'updatedAt'>): Promise<Checkpoint>;
+  addCheckpoints(
+    tripId: string,
+    checkpoints: Omit<Checkpoint, 'id' | 'updatedAt'>[]
+  ): Promise<Checkpoint[]>;
   updateCheckpoint(
     tripId: string,
     id: string,
@@ -16,6 +20,12 @@ export interface TripRepository {
   deleteCheckpoint(tripId: string, id: string): Promise<void>;
   subscribeToAlternatives(tripId: string, cb: (alternatives: Alternative[]) => void): () => void;
   addAlternative(tripId: string, alt: Omit<Alternative, 'id'>): Promise<Alternative>;
+  addAlternatives(tripId: string, alternatives: Omit<Alternative, 'id'>[]): Promise<Alternative[]>;
+  updateAlternative(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<Alternative, 'id'>>
+  ): Promise<void>;
   deleteAlternative(tripId: string, id: string): Promise<void>;
   promoteAlternative(tripId: string, alternativeId: string, startTime: string): Promise<void>;
   subscribeToBookings(tripId: string, cb: (bookings: Booking[]) => void): () => void;

@@ -23,10 +23,15 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LogoutIcon from '@mui/icons-material/Logout';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import type { TripRepository } from '../../data/TripRepository';
-import type { Trip } from '../../types';
+import type { Trip, Checkpoint, Alternative } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 import emptyStateBanner from '../../assets/empty-state-banner.svg';
+import { serializeTrip, parseTripYaml, type ParsedTripYaml } from '../../data/tripYaml';
+import { downloadTextFile, slugifyFilename } from '../../utils/fileTransfer';
+import { YamlImportDialog } from './YamlImportDialog';
 
 interface Props {
   repo: TripRepository;
@@ -43,6 +48,46 @@ const EMPTY_FORM: FormState = { name: '', start: '', end: '' };
 
 function canManage(trip: Trip, uid: string | undefined): boolean {
   return !trip.ownerId || trip.ownerId === uid;
+}
+
+// One-shot fetch of a trip's checkpoints/alternatives — there's no dedicated
+// repo method for this, so we subscribe, wait for the first callback from
+// each, then unsubscribe. Some repos (e.g. LocalTripRepository) invoke the
+// subscribe callback synchronously before returning the unsubscribe
+// function, so the actual unsubscribe calls are deferred to a microtask to
+// avoid referencing an unsub function before it has been assigned.
+function fetchTripDataOnce(
+  repo: TripRepository,
+  tripId: string
+): Promise<{ checkpoints: Checkpoint[]; alternatives: Alternative[] }> {
+  return new Promise((resolve) => {
+    let checkpoints: Checkpoint[] | null = null;
+    let alternatives: Alternative[] | null = null;
+    let settled = false;
+
+    const unsubCheckpoints = repo.subscribeToCheckpoints(tripId, (cps) => {
+      if (checkpoints === null) {
+        checkpoints = cps;
+        trySettle();
+      }
+    });
+    const unsubAlternatives = repo.subscribeToAlternatives(tripId, (alts) => {
+      if (alternatives === null) {
+        alternatives = alts;
+        trySettle();
+      }
+    });
+
+    function trySettle() {
+      if (settled || checkpoints === null || alternatives === null) return;
+      settled = true;
+      Promise.resolve().then(() => {
+        unsubCheckpoints();
+        unsubAlternatives();
+      });
+      resolve({ checkpoints: checkpoints!, alternatives: alternatives! });
+    }
+  });
 }
 
 export function TripSelectorScreen({ repo, onSelect }: Props) {
@@ -63,6 +108,8 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
 
   const [deleteTarget, setDeleteTarget] = useState<Trip | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,6 +222,31 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
     }
   }
 
+  async function handleExportTrip(trip: Trip) {
+    const { checkpoints, alternatives } = await fetchTripDataOnce(repo, trip.id);
+    const yamlText = serializeTrip(trip, checkpoints, alternatives);
+    downloadTextFile(`${slugifyFilename(trip.name, 'trip')}.yaml`, yamlText);
+  }
+
+  async function handleImportTripConfirm(parsed: ParsedTripYaml) {
+    const newTrip = await repo.createTrip(parsed.name, parsed.dateRange);
+    try {
+      if (parsed.checkpoints.length > 0) {
+        await repo.addCheckpoints(newTrip.id, parsed.checkpoints);
+      }
+      if (parsed.alternatives.length > 0) {
+        await repo.addAlternatives(newTrip.id, parsed.alternatives);
+      }
+    } catch (e) {
+      // Clean up the orphaned empty trip rather than leaving it stranded —
+      // the user can retry the import from the same dialog afterwards.
+      await repo.deleteTrip(newTrip.id);
+      throw e;
+    }
+    localStorage.setItem('trip-planner:activeTripId', newTrip.id);
+    onSelect(newTrip.id);
+  }
+
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {service && (
@@ -250,31 +322,40 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
                       disablePadding
                       divider={index < trips.length - 1}
                       secondaryAction={
-                        manageable ? (
-                          <Stack direction="row" spacing={0.5}>
-                            <IconButton
-                              size="small"
-                              edge="end"
-                              aria-label={`Rename ${trip.name}`}
-                              onClick={() => openRenameDialog(trip)}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              edge="end"
-                              aria-label={`Delete ${trip.name}`}
-                              onClick={() => openDeleteDialog(trip)}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Stack>
-                        ) : undefined
+                        <Stack direction="row" spacing={0.5}>
+                          <IconButton
+                            size="small"
+                            edge={manageable ? undefined : 'end'}
+                            aria-label={`Export ${trip.name}`}
+                            onClick={() => handleExportTrip(trip)}
+                          >
+                            <FileDownloadIcon fontSize="small" />
+                          </IconButton>
+                          {manageable && (
+                            <>
+                              <IconButton
+                                size="small"
+                                aria-label={`Rename ${trip.name}`}
+                                onClick={() => openRenameDialog(trip)}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                edge="end"
+                                aria-label={`Delete ${trip.name}`}
+                                onClick={() => openDeleteDialog(trip)}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </>
+                          )}
+                        </Stack>
                       }
                     >
                       <ListItemButton
                         onClick={() => handleTripClick(trip)}
-                        sx={{ py: 1.5, pr: manageable ? 11 : 2 }}
+                        sx={{ py: 1.5, pr: manageable ? 15 : 6 }}
                       >
                         <ListItemText
                           primary={trip.name}
@@ -291,15 +372,26 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
               </List>
             )}
 
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={openDialog}
-              fullWidth
-              size="large"
-            >
-              New trip
-            </Button>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={openDialog}
+                fullWidth
+                size="large"
+              >
+                New trip
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<UploadFileIcon />}
+                onClick={() => setImportDialogOpen(true)}
+                fullWidth
+                size="large"
+              >
+                Import trip
+              </Button>
+            </Stack>
           </Box>
         )}
 
@@ -411,6 +503,15 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <YamlImportDialog
+          open={importDialogOpen}
+          title="Import trip"
+          description="Import a trip exported from this app (or any file with matching name/dateRange/checkpoints/alternatives) as a new trip."
+          onClose={() => setImportDialogOpen(false)}
+          parse={parseTripYaml}
+          onConfirm={handleImportTripConfirm}
+        />
       </Box>
     </Box>
   );

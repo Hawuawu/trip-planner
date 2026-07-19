@@ -14,6 +14,7 @@ import {
   deleteDoc,
   serverTimestamp,
   Timestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import type { TripRepository } from './TripRepository';
 import type { Trip, Checkpoint, Alternative, Booking } from '../types';
@@ -137,6 +138,21 @@ export class FirebaseTripRepository implements TripRepository {
     });
   }
 
+  async addCheckpoints(
+    tripId: string,
+    checkpoints: Omit<Checkpoint, 'id' | 'updatedAt'>[]
+  ): Promise<Checkpoint[]> {
+    const now = new Date().toISOString();
+    const batch = writeBatch(this.db);
+    const collectionRef = collection(this.db, 'trips', tripId, 'checkpoints');
+    const refs = checkpoints.map(() => doc(collectionRef));
+    checkpoints.forEach((cp, i) => {
+      batch.set(refs[i], { ...cp, updatedAt: serverTimestamp() });
+    });
+    await batch.commit();
+    return checkpoints.map((cp, i) => ({ ...cp, id: refs[i].id, updatedAt: now }));
+  }
+
   async deleteCheckpoint(tripId: string, id: string): Promise<void> {
     await deleteDoc(doc(this.db, 'trips', tripId, 'checkpoints', id));
   }
@@ -150,6 +166,28 @@ export class FirebaseTripRepository implements TripRepository {
   async addAlternative(tripId: string, alt: Omit<Alternative, 'id'>): Promise<Alternative> {
     const ref = await addDoc(collection(this.db, 'trips', tripId, 'alternatives'), alt);
     return { ...alt, id: ref.id };
+  }
+
+  async addAlternatives(
+    tripId: string,
+    alternatives: Omit<Alternative, 'id'>[]
+  ): Promise<Alternative[]> {
+    const batch = writeBatch(this.db);
+    const collectionRef = collection(this.db, 'trips', tripId, 'alternatives');
+    const refs = alternatives.map(() => doc(collectionRef));
+    alternatives.forEach((alt, i) => {
+      batch.set(refs[i], alt);
+    });
+    await batch.commit();
+    return alternatives.map((alt, i) => ({ ...alt, id: refs[i].id }));
+  }
+
+  async updateAlternative(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<Alternative, 'id'>>
+  ): Promise<void> {
+    await updateDoc(doc(this.db, 'trips', tripId, 'alternatives', id), { ...changes });
   }
 
   async deleteAlternative(tripId: string, id: string): Promise<void> {

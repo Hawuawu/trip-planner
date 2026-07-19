@@ -9,6 +9,7 @@ interface TripState {
   bookings: Booking[];
   selectedId: string | null;
   undoCheckpoint: Checkpoint | null;
+  undoAlternative: Alternative | null;
   repo: TripRepository | null;
   tripId: string | null;
 
@@ -27,8 +28,16 @@ interface TripState {
   reorderCheckpoints(fromIndex: number, toIndex: number): Promise<void>;
 
   addAlternative(alt: Omit<Alternative, 'id'>): Promise<void>;
+  updateAlternative(id: string, changes: Partial<Omit<Alternative, 'id'>>): Promise<void>;
   deleteAlternative(id: string): Promise<void>;
+  undoDeleteAlternative(): Promise<void>;
+  clearUndoAlternative(): void;
   promoteAlternative(alternativeId: string, startTime: string): Promise<void>;
+
+  importCheckpoints(items: {
+    checkpoints: Omit<Checkpoint, 'id' | 'updatedAt'>[];
+    alternatives: Omit<Alternative, 'id'>[];
+  }): Promise<void>;
 
   addBooking(booking: Omit<Booking, 'id'>): Promise<Booking>;
   updateBooking(id: string, changes: Partial<Omit<Booking, 'id'>>): Promise<void>;
@@ -42,6 +51,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   bookings: [],
   selectedId: null,
   undoCheckpoint: null,
+  undoAlternative: null,
   repo: null,
   tripId: null,
 
@@ -170,11 +180,43 @@ export const useTripStore = create<TripState>((set, get) => ({
     set((s) => ({ alternatives: s.alternatives.map((a) => (a.id === optimistic.id ? saved : a)) }));
   },
 
+  async updateAlternative(id, changes) {
+    const { repo, tripId, alternatives } = get();
+    if (!repo || !tripId) return;
+    const prev = alternatives.find((a) => a.id === id);
+    set({ alternatives: alternatives.map((a) => (a.id === id ? { ...a, ...changes } : a)) });
+    try {
+      await repo.updateAlternative(tripId, id, changes);
+    } catch {
+      if (prev) set((s) => ({ alternatives: s.alternatives.map((a) => (a.id === id ? prev : a)) }));
+    }
+  },
+
   async deleteAlternative(id) {
     const { repo, tripId, alternatives } = get();
     if (!repo || !tripId) return;
-    set({ alternatives: alternatives.filter((a) => a.id !== id) });
-    await repo.deleteAlternative(tripId, id);
+    const target = alternatives.find((a) => a.id === id);
+    set({
+      alternatives: alternatives.filter((a) => a.id !== id),
+      undoAlternative: target ?? null,
+    });
+    try {
+      await repo.deleteAlternative(tripId, id);
+    } catch {
+      if (target) set((s) => ({ alternatives: [...s.alternatives, target] }));
+    }
+  },
+
+  async undoDeleteAlternative() {
+    const { repo, tripId, undoAlternative } = get();
+    if (!repo || !tripId || !undoAlternative) return;
+    set({ undoAlternative: null });
+    const { id: _id, ...alt } = undoAlternative;
+    await get().addAlternative(alt);
+  },
+
+  clearUndoAlternative() {
+    set({ undoAlternative: null });
   },
 
   async promoteAlternative(alternativeId, startTime) {
@@ -182,6 +224,15 @@ export const useTripStore = create<TripState>((set, get) => ({
     if (!repo || !tripId) return;
     set((s) => ({ alternatives: s.alternatives.filter((a) => a.id !== alternativeId) }));
     await repo.promoteAlternative(tripId, alternativeId, startTime);
+  },
+
+  async importCheckpoints({ checkpoints, alternatives }) {
+    const { repo, tripId } = get();
+    if (!repo || !tripId) return;
+    if (checkpoints.length > 0) await repo.addCheckpoints(tripId, checkpoints);
+    if (alternatives.length > 0) await repo.addAlternatives(tripId, alternatives);
+    // No manual set() — the live subscribeToCheckpoints/subscribeToAlternatives
+    // listeners from init() push the new items in, same as every other write.
   },
 
   async addBooking(booking) {
