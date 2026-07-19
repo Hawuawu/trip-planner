@@ -148,7 +148,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 describe('Flow 1: Add checkpoint', () => {
   it('adds a new checkpoint and shows it on the timeline', async () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={() => {}} />);
 
     // Wait for seed checkpoints to load (Timeline tab is default on phone)
     await waitFor(() => {
@@ -191,7 +191,7 @@ describe('Flow 1: Add checkpoint', () => {
 // ---------------------------------------------------------------------------
 describe('Flow 2: Edit checkpoint', () => {
   it('edits an existing checkpoint and shows the updated name', async () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={() => {}} />);
 
     // Wait for seed data
     await waitFor(() => {
@@ -231,7 +231,7 @@ describe('Flow 2: Edit checkpoint', () => {
 // ---------------------------------------------------------------------------
 describe('Flow 3: Delete and undo', () => {
   it('deletes a checkpoint then restores it via the UNDO snackbar', async () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={() => {}} />);
 
     // Wait for seed checkpoints
     await waitFor(() => {
@@ -240,11 +240,15 @@ describe('Flow 3: Delete and undo', () => {
 
     // Find the first non-FAB icon button on the page — that is the delete button
     // for the first checkpoint in the timeline (renders a DeleteOutline svg).
+    // AppBar buttons (back, sign-out, ...) all carry a `title`, the checkpoint
+    // delete button doesn't — exclude by that rather than by a growing list of
+    // Toolbar labels.
     const allButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'));
     const deleteBtn = allButtons.find(
       (b) =>
         !b.classList.contains('MuiFab-root') &&
         b.querySelector('svg') &&
+        !b.title &&
         !b.textContent?.match(/timeline|map|alternatives/i)
     );
     expect(deleteBtn).toBeTruthy();
@@ -275,7 +279,7 @@ describe('Flow 3: Delete and undo', () => {
 // ---------------------------------------------------------------------------
 describe('Flow 4: Promote alternative to timeline', () => {
   it('promotes an alternative to the timeline via the promote dialog', async () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={() => {}} />);
 
     // Wait for the initial timeline to render
     await waitFor(() => {
@@ -341,7 +345,7 @@ describe('Flow 4: Promote alternative to timeline', () => {
 describe('Flow 5: Offline banner', () => {
   it('shows the offline banner on "offline" event and hides it on "online" event', async () => {
     setOnline(true);
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={() => {}} />);
 
     // Banner should not be present initially
     expect(screen.queryByText(/saved locally/i)).not.toBeInTheDocument();
@@ -369,7 +373,7 @@ describe('Flow 5: Offline banner', () => {
 
   it('shows the offline banner immediately when navigator.onLine is false at mount', () => {
     setOnline(false);
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={() => {}} />);
 
     expect(screen.getByText(/saved locally/i)).toBeInTheDocument();
   });

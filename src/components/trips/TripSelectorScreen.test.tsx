@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TripSelectorScreen } from './TripSelectorScreen';
-import { renderWithProviders } from '../../test/helpers';
+import { renderWithProviders, resetStores } from '../../test/helpers';
+import { useAuthStore } from '../../store/authStore';
 import type { TripRepository } from '../../data/TripRepository';
 import type { Trip } from '../../types';
+import type { AuthService } from '../../data/AuthService';
 
 // ── localStorage mock ─────────────────────────────────────────────────────────
 
@@ -12,10 +14,18 @@ function makeLocalStorageMock() {
   const store = new Map<string, string>();
   return {
     getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => { store.set(k, v); },
-    removeItem: (k: string) => { store.delete(k); },
-    clear: () => { store.clear(); },
-    get length() { return store.size; },
+    setItem: (k: string, v: string) => {
+      store.set(k, v);
+    },
+    removeItem: (k: string) => {
+      store.delete(k);
+    },
+    clear: () => {
+      store.clear();
+    },
+    get length() {
+      return store.size;
+    },
     key: (i: number) => Array.from(store.keys())[i] ?? null,
   };
 }
@@ -25,6 +35,7 @@ let storageMock: ReturnType<typeof makeLocalStorageMock>;
 beforeEach(() => {
   storageMock = makeLocalStorageMock();
   vi.stubGlobal('localStorage', storageMock);
+  resetStores();
 });
 
 afterEach(() => {
@@ -33,14 +44,31 @@ afterEach(() => {
 
 // ── Mock repo factory ─────────────────────────────────────────────────────────
 
-const TRIP_A: Trip = { id: 'trip-1', name: 'Japan 2026', dateRange: { start: '2026-10-01', end: '2026-10-14' }, memberIds: [] };
-const TRIP_B: Trip = { id: 'trip-2', name: 'Korea 2027', dateRange: { start: '2027-05-01', end: '2027-05-10' }, memberIds: [] };
+const TRIP_A: Trip = {
+  id: 'trip-1',
+  name: 'Japan 2026',
+  dateRange: { start: '2026-10-01', end: '2026-10-14' },
+  memberIds: [],
+};
+const TRIP_B: Trip = {
+  id: 'trip-2',
+  name: 'Korea 2027',
+  dateRange: { start: '2027-05-01', end: '2027-05-10' },
+  memberIds: [],
+};
 
 function makeRepo(overrides: Partial<TripRepository> = {}): TripRepository {
   return {
     getTrip: vi.fn().mockResolvedValue(TRIP_A),
     listTrips: vi.fn().mockResolvedValue([TRIP_A, TRIP_B]),
-    createTrip: vi.fn().mockResolvedValue({ id: 'trip-new', name: 'New Trip', dateRange: { start: '2027-01-01', end: '2027-01-10' }, memberIds: [] }),
+    createTrip: vi.fn().mockResolvedValue({
+      id: 'trip-new',
+      name: 'New Trip',
+      dateRange: { start: '2027-01-01', end: '2027-01-10' },
+      memberIds: [],
+    }),
+    updateTrip: vi.fn().mockResolvedValue(undefined),
+    deleteTrip: vi.fn().mockResolvedValue(undefined),
     subscribeToCheckpoints: vi.fn().mockReturnValue(() => {}),
     addCheckpoint: vi.fn(),
     updateCheckpoint: vi.fn(),
@@ -137,7 +165,12 @@ describe('TripSelectorScreen — new trip dialog', () => {
 
   it('submitting a valid form calls repo.createTrip and then onSelect', async () => {
     const user = userEvent.setup();
-    const newTrip: Trip = { id: 'trip-new', name: 'My New Trip', dateRange: { start: '2027-01-01', end: '2027-01-10' }, memberIds: [] };
+    const newTrip: Trip = {
+      id: 'trip-new',
+      name: 'My New Trip',
+      dateRange: { start: '2027-01-01', end: '2027-01-10' },
+      memberIds: [],
+    };
     const repo = makeRepo({ createTrip: vi.fn().mockResolvedValue(newTrip) });
     const onSelect = vi.fn();
     renderWithProviders(<TripSelectorScreen repo={repo} onSelect={onSelect} />);
@@ -161,5 +194,141 @@ describe('TripSelectorScreen — new trip dialog', () => {
       });
       expect(onSelect).toHaveBeenCalledWith('trip-new');
     });
+  });
+});
+
+describe('TripSelectorScreen — owner-gated rename/delete visibility', () => {
+  it('shows rename/delete icons for a trip with no ownerId (legacy trip)', async () => {
+    const repo = makeRepo({ listTrips: vi.fn().mockResolvedValue([TRIP_A]) });
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    expect(screen.getByLabelText('Rename Japan 2026')).toBeInTheDocument();
+    expect(screen.getByLabelText('Delete Japan 2026')).toBeInTheDocument();
+  });
+
+  it('shows rename/delete icons when the current user owns the trip', async () => {
+    useAuthStore.setState({ user: { uid: 'owner-1', email: null, displayName: null } });
+    const owned: Trip = { ...TRIP_A, ownerId: 'owner-1' };
+    const repo = makeRepo({ listTrips: vi.fn().mockResolvedValue([owned]) });
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    expect(screen.getByLabelText('Rename Japan 2026')).toBeInTheDocument();
+  });
+
+  it('hides rename/delete icons when the current user does not own the trip', async () => {
+    useAuthStore.setState({ user: { uid: 'someone-else', email: null, displayName: null } });
+    const owned: Trip = { ...TRIP_A, ownerId: 'owner-1' };
+    const repo = makeRepo({ listTrips: vi.fn().mockResolvedValue([owned]) });
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    expect(screen.queryByLabelText('Rename Japan 2026')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Delete Japan 2026')).not.toBeInTheDocument();
+  });
+});
+
+describe('TripSelectorScreen — rename dialog', () => {
+  it('opens pre-filled with the trip name and saves via repo.updateTrip', async () => {
+    const user = userEvent.setup();
+    const repo = makeRepo({ listTrips: vi.fn().mockResolvedValue([TRIP_A]) });
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    await user.click(screen.getByLabelText('Rename Japan 2026'));
+
+    expect(screen.getByText('Rename trip')).toBeInTheDocument();
+    const nameInput = screen.getByRole('textbox', { name: /rename trip name/i });
+    expect(nameInput).toHaveValue('Japan 2026');
+
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Japan Autumn 2026');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(repo.updateTrip).toHaveBeenCalledWith('trip-1', {
+        name: 'Japan Autumn 2026',
+        dateRange: { start: '2026-10-01', end: '2026-10-14' },
+      });
+    });
+    expect(screen.getByText('Japan Autumn 2026')).toBeInTheDocument();
+  });
+
+  it('does not save when the name is cleared', async () => {
+    const user = userEvent.setup();
+    const repo = makeRepo({ listTrips: vi.fn().mockResolvedValue([TRIP_A]) });
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    await user.click(screen.getByLabelText('Rename Japan 2026'));
+    await user.clear(screen.getByRole('textbox', { name: /rename trip name/i }));
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(repo.updateTrip).not.toHaveBeenCalled();
+    expect(screen.getByText(/name is required/i)).toBeInTheDocument();
+  });
+});
+
+describe('TripSelectorScreen — delete dialog', () => {
+  it('asks for confirmation and calls repo.deleteTrip on confirm', async () => {
+    const user = userEvent.setup();
+    const repo = makeRepo({ listTrips: vi.fn().mockResolvedValue([TRIP_A, TRIP_B]) });
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    await user.click(screen.getByLabelText('Delete Japan 2026'));
+
+    expect(screen.getByText('Delete trip')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^delete$/i }));
+
+    await waitFor(() => {
+      expect(repo.deleteTrip).toHaveBeenCalledWith('trip-1');
+      expect(screen.queryByText('Japan 2026')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('Korea 2027')).toBeInTheDocument();
+  });
+
+  it('cancelling does not call repo.deleteTrip', async () => {
+    const user = userEvent.setup();
+    const repo = makeRepo({ listTrips: vi.fn().mockResolvedValue([TRIP_A]) });
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    await user.click(screen.getByLabelText('Delete Japan 2026'));
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+    expect(repo.deleteTrip).not.toHaveBeenCalled();
+    expect(screen.getByText('Japan 2026')).toBeInTheDocument();
+  });
+});
+
+describe('TripSelectorScreen — sign out', () => {
+  const fakeAuthService: AuthService = {
+    getCurrentUser: () => null,
+    onAuthStateChanged: () => () => {},
+    signInWithGoogle: async () => {},
+    signOut: async () => {},
+  };
+
+  it('hides the sign-out button in local mode (no auth service)', async () => {
+    const repo = makeRepo();
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    expect(screen.queryByTitle('Sign out')).not.toBeInTheDocument();
+  });
+
+  it('shows a labeled Logout button and calls signOut when a service is present', async () => {
+    const signOut = vi.fn();
+    useAuthStore.setState({ service: fakeAuthService, signOut });
+    const repo = makeRepo();
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    const logoutButton = screen.getByTitle('Sign out');
+    expect(logoutButton).toHaveTextContent('Logout');
+    await userEvent.setup().click(logoutButton);
+    expect(signOut).toHaveBeenCalledTimes(1);
   });
 });

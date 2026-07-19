@@ -38,6 +38,7 @@ export interface Trip {
   name: string;
   dateRange: { start: string; end: string };
   memberIds: string[];
+  ownerId?: string;
 }
 
 export interface AuthUser {

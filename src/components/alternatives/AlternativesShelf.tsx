@@ -94,30 +94,40 @@ export function AlternativesShelf() {
   }
 
   return (
-    <Box sx={{ p: 2, height: '100%', overflowY: 'auto' }}>
-      <Typography variant="h6" gutterBottom>
-        Alternatives
-      </Typography>
-      <Typography variant="body2" color="text.secondary" mb={2}>
-        Shortlisted places — not on the timeline yet.
-      </Typography>
-
-      <Button
-        variant="contained"
-        size="small"
-        startIcon={<AddCircleOutlineIcon />}
-        onClick={handleAddOpen}
-        sx={{ mb: 2 }}
-      >
-        Add alternative
-      </Button>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+      {alternatives.length > 0 && (
+        <Box sx={{ p: 2, pb: 2 }}>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddCircleOutlineIcon />}
+            onClick={handleAddOpen}
+          >
+            Add alternative
+          </Button>
+        </Box>
+      )}
 
       {alternatives.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          No alternatives saved.
-        </Typography>
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            px: 2,
+            color: 'text.secondary',
+          }}
+        >
+          <Typography variant="h6">No alternatives yet</Typography>
+          <Button variant="contained" startIcon={<AddCircleOutlineIcon />} onClick={handleAddOpen}>
+            Add alternative
+          </Button>
+        </Box>
       ) : (
-        <List disablePadding>
+        <List disablePadding sx={{ px: 2, pb: 2 }}>
           {alternatives.map((alt) => (
             <ListItem
               key={alt.id}

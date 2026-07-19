@@ -289,6 +289,51 @@ describe('LocalTripRepository — alternatives', () => {
   });
 });
 
+// ── createTrip / updateTrip / deleteTrip ──────────────────────────────────────
+
+describe('LocalTripRepository — createTrip', () => {
+  it('sets ownerId to local-user', async () => {
+    const repo = makeRepo();
+    const trip = await repo.createTrip('My Trip', { start: '2027-01-01', end: '2027-01-10' });
+    expect(trip.ownerId).toBe('local-user');
+    expect(trip.memberIds).toEqual(['local-user']);
+  });
+});
+
+describe('LocalTripRepository — updateTrip', () => {
+  it('merges name/dateRange changes into the stored trip', async () => {
+    const repo = makeRepo();
+    const trip = await repo.createTrip('Original Name', { start: '2027-01-01', end: '2027-01-10' });
+    await repo.updateTrip(trip.id, { name: 'Renamed' });
+    const trips = await repo.listTrips();
+    const updated = trips.find((t) => t.id === trip.id);
+    expect(updated?.name).toBe('Renamed');
+    expect(updated?.dateRange).toEqual({ start: '2027-01-01', end: '2027-01-10' });
+  });
+
+  it('leaves other trips untouched', async () => {
+    const repo = makeRepo();
+    const tripA = await repo.createTrip('Trip A', { start: '2027-01-01', end: '2027-01-10' });
+    // createTrip ids are Date.now()-based; force a distinct millisecond so
+    // tripA and tripB don't collide onto the same generated id.
+    await new Promise((r) => setTimeout(r, 2));
+    const tripB = await repo.createTrip('Trip B', { start: '2027-02-01', end: '2027-02-10' });
+    await repo.updateTrip(tripA.id, { name: 'Trip A Renamed' });
+    const trips = await repo.listTrips();
+    expect(trips.find((t) => t.id === tripB.id)?.name).toBe('Trip B');
+  });
+});
+
+describe('LocalTripRepository — deleteTrip', () => {
+  it('removes the trip so it no longer appears in listTrips', async () => {
+    const repo = makeRepo();
+    const trip = await repo.createTrip('To Delete', { start: '2027-01-01', end: '2027-01-10' });
+    await repo.deleteTrip(trip.id);
+    const trips = await repo.listTrips();
+    expect(trips.find((t) => t.id === trip.id)).toBeUndefined();
+  });
+});
+
 // ── error recovery (catch branches) ──────────────────────────────────────────
 
 describe('LocalTripRepository — corrupted localStorage recovery', () => {

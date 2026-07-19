@@ -28,14 +28,9 @@ function seedAlternatives(alts: Alternative[]) {
 }
 
 describe('AlternativesShelf', () => {
-  it('renders the section heading', () => {
-    renderWithProviders(<AlternativesShelf />);
-    expect(screen.getByText('Alternatives')).toBeInTheDocument();
-  });
-
   it('shows an empty-state message when there are no alternatives', () => {
     renderWithProviders(<AlternativesShelf />);
-    expect(screen.getByText(/no alternatives saved/i)).toBeInTheDocument();
+    expect(screen.getByText(/no alternatives yet/i)).toBeInTheDocument();
   });
 
   it('renders each alternative by name', () => {

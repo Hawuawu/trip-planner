@@ -49,7 +49,14 @@ if (toolName === 'Write') {
 
 const ext = filePath.split('.').pop();
 // No leading dot — ESLint ignores dotfiles by default.
-const tmpFile = `${PROJECT_ROOT}/sast-gate-tmp-${process.pid}.${ext}`;
+// Preserve a `.test.<ext>` suffix so the `**/*.test.ts(x)` overrides in
+// .eslintrc.cjs (e.g. the non-literal-fs-filename exemption for test
+// fixtures) still match — otherwise every test file would be linted as if
+// it were production code.
+const isTestFile = /\.test\.(ts|tsx)$/.test(filePath);
+const tmpFile = isTestFile
+  ? `${PROJECT_ROOT}/sast-gate-tmp-${process.pid}.test.${ext}`
+  : `${PROJECT_ROOT}/sast-gate-tmp-${process.pid}.${ext}`;
 writeFileSync(tmpFile, newContent, 'utf8');
 
 let result = '';
