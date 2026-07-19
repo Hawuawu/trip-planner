@@ -96,9 +96,7 @@ describe('AlternativesShelf', () => {
     await userEvent.type(screen.getByRole('textbox', { name: /name/i }), 'Test Place');
     await userEvent.click(screen.getByRole('button', { name: /^add$/i }));
 
-    expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Test Place', type: 'poi' }),
-    );
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ name: 'Test Place', type: 'poi' }));
   });
 
   it('closes the dialog after a successful submit', async () => {
@@ -119,7 +117,10 @@ describe('AlternativesShelf', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /add alternative/i }));
     await userEvent.type(screen.getByRole('textbox', { name: /name/i }), 'Senso-ji');
-    await userEvent.type(screen.getByRole('textbox', { name: /location label/i }), 'Asakusa, Tokyo');
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /location label/i }),
+      'Asakusa, Tokyo'
+    );
     await userEvent.type(screen.getByRole('spinbutton', { name: /lat/i }), '35.7148');
     await userEvent.type(screen.getByRole('spinbutton', { name: /lng/i }), '139.7967');
     await userEvent.click(screen.getByRole('button', { name: /^add$/i }));
@@ -128,7 +129,7 @@ describe('AlternativesShelf', () => {
       expect.objectContaining({
         name: 'Senso-ji',
         location: expect.objectContaining({ lat: 35.7148, lng: 139.7967, label: 'Asakusa, Tokyo' }),
-      }),
+      })
     );
   });
 
@@ -141,7 +142,7 @@ describe('AlternativesShelf', () => {
     await userEvent.click(screen.getByRole('button', { name: /^add$/i }));
 
     expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'No Location', location: undefined }),
+      expect.objectContaining({ name: 'No Location', location: undefined })
     );
   });
 
@@ -157,7 +158,13 @@ describe('AlternativesShelf', () => {
   it('shows empty-state text when there are no alternatives', () => {
     useTripStore.setState({ alternatives: [] });
     renderWithProviders(<AlternativesShelf />);
-    expect(screen.getByText(/no alternatives saved/i)).toBeInTheDocument();
+    expect(screen.getByText(/no alternatives yet/i)).toBeInTheDocument();
+  });
+
+  it('shows exactly one "Add alternative" button when empty, centered in the panel', () => {
+    useTripStore.setState({ alternatives: [] });
+    renderWithProviders(<AlternativesShelf />);
+    expect(screen.getAllByRole('button', { name: /add alternative/i })).toHaveLength(1);
   });
 
   it('calls deleteAlternative when the delete button is clicked', async () => {
@@ -166,9 +173,9 @@ describe('AlternativesShelf', () => {
     const spy = vi.spyOn(useTripStore.getState(), 'deleteAlternative').mockResolvedValue();
     renderWithProviders(<AlternativesShelf />);
 
-    const deleteBtns = screen.getAllByTestId('DeleteOutlineIcon').map(
-      icon => icon.closest('button')!,
-    );
+    const deleteBtns = screen
+      .getAllByTestId('DeleteOutlineIcon')
+      .map((icon) => icon.closest('button')!);
     await userEvent.click(deleteBtns[0]);
 
     expect(spy).toHaveBeenCalledWith('a1');

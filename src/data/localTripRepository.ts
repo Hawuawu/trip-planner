@@ -6,6 +6,7 @@ const DEMO_TRIP: Trip = {
   name: 'Japan 2026',
   dateRange: { start: '2026-10-01', end: '2026-10-14' },
   memberIds: ['local-user'],
+  ownerId: 'local-user',
 };
 
 const now = new Date().toISOString();
@@ -279,9 +280,26 @@ export class LocalTripRepository implements TripRepository {
 
   async createTrip(name: string, dateRange: { start: string; end: string }): Promise<Trip> {
     const trips = loadTrips();
-    const trip: Trip = { id: `trip-${Date.now()}`, name, dateRange, memberIds: ['local-user'] };
+    const trip: Trip = {
+      id: `trip-${Date.now()}`,
+      name,
+      dateRange,
+      memberIds: ['local-user'],
+      ownerId: 'local-user',
+    };
     const existing = trips.find((t) => t.id === DEMO_TRIP.id);
     saveTrips([...(existing ? trips : [DEMO_TRIP, ...trips]), trip]);
     return trip;
+  }
+
+  async updateTrip(
+    tripId: string,
+    changes: Partial<Pick<Trip, 'name' | 'dateRange'>>
+  ): Promise<void> {
+    saveTrips(loadTrips().map((t) => (t.id === tripId ? { ...t, ...changes } : t)));
+  }
+
+  async deleteTrip(tripId: string): Promise<void> {
+    saveTrips(loadTrips().filter((t) => t.id !== tripId));
   }
 }

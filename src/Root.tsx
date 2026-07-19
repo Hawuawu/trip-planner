@@ -22,6 +22,11 @@ export function Root({ tripRepo }: Props) {
     setActiveTripId(tripId);
   }
 
+  function handleBack() {
+    localStorage.removeItem('trip-planner:activeTripId');
+    setActiveTripId(null);
+  }
+
   if (loading) {
     return (
       <Box
@@ -45,5 +50,5 @@ export function Root({ tripRepo }: Props) {
   // the store is populated before App mounts.
   useTripStore.getState().init(activeTripId, tripRepo);
 
-  return <App />;
+  return <App onBack={handleBack} />;
 }

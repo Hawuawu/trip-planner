@@ -4,9 +4,15 @@ export interface TripRepository {
   getTrip(tripId: string): Promise<Trip>;
   listTrips(): Promise<Trip[]>;
   createTrip(name: string, dateRange: { start: string; end: string }): Promise<Trip>;
+  updateTrip(tripId: string, changes: Partial<Pick<Trip, 'name' | 'dateRange'>>): Promise<void>;
+  deleteTrip(tripId: string): Promise<void>;
   subscribeToCheckpoints(tripId: string, cb: (checkpoints: Checkpoint[]) => void): () => void;
   addCheckpoint(tripId: string, cp: Omit<Checkpoint, 'id' | 'updatedAt'>): Promise<Checkpoint>;
-  updateCheckpoint(tripId: string, id: string, changes: Partial<Omit<Checkpoint, 'id' | 'updatedAt'>>): Promise<void>;
+  updateCheckpoint(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<Checkpoint, 'id' | 'updatedAt'>>
+  ): Promise<void>;
   deleteCheckpoint(tripId: string, id: string): Promise<void>;
   subscribeToAlternatives(tripId: string, cb: (alternatives: Alternative[]) => void): () => void;
   addAlternative(tripId: string, alt: Omit<Alternative, 'id'>): Promise<Alternative>;

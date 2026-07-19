@@ -94,7 +94,7 @@ export function TimelineView() {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            height: '80%',
+            height: '100%',
             gap: 2,
             color: 'text.secondary',
           }}
