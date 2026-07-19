@@ -50,7 +50,7 @@ beforeEach(() => {
 
 describe('AppShell — tablet split layout (neither phone nor wide)', () => {
   it('renders the timeline panel and only the left toggle', () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
 
     expect(screen.getByText(/no checkpoints yet/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Collapse timeline')).toBeInTheDocument();
@@ -58,7 +58,7 @@ describe('AppShell — tablet split layout (neither phone nor wide)', () => {
   });
 
   it('collapses and expands the timeline panel via its toggle', () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
 
     fireEvent.click(screen.getByLabelText('Collapse timeline'));
     expect(screen.queryByText(/no checkpoints yet/i)).not.toBeInTheDocument();
@@ -75,7 +75,7 @@ describe('AppShell — wide desktop layout', () => {
   });
 
   it('renders the alternatives panel and both toggles', () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
 
     expect(screen.getByLabelText('Collapse timeline')).toBeInTheDocument();
     expect(screen.getByLabelText('Collapse alternatives')).toBeInTheDocument();
@@ -83,7 +83,7 @@ describe('AppShell — wide desktop layout', () => {
   });
 
   it('collapses and expands the alternatives panel via its toggle', () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
 
     fireEvent.click(screen.getByLabelText('Collapse alternatives'));
     expect(screen.queryByText(/no alternatives/i)).not.toBeInTheDocument();
@@ -100,7 +100,7 @@ describe('AppShell — phone layout', () => {
   });
 
   it('renders bottom navigation and switches between tabs', () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
 
     expect(screen.getByText(/no checkpoints yet/i)).toBeInTheDocument();
 
@@ -115,7 +115,7 @@ describe('AppShell — phone layout', () => {
 
 describe('AppShell — app bar', () => {
   it('falls back to "Maiyun\'s Trip Planner" when no trip is loaded', () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
     expect(screen.getByText("Maiyun's Trip Planner")).toBeInTheDocument();
   });
 
@@ -128,12 +128,12 @@ describe('AppShell — app bar', () => {
         memberIds: [],
       },
     });
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
     expect(screen.getByText('Japan 2026')).toBeInTheDocument();
   });
 
   it('hides the sign-out button in local mode (no auth service)', () => {
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
     expect(screen.queryByTitle('Sign out')).not.toBeInTheDocument();
   });
 
@@ -141,8 +141,33 @@ describe('AppShell — app bar', () => {
     const signOut = vi.fn();
     useAuthStore.setState({ service: fakeAuthService, signOut });
 
-    renderWithProviders(<AppShell />);
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
     fireEvent.click(screen.getByTitle('Sign out'));
     expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('always shows the back button, before the sign-out button, and calls onBack', () => {
+    const onBack = vi.fn();
+    useAuthStore.setState({ service: fakeAuthService });
+
+    renderWithProviders(<AppShell onBack={onBack} />);
+    const backButton = screen.getByTitle('Back to trips');
+    expect(backButton).toBeInTheDocument();
+
+    const toolbarButtons = screen
+      .getAllByRole('button')
+      .filter(
+        (btn) =>
+          btn.getAttribute('title') === 'Back to trips' || btn.getAttribute('title') === 'Sign out'
+      );
+    expect(toolbarButtons[0]).toBe(backButton);
+
+    fireEvent.click(backButton);
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the back button even in local mode (no auth service)', () => {
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    expect(screen.getByTitle('Back to trips')).toBeInTheDocument();
   });
 });

@@ -14,6 +14,7 @@ import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
 import MapIcon from '@mui/icons-material/Map';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import LogoutIcon from '@mui/icons-material/Logout';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { TimelineView } from '../timeline/TimelineView';
@@ -23,6 +24,10 @@ import { OfflineBanner } from './OfflineBanner';
 import { useTripStore } from '../../store/tripStore';
 import { useAuthStore } from '../../store/authStore';
 import appIcon from '../../assets/app-icon.svg';
+
+interface Props {
+  onBack: () => void;
+}
 
 // Pill-shaped toggle tab stuck to the edge of the map container.
 // `side` controls which edge it sits on and which border-radius corners are rounded.
@@ -84,7 +89,7 @@ function PanelToggle({
   );
 }
 
-export function AppShell() {
+export function AppShell({ onBack }: Props) {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const isWide = useMediaQuery(theme.breakpoints.up('lg'));
@@ -104,6 +109,9 @@ export function AppShell() {
         sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
       >
         <Toolbar variant="dense">
+          <IconButton size="small" onClick={onBack} title="Back to trips" sx={{ mr: 1 }}>
+            <ArrowBackIcon fontSize="small" />
+          </IconButton>
           <Box
             component="img"
             src={appIcon}

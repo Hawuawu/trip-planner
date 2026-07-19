@@ -45,7 +45,13 @@ export class FirebaseTripRepository implements TripRepository {
     const snap = await getDoc(doc(this.db, 'trips', tripId));
     if (!snap.exists()) throw new Error(`Trip ${tripId} not found`);
     const d = snap.data();
-    return { id: snap.id, name: d.name, dateRange: d.dateRange, memberIds: d.memberIds ?? [] };
+    return {
+      id: snap.id,
+      name: d.name,
+      dateRange: d.dateRange,
+      memberIds: d.memberIds ?? [],
+      ownerId: d.ownerId,
+    };
   }
 
   async listTrips(): Promise<Trip[]> {
@@ -61,6 +67,7 @@ export class FirebaseTripRepository implements TripRepository {
         name: data.name,
         dateRange: data.dateRange,
         memberIds: data.memberIds ?? [],
+        ownerId: data.ownerId,
       };
     });
   }
@@ -69,8 +76,24 @@ export class FirebaseTripRepository implements TripRepository {
     const uid = getAuth().currentUser?.uid;
     if (!uid) throw new Error('Must be signed in to create a trip');
     const memberIds = [uid];
-    const ref = await addDoc(collection(this.db, 'trips'), { name, dateRange, memberIds });
-    return { id: ref.id, name, dateRange, memberIds };
+    const ref = await addDoc(collection(this.db, 'trips'), {
+      name,
+      dateRange,
+      memberIds,
+      ownerId: uid,
+    });
+    return { id: ref.id, name, dateRange, memberIds, ownerId: uid };
+  }
+
+  async updateTrip(
+    tripId: string,
+    changes: Partial<Pick<Trip, 'name' | 'dateRange'>>
+  ): Promise<void> {
+    await updateDoc(doc(this.db, 'trips', tripId), { ...changes });
+  }
+
+  async deleteTrip(tripId: string): Promise<void> {
+    await deleteDoc(doc(this.db, 'trips', tripId));
   }
 
   subscribeToCheckpoints(tripId: string, cb: (checkpoints: Checkpoint[]) => void): () => void {

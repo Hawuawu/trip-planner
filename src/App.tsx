@@ -1,5 +1,9 @@
 import { AppShell } from './components/layout/AppShell';
 
-export default function App() {
-  return <AppShell />;
+interface Props {
+  onBack: () => void;
+}
+
+export default function App({ onBack }: Props) {
+  return <AppShell onBack={onBack} />;
 }
