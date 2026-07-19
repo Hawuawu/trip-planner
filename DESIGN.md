@@ -104,11 +104,11 @@ There is no separate "mobile design" and "desktop design."
 - Avoid decorative imagery competing with the timeline's actual job:
   showing what happens next.
 
-## Anime-styled MUI theme (in progress)
+## Anime-styled MUI theme
 
-Direction: reskin the app with an anime-styled MUI theme (custom palette,
-typography, shape, and component overrides via `ThemeProvider`), applied
-app-wide.
+Reskins the app with an anime-styled MUI theme (custom palette, typography,
+shape, and component overrides via `ThemeProvider` in `src/theme.ts`),
+applied app-wide.
 
 - **Scope**: theme + a few new/adapted components where MUI overrides alone
   can't get the look (e.g. a stylized timeline connector, checkpoint
@@ -123,16 +123,85 @@ pastel palette applies to surfaces/backgrounds and secondary chrome, not to
 body text contrast or the current/next-checkpoint accent, which stay at
 full contrast regardless of the softer palette around them.
 
+### Palette
+
+Defined in `src/theme.ts`, sampled from the generated hero banner. Body
+text and the current/next-checkpoint accent are deliberately kept outside
+this softened palette (see above).
+
+| Role                 | Hex       | Used for                                            |
+| -------------------- | --------- | --------------------------------------------------- |
+| `primary`            | `#6B5470` | Buttons, active/selected states, primary icons      |
+| `secondary`          | `#D97D89` | Current/next-checkpoint accent, secondary actions   |
+| `background.default` | `#FBF6F2` | App background                                      |
+| `background.paper`   | `#FFFDFB` | Cards, dialogs, list surfaces                       |
+| `text.primary`       | `#3D2E3F` | Body text, checkpoint names — kept at full contrast |
+| `text.secondary`     | `#7A6B7D` | Secondary/meta text, muted empty-state copy         |
+| `divider`            | `#E5DCE2` | Borders, dividers                                   |
+
+### Shape & typography
+
+- Font: `"Inter", "Helvetica Neue", Arial, sans-serif`.
+- `shape.borderRadius: 5` — the base radius for boxes, cards, and dialogs
+  (used directly, or as the 1x/2x unit behind `sx={{ borderRadius: 1 }}`
+  etc. throughout the app). Deliberately small/restrained rather than
+  heavily rounded, matching "Visual tone" above (boarding-pass register,
+  not a lifestyle-blog one).
+- Buttons are the one exception: an explicit `MuiButton` `styleOverrides`
+  pins their radius to `16`, independent of the smaller box radius above,
+  so the pill-shaped buttons established early in the reskin didn't get
+  flattened when the box radius was tightened later.
+
+### Decorative textures
+
+A recurring sakura-branch motif, used sparingly as a background texture
+behind panel content — never as foreground/interactive imagery, so it
+can't compete with or obscure real content (per "Visual tone" above).
+Both assets live in `src/assets/` and are always rendered via a dedicated,
+absolutely-positioned, `pointer-events: none` layer sitting behind the
+real content (see `PanelBackground`/`TexturedPanel` in
+`src/components/layout/AppShell.tsx`) — texture opacity is controlled by
+CSS on that layer, not baked into the SVG, and it never intercepts clicks
+or fades real content.
+
+- **`sakura-pattern.svg`** — a small, seamlessly-tileable ditsy floral
+  repeat. Used behind the Alternatives panel at a `360px` tile size.
+- **`sakura-branch.svg`** — a single tall vertical branch illustration.
+  Used behind the Timeline panel, `background-size: contain` /
+  `no-repeat` / anchored top-center so it scales to the column without
+  cropping.
+- Both currently render at `opacity: 0.05` — faint enough to read as
+  texture, not pattern, well clear of interfering with checkpoint/
+  alternative text legibility.
+- Applied consistently across all three responsive layouts (phone tabs,
+  tablet split, desktop split) via a shared helper, not duplicated
+  per-breakpoint.
+
 ### Asset inventory for Recraft generation
 
-Compiled by scanning current icon/image usage in `src/` — nothing below
-exists as custom art yet, all currently fall back to MUI defaults or are
-entirely absent.
+Status as of this writing — compiled by scanning current icon/image usage
+in `src/`.
+
+**Shipped:**
+
+- **Banner / hero art** —
+  `src/components/auth/SignInPage.tsx` (`hero-banner.svg` +
+  `signin-bg.svg`) and `src/components/trips/TripSelectorScreen.tsx`'s
+  empty-trip state (`empty-state-banner.svg`, covering the "empty trip"
+  state under "States worth designing deliberately" above).
+- **App icon** — `app-icon.svg`, used inline in `AppShell.tsx`'s toolbar.
+  Note this is _not yet_ wired as the actual favicon/PWA icon (see below)
+  — it's only used within the app UI itself so far.
+- **Decorative textures** — see above; not originally scoped in this
+  inventory but added during the reskin as a second texture pass.
+
+**Still pending:**
 
 **Checkpoint type icons** (highest priority — this is the app's core
 iconography per "type is communicated by icon shape, not color" above).
 Defined in `src/components/timeline/CheckpointIcon.tsx`, used on both the
-timeline and the map pins, so they must work at both scales:
+timeline and the map pins, so they must work at both scales — still
+plain MUI defaults, unchanged since this reskin started:
 
 - `flight` (currently MUI `Flight`)
 - `train` (MUI `Train`)
@@ -145,22 +214,15 @@ Needs: one consistent set, simple silhouettes (not overly detailed), a
 single line weight, and both a neutral and an accent-filled variant per
 icon (for the current/next state described under "The timeline").
 
-**App icon / favicon / PWA icons** — currently missing entirely; no
-`public/` directory and no `icons` array in the PWA manifest
-(`vite.config.ts`):
+**App icon / favicon / PWA icons** — `app-icon.svg` exists (see
+"Shipped" above) but isn't wired into `index.html`'s favicon or the PWA
+manifest's `icons` array (`vite.config.ts`) yet; the manifest's
+`theme_color`/`background_color` also still reference the pre-reskin
+Material blue/white, not the palette above:
 
 - App icon, 192×192 and 512×512, plus a maskable variant
 - Favicon
 - Apple touch icon
-
-**Banner / hero art** — both currently plain MUI text, no imagery:
-
-- `src/components/auth/SignInPage.tsx` — sign-in card; a hero
-  illustration/banner above or behind it is the natural slot.
-- `src/components/trips/TripSelectorScreen.tsx` — trip list screen; also
-  covers the "empty trip" state (see "States worth designing deliberately"
-  above), which should get a deliberate illustration rather than a blank
-  screen.
 
 **Out of scope for the reskin**: generic UI/action icons (nav tabs,
 delete, add, layers, chevrons, offline-wifi, logout) and the Google brand

@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Button,
-  Fab,
   IconButton,
   Snackbar,
   Typography,
@@ -16,7 +15,11 @@ import { useTripStore } from '../../store/tripStore';
 import { CheckpointItem } from './CheckpointItem';
 import { CheckpointForm } from './CheckpointForm';
 
-export function TimelineView() {
+interface Props {
+  openAddSignal?: number;
+}
+
+export function TimelineView({ openAddSignal }: Props) {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -36,6 +39,8 @@ export function TimelineView() {
   const [insertAfterIndex, setInsertAfterIndex] = useState<number | null>(null);
   const now = useRef(new Date().toISOString());
   const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const checkpointsRef = useRef(checkpoints);
+  checkpointsRef.current = checkpoints;
 
   const activeId =
     checkpoints.find((c) => c.startTime > now.current)?.id ??
@@ -51,6 +56,14 @@ export function TimelineView() {
       itemRefs.current.get(id)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
   }, []); // runs once on mount — initialActiveId.current is stable
+
+  // Opens the "add checkpoint" drawer when the parent (menu drawer) asks for
+  // it — checkpointsRef keeps this effect from needing checkpoints as a dep.
+  useEffect(() => {
+    if (openAddSignal === undefined) return;
+    setInsertAfterIndex(checkpointsRef.current.length - 1);
+    setAdding(true);
+  }, [openAddSignal]);
 
   function defaultStartForInsert(afterIndex: number | null): string {
     if (afterIndex === null || checkpoints.length === 0) return now.current;
@@ -153,20 +166,6 @@ export function TimelineView() {
             </Box>
           ))}
         </Timeline>
-      )}
-
-      {checkpoints.length > 0 && (
-        <Fab
-          color="secondary"
-          size="medium"
-          sx={{ position: 'fixed', bottom: isPhone ? 72 : 24, right: 24 }}
-          onClick={() => {
-            setInsertAfterIndex(checkpoints.length - 1);
-            setAdding(true);
-          }}
-        >
-          <AddIcon />
-        </Fab>
       )}
 
       <Drawer

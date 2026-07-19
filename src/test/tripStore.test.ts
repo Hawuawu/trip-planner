@@ -29,16 +29,28 @@ function makeCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
 function makeMockRepo(overrides: Partial<TripRepository> = {}): TripRepository {
   return {
     getTrip: vi.fn().mockResolvedValue(TRIP),
+    listTrips: vi.fn().mockResolvedValue([TRIP]),
+    createTrip: vi.fn().mockResolvedValue(TRIP),
+    updateTrip: vi.fn().mockResolvedValue(undefined),
+    deleteTrip: vi.fn().mockResolvedValue(undefined),
     subscribeToCheckpoints: vi.fn().mockReturnValue(() => {}),
     addCheckpoint: vi.fn().mockResolvedValue(makeCheckpoint({ id: 'saved-1' })),
+    addCheckpoints: vi.fn().mockResolvedValue([makeCheckpoint({ id: 'saved-1' })]),
     updateCheckpoint: vi.fn().mockResolvedValue(undefined),
     deleteCheckpoint: vi.fn().mockResolvedValue(undefined),
     subscribeToAlternatives: vi.fn().mockReturnValue(() => {}),
     addAlternative: vi.fn().mockResolvedValue({ id: 'alt-saved-1', type: 'poi', name: 'New Alt' }),
+    addAlternatives: vi
+      .fn()
+      .mockResolvedValue([{ id: 'alt-saved-1', type: 'poi', name: 'New Alt' }]),
     deleteAlternative: vi.fn().mockResolvedValue(undefined),
     promoteAlternative: vi.fn().mockResolvedValue(undefined),
     subscribeToBookings: vi.fn().mockReturnValue(() => {}),
-    addBooking: vi.fn().mockResolvedValue({ id: 'bk-saved-1', provider: 'Japan Airlines', confirmationNumber: 'JL-001' }),
+    addBooking: vi.fn().mockResolvedValue({
+      id: 'bk-saved-1',
+      provider: 'Japan Airlines',
+      confirmationNumber: 'JL-001',
+    }),
     updateBooking: vi.fn().mockResolvedValue(undefined),
     deleteBooking: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -314,6 +326,60 @@ describe('tripStore — alternatives', () => {
   });
 });
 
+describe('tripStore — importCheckpoints', () => {
+  it('calls addCheckpoints and addAlternatives with the given items', async () => {
+    const repo = makeMockRepo();
+    useTripStore.setState({ repo, tripId: 'trip-1' });
+
+    const checkpoints = [
+      { type: 'poi' as const, name: 'Nara Deer Park', startTime: '2026-10-09T09:00:00.000Z' },
+    ];
+    const alternatives = [{ type: 'poi' as const, name: 'Todai-ji Temple' }];
+
+    await useTripStore.getState().importCheckpoints({ checkpoints, alternatives });
+
+    expect(repo.addCheckpoints).toHaveBeenCalledWith('trip-1', checkpoints);
+    expect(repo.addAlternatives).toHaveBeenCalledWith('trip-1', alternatives);
+  });
+
+  it('does not call addCheckpoints when the checkpoints list is empty', async () => {
+    const repo = makeMockRepo();
+    useTripStore.setState({ repo, tripId: 'trip-1' });
+
+    await useTripStore.getState().importCheckpoints({ checkpoints: [], alternatives: [] });
+
+    expect(repo.addCheckpoints).not.toHaveBeenCalled();
+    expect(repo.addAlternatives).not.toHaveBeenCalled();
+  });
+
+  it('does not manually set local checkpoints/alternatives state (relies on subscriptions)', async () => {
+    const repo = makeMockRepo();
+    useTripStore.setState({ repo, tripId: 'trip-1', checkpoints: [], alternatives: [] });
+
+    await useTripStore.getState().importCheckpoints({
+      checkpoints: [
+        { type: 'poi' as const, name: 'Nara Deer Park', startTime: '2026-10-09T09:00:00.000Z' },
+      ],
+      alternatives: [],
+    });
+
+    // No optimistic/manual update — state stays empty until the (mocked, inert)
+    // subscription callback would push new data in.
+    expect(useTripStore.getState().checkpoints).toEqual([]);
+  });
+
+  it('is a no-op when repo/tripId are not set', async () => {
+    const repo = makeMockRepo();
+    await useTripStore.getState().importCheckpoints({
+      checkpoints: [
+        { type: 'poi' as const, name: 'Nara Deer Park', startTime: '2026-10-09T09:00:00.000Z' },
+      ],
+      alternatives: [],
+    });
+    expect(repo.addCheckpoints).not.toHaveBeenCalled();
+  });
+});
+
 describe('tripStore — bookings', () => {
   it('addBooking inserts optimistically then replaces with saved booking', async () => {
     let resolveAdd!: (b: import('../types').Booking) => void;
@@ -373,7 +439,9 @@ describe('tripStore — bookings', () => {
     const original = { id: 'bk-1', provider: 'JAL', confirmationNumber: 'OLD-123' };
     useTripStore.setState({ repo, tripId: 'trip-1', bookings: [original] });
 
-    const promise = useTripStore.getState().updateBooking('bk-1', { confirmationNumber: 'NEW-456' });
+    const promise = useTripStore
+      .getState()
+      .updateBooking('bk-1', { confirmationNumber: 'NEW-456' });
 
     // Optimistic update already applied
     expect(useTripStore.getState().bookings[0].confirmationNumber).toBe('NEW-456');

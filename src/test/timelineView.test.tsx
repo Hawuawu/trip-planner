@@ -31,13 +31,6 @@ describe('TimelineView — empty state', () => {
     expect(screen.getByRole('button', { name: /add first checkpoint/i })).toBeInTheDocument();
   });
 
-  it('does not render the FAB when there are no checkpoints', () => {
-    renderWithProviders(<TimelineView />);
-    // FAB only shows when checkpoints.length > 0
-    const fabs = document.querySelectorAll('.MuiFab-root');
-    expect(fabs.length).toBe(0);
-  });
-
   it('opens the add form when "Add first checkpoint" is clicked', () => {
     renderWithProviders(<TimelineView />);
     fireEvent.click(screen.getByRole('button', { name: /add first checkpoint/i }));
@@ -64,12 +57,6 @@ describe('TimelineView — with checkpoints', () => {
     renderWithProviders(<TimelineView />);
     expect(screen.getByText('Flight Out')).toBeInTheDocument();
     expect(screen.getByText('Shinjuku Hotel')).toBeInTheDocument();
-  });
-
-  it('renders the FAB when there are checkpoints', () => {
-    seedCheckpoints([makeCheckpoint()]);
-    renderWithProviders(<TimelineView />);
-    expect(document.querySelector('.MuiFab-root')).not.toBeNull();
   });
 
   it('does not render the empty-state message when checkpoints exist', () => {
@@ -99,7 +86,7 @@ describe('TimelineView — with checkpoints', () => {
     expect(useTripStore.getState().selectedId).toBeNull();
   });
 
-  it('calls deleteCheckpoint when delete icon is clicked on a checkpoint', async () => {
+  it('calls deleteCheckpoint when delete icon is clicked and confirmed on a checkpoint', async () => {
     useTripStore.setState({
       checkpoints: [makeCheckpoint({ id: 'cp-1', name: 'JFK → NRT' })],
     });
@@ -107,13 +94,8 @@ describe('TimelineView — with checkpoints', () => {
 
     renderWithProviders(<TimelineView />);
 
-    // Find the delete button — it has an svg and is not the FAB
-    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'));
-    const deleteBtn = buttons.find(
-      (b) => b.querySelector('svg') && !b.classList.contains('MuiFab-root')
-    );
-    expect(deleteBtn).toBeTruthy();
-    fireEvent.click(deleteBtn!);
+    fireEvent.click(screen.getByRole('button', { name: /delete checkpoint/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
     expect(spy).toHaveBeenCalledWith('cp-1');
     spy.mockRestore();
   });
@@ -160,18 +142,17 @@ describe('TimelineView — with checkpoints', () => {
     ).toBeGreaterThanOrEqual(1);
   });
 
-  it('opens the add form when FAB is clicked', () => {
+  it('opens the add form when openAddSignal changes (triggered externally, e.g. from the menu)', () => {
     seedCheckpoints([makeCheckpoint()]);
-    renderWithProviders(<TimelineView />);
-    const fab = document.querySelector<HTMLButtonElement>('.MuiFab-root')!;
-    fireEvent.click(fab);
+    const { rerender } = renderWithProviders(<TimelineView openAddSignal={1} />);
+    expect(screen.getByText('Add checkpoint')).toBeInTheDocument();
+    rerender(<TimelineView openAddSignal={2} />);
     expect(screen.getByText('Add checkpoint')).toBeInTheDocument();
   });
 
   it('closes the add form when Cancel is clicked inside the drawer', () => {
     seedCheckpoints([makeCheckpoint()]);
-    renderWithProviders(<TimelineView />);
-    fireEvent.click(document.querySelector<HTMLButtonElement>('.MuiFab-root')!);
+    renderWithProviders(<TimelineView openAddSignal={1} />);
     expect(screen.getByText('Add checkpoint')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(screen.queryByText('Add checkpoint')).not.toBeInTheDocument();

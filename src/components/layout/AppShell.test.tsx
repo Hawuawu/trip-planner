@@ -1,8 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { screen, within, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
 import { renderWithProviders, resetStores } from '../../test/helpers';
 import { useTripStore } from '../../store/tripStore';
+import type { TripRepository } from '../../data/TripRepository';
+import { downloadTextFile } from '../../utils/fileTransfer';
+
+vi.mock('../../utils/fileTransfer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../utils/fileTransfer')>();
+  return { ...actual, downloadTextFile: vi.fn() };
+});
 
 vi.mock('react-map-gl/maplibre', () => ({
   __esModule: true,
@@ -34,9 +42,55 @@ function installMatchMedia({ phone = false, wide = false }: { phone?: boolean; w
   });
 }
 
+function makeMockRepo(overrides: Partial<TripRepository> = {}): TripRepository {
+  return {
+    getTrip: vi.fn().mockResolvedValue(null),
+    listTrips: vi.fn().mockResolvedValue([]),
+    createTrip: vi.fn(),
+    updateTrip: vi.fn(),
+    deleteTrip: vi.fn(),
+    subscribeToCheckpoints: vi.fn().mockReturnValue(() => {}),
+    addCheckpoint: vi.fn(),
+    addCheckpoints: vi.fn().mockResolvedValue([]),
+    updateCheckpoint: vi.fn(),
+    deleteCheckpoint: vi.fn(),
+    subscribeToAlternatives: vi.fn().mockReturnValue(() => {}),
+    addAlternative: vi.fn(),
+    addAlternatives: vi.fn().mockResolvedValue([]),
+    updateAlternative: vi.fn(),
+    deleteAlternative: vi.fn(),
+    promoteAlternative: vi.fn(),
+    subscribeToBookings: vi.fn().mockReturnValue(() => {}),
+    addBooking: vi.fn(),
+    updateBooking: vi.fn(),
+    deleteBooking: vi.fn(),
+    ...overrides,
+  } as TripRepository;
+}
+
+async function uploadYamlFile(content: string, fileName = 'checkpoints.yaml') {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: /choose yaml file/i }));
+
+  const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+  const file = new File([content], fileName, { type: 'text/yaml' });
+  Object.defineProperty(input, 'files', { value: [file] });
+  input.dispatchEvent(new Event('change'));
+  await new Promise((r) => setTimeout(r, 0));
+}
+
+function withinMenu() {
+  return within(screen.getByTestId('app-menu'));
+}
+
 beforeEach(() => {
   resetStores();
   installMatchMedia({});
+  vi.mocked(downloadTextFile).mockClear();
+});
+
+afterEach(() => {
+  document.querySelectorAll('input[type="file"]').forEach((el) => el.remove());
 });
 
 describe('AppShell — tablet split layout (neither phone nor wide)', () => {
@@ -47,6 +101,15 @@ describe('AppShell — tablet split layout (neither phone nor wide)', () => {
     expect(screen.getByLabelText('Collapse timeline')).toBeInTheDocument();
     expect(screen.getByText(/no alternatives/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Collapse alternatives')).toBeInTheDocument();
+  });
+
+  it('gives the timeline and alternatives panels the same width', () => {
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    const timelineWidth = window.getComputedStyle(screen.getByTestId('timeline-panel')).width;
+    const alternativesWidth = window.getComputedStyle(
+      screen.getByTestId('alternatives-panel')
+    ).width;
+    expect(timelineWidth).toBe(alternativesWidth);
   });
 
   it('collapses and expands the timeline panel via its toggle', () => {
@@ -140,14 +203,137 @@ describe('AppShell — app bar', () => {
     expect(screen.queryByTitle('Sign out')).not.toBeInTheDocument();
   });
 
-  it('shows the back button and calls onBack when clicked', () => {
+  it('shows the hamburger menu button (no separate back button in the toolbar)', () => {
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    expect(screen.getByLabelText('Menu')).toBeInTheDocument();
+    expect(screen.queryByTitle('Back to trips')).not.toBeInTheDocument();
+  });
+});
+
+describe('AppShell — hamburger menu', () => {
+  it('opens the menu with add/back/export/import options when the hamburger icon is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+
+    const menu = withinMenu();
+    expect(menu.getByRole('button', { name: 'Add checkpoint' })).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: 'Add alternative' })).toBeInTheDocument();
+    expect(menu.getByText('Back to trips')).toBeInTheDocument();
+    expect(menu.getByText('Export trip (.yaml)')).toBeInTheDocument();
+    expect(menu.getByText('Import checkpoints…')).toBeInTheDocument();
+  });
+
+  it('opens the add-checkpoint form when "Add checkpoint" is clicked from the menu', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByRole('button', { name: 'Add checkpoint' }));
+
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
+  });
+
+  it('opens the add-alternative form when "Add alternative" is clicked from the menu', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByRole('button', { name: 'Add alternative' }));
+
+    expect(screen.getByRole('heading', { name: /add alternative/i })).toBeInTheDocument();
+  });
+
+  it('calls onBack when "Back to trips" is clicked from the menu', async () => {
+    const user = userEvent.setup();
     const onBack = vi.fn();
     renderWithProviders(<AppShell onBack={onBack} />);
 
-    const backButton = screen.getByTitle('Back to trips');
-    expect(backButton).toBeInTheDocument();
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByText('Back to trips'));
 
-    fireEvent.click(backButton);
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('exports the trip using the live store state and shows a success snackbar', async () => {
+    const user = userEvent.setup();
+    useTripStore.setState({
+      trip: {
+        id: 't1',
+        name: 'Japan 2026',
+        dateRange: { start: '2026-09-01', end: '2026-09-10' },
+        memberIds: [],
+      },
+      checkpoints: [
+        {
+          id: 'cp-1',
+          type: 'poi',
+          name: 'Fushimi Inari',
+          startTime: '2026-09-02T08:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      alternatives: [],
+    });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByText('Export trip (.yaml)'));
+
+    expect(downloadTextFile).toHaveBeenCalledTimes(1);
+    const [filename, yamlText] = vi.mocked(downloadTextFile).mock.calls[0];
+    expect(filename).toBe('japan-2026.yaml');
+    expect(yamlText).toContain('Fushimi Inari');
+    await waitFor(() => {
+      expect(screen.getByText('Trip exported.')).toBeInTheDocument();
+    });
+  });
+
+  it('does not attempt to export when no trip is loaded', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByText('Export trip (.yaml)'));
+
+    expect(downloadTextFile).not.toHaveBeenCalled();
+  });
+
+  it('imports checkpoints via the store and shows a count snackbar', async () => {
+    const user = userEvent.setup();
+    const repo = makeMockRepo();
+    useTripStore.setState({ repo, tripId: 'trip-1' });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByText('Import checkpoints…'));
+
+    const yaml = `
+checkpoints:
+  - type: poi
+    name: Nara Deer Park
+    startTime: "2026-10-09T09:00:00.000Z"
+alternatives:
+  - type: poi
+    name: Todai-ji Temple
+`;
+    await uploadYamlFile(yaml);
+    await waitFor(() => screen.getByRole('button', { name: /^import$/i }));
+    await user.click(screen.getByRole('button', { name: /^import$/i }));
+
+    await waitFor(() => {
+      expect(repo.addCheckpoints).toHaveBeenCalledWith(
+        'trip-1',
+        expect.arrayContaining([expect.objectContaining({ name: 'Nara Deer Park' })])
+      );
+      expect(repo.addAlternatives).toHaveBeenCalledWith(
+        'trip-1',
+        expect.arrayContaining([expect.objectContaining({ name: 'Todai-ji Temple' })])
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/imported 1 checkpoint and 1 alternative\./i)).toBeInTheDocument();
+    });
   });
 });

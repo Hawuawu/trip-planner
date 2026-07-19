@@ -180,6 +180,21 @@ export class LocalTripRepository implements TripRepository {
     return saved;
   }
 
+  async addCheckpoints(
+    tripId: string,
+    checkpoints: Omit<Checkpoint, 'id' | 'updatedAt'>[]
+  ): Promise<Checkpoint[]> {
+    const now = new Date().toISOString();
+    const saved: Checkpoint[] = checkpoints.map((cp, i) => ({
+      ...cp,
+      id: `local-${Date.now()}-${i}`,
+      updatedAt: now,
+    }));
+    saveCp([...loadCp(), ...saved]);
+    this.notifyCp(tripId);
+    return saved;
+  }
+
   async updateCheckpoint(
     tripId: string,
     id: string,
@@ -216,6 +231,28 @@ export class LocalTripRepository implements TripRepository {
     saveAlt([...loadAlt(), saved]);
     this.notifyAlt(tripId);
     return saved;
+  }
+
+  async addAlternatives(
+    tripId: string,
+    alternatives: Omit<Alternative, 'id'>[]
+  ): Promise<Alternative[]> {
+    const saved: Alternative[] = alternatives.map((alt, i) => ({
+      ...alt,
+      id: `local-alt-${Date.now()}-${i}`,
+    }));
+    saveAlt([...loadAlt(), ...saved]);
+    this.notifyAlt(tripId);
+    return saved;
+  }
+
+  async updateAlternative(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<Alternative, 'id'>>
+  ): Promise<void> {
+    saveAlt(loadAlt().map((a) => (a.id === id ? { ...a, ...changes } : a)));
+    this.notifyAlt(tripId);
   }
 
   async deleteAlternative(tripId: string, id: string): Promise<void> {
