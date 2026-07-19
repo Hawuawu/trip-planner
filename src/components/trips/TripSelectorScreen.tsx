@@ -16,10 +16,13 @@ import {
   DialogContentText,
   DialogActions,
   CircularProgress,
+  AppBar,
+  Toolbar,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import LogoutIcon from '@mui/icons-material/Logout';
 import type { TripRepository } from '../../data/TripRepository';
 import type { Trip } from '../../types';
 import { useAuthStore } from '../../store/authStore';
@@ -44,6 +47,8 @@ function canManage(trip: Trip, uid: string | undefined): boolean {
 
 export function TripSelectorScreen({ repo, onSelect }: Props) {
   const currentUid = useAuthStore((s) => s.user?.uid);
+  const signOut = useAuthStore((s) => s.signOut);
+  const service = useAuthStore((s) => s.service);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -171,220 +176,242 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
   }
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        pt: { xs: 6, sm: 10 },
-        px: 2,
-      }}
-    >
-      <Typography variant="h5" fontWeight={700} mb={1}>
-        Your trips
-      </Typography>
-      <Typography variant="body2" color="text.secondary" mb={4}>
-        Select a trip to continue or create a new one.
-      </Typography>
-
-      {loading ? (
-        <CircularProgress size={32} />
-      ) : (
-        <Box sx={{ width: '100%', maxWidth: 480 }}>
-          {trips.length === 0 ? (
-            <Box textAlign="center" py={2}>
-              <Box
-                component="img"
-                src={emptyStateBanner}
-                alt=""
-                sx={{ width: '100%', maxWidth: 280, mb: 2 }}
-              />
-              <Typography color="text.secondary" textAlign="center" py={2}>
-                No trips yet. Create your first trip below.
-              </Typography>
-            </Box>
-          ) : (
-            <List
-              disablePadding
-              sx={{
-                bgcolor: 'background.paper',
-                borderRadius: 2,
-                mb: 3,
-                border: '1px solid',
-                borderColor: 'divider',
-              }}
+    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {service && (
+        <AppBar
+          position="static"
+          color="default"
+          elevation={0}
+          sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
+        >
+          <Toolbar variant="dense" sx={{ justifyContent: 'flex-end' }}>
+            <Button
+              size="small"
+              onClick={signOut}
+              title="Sign out"
+              startIcon={<LogoutIcon fontSize="small" />}
             >
-              {trips.map((trip, index) => {
-                const manageable = canManage(trip, currentUid);
-                return (
-                  <ListItem
-                    key={trip.id}
-                    disablePadding
-                    divider={index < trips.length - 1}
-                    secondaryAction={
-                      manageable ? (
-                        <Stack direction="row" spacing={0.5}>
-                          <IconButton
-                            size="small"
-                            edge="end"
-                            aria-label={`Rename ${trip.name}`}
-                            onClick={() => openRenameDialog(trip)}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            edge="end"
-                            aria-label={`Delete ${trip.name}`}
-                            onClick={() => openDeleteDialog(trip)}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Stack>
-                      ) : undefined
-                    }
-                  >
-                    <ListItemButton
-                      onClick={() => handleTripClick(trip)}
-                      sx={{ py: 1.5, pr: manageable ? 11 : 2 }}
-                    >
-                      <ListItemText
-                        primary={trip.name}
-                        secondary={
-                          trip.dateRange.start && trip.dateRange.end
-                            ? `${trip.dateRange.start} – ${trip.dateRange.end}`
-                            : undefined
-                        }
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                );
-              })}
-            </List>
-          )}
-
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={openDialog}
-            fullWidth
-            size="large"
-          >
-            New trip
-          </Button>
-        </Box>
+              Logout
+            </Button>
+          </Toolbar>
+        </AppBar>
       )}
 
-      <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="xs">
-        <DialogTitle>Create a new trip</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Trip name"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              error={Boolean(errors.name)}
-              helperText={errors.name}
-              autoFocus
-              fullWidth
-              inputProps={{ 'aria-label': 'Trip name' }}
-            />
-            <TextField
-              label="Start date"
-              type="date"
-              value={form.start}
-              onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ 'aria-label': 'Start date' }}
-            />
-            <TextField
-              label="End date"
-              type="date"
-              value={form.end}
-              onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))}
-              error={Boolean(errors.end)}
-              helperText={errors.end}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ 'aria-label': 'End date' }}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeDialog} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          pt: { xs: 6, sm: 10 },
+          px: 2,
+        }}
+      >
+        <Typography variant="h5" fontWeight={700} mb={1}>
+          Your trips
+        </Typography>
+        <Typography variant="body2" color="text.secondary" mb={4}>
+          Select a trip to continue or create a new one.
+        </Typography>
 
-      <Dialog open={Boolean(renameTarget)} onClose={closeRenameDialog} fullWidth maxWidth="xs">
-        <DialogTitle>Rename trip</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Trip name"
-              value={renameForm.name}
-              onChange={(e) => setRenameForm((f) => ({ ...f, name: e.target.value }))}
-              error={Boolean(renameErrors.name)}
-              helperText={renameErrors.name}
-              autoFocus
-              fullWidth
-              inputProps={{ 'aria-label': 'Rename trip name' }}
-            />
-            <TextField
-              label="Start date"
-              type="date"
-              value={renameForm.start}
-              onChange={(e) => setRenameForm((f) => ({ ...f, start: e.target.value }))}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ 'aria-label': 'Rename start date' }}
-            />
-            <TextField
-              label="End date"
-              type="date"
-              value={renameForm.end}
-              onChange={(e) => setRenameForm((f) => ({ ...f, end: e.target.value }))}
-              error={Boolean(renameErrors.end)}
-              helperText={renameErrors.end}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ 'aria-label': 'Rename end date' }}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeRenameDialog} disabled={renameSubmitting}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleRenameSubmit} disabled={renameSubmitting}>
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
+        {loading ? (
+          <CircularProgress size={32} />
+        ) : (
+          <Box sx={{ width: '100%', maxWidth: 480 }}>
+            {trips.length === 0 ? (
+              <Box textAlign="center" py={2}>
+                <Box
+                  component="img"
+                  src={emptyStateBanner}
+                  alt=""
+                  sx={{ width: '100%', maxWidth: 280, mb: 2 }}
+                />
+                <Typography color="text.secondary" textAlign="center" py={2}>
+                  No trips yet. Create your first trip below.
+                </Typography>
+              </Box>
+            ) : (
+              <List
+                disablePadding
+                sx={{
+                  bgcolor: 'background.paper',
+                  borderRadius: 2,
+                  mb: 3,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                }}
+              >
+                {trips.map((trip, index) => {
+                  const manageable = canManage(trip, currentUid);
+                  return (
+                    <ListItem
+                      key={trip.id}
+                      disablePadding
+                      divider={index < trips.length - 1}
+                      secondaryAction={
+                        manageable ? (
+                          <Stack direction="row" spacing={0.5}>
+                            <IconButton
+                              size="small"
+                              edge="end"
+                              aria-label={`Rename ${trip.name}`}
+                              onClick={() => openRenameDialog(trip)}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              edge="end"
+                              aria-label={`Delete ${trip.name}`}
+                              onClick={() => openDeleteDialog(trip)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        ) : undefined
+                      }
+                    >
+                      <ListItemButton
+                        onClick={() => handleTripClick(trip)}
+                        sx={{ py: 1.5, pr: manageable ? 11 : 2 }}
+                      >
+                        <ListItemText
+                          primary={trip.name}
+                          secondary={
+                            trip.dateRange.start && trip.dateRange.end
+                              ? `${trip.dateRange.start} – ${trip.dateRange.end}`
+                              : undefined
+                          }
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
 
-      <Dialog open={Boolean(deleteTarget)} onClose={closeDeleteDialog} fullWidth maxWidth="xs">
-        <DialogTitle>Delete trip</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Delete "{deleteTarget?.name}"? This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeDeleteDialog} disabled={deleteSubmitting}>
-            Cancel
-          </Button>
-          <Button color="error" onClick={handleDeleteConfirm} disabled={deleteSubmitting}>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={openDialog}
+              fullWidth
+              size="large"
+            >
+              New trip
+            </Button>
+          </Box>
+        )}
+
+        <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="xs">
+          <DialogTitle>Create a new trip</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                label="Trip name"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                error={Boolean(errors.name)}
+                helperText={errors.name}
+                autoFocus
+                fullWidth
+                inputProps={{ 'aria-label': 'Trip name' }}
+              />
+              <TextField
+                label="Start date"
+                type="date"
+                value={form.start}
+                onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))}
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ 'aria-label': 'Start date' }}
+              />
+              <TextField
+                label="End date"
+                type="date"
+                value={form.end}
+                onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))}
+                error={Boolean(errors.end)}
+                helperText={errors.end}
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ 'aria-label': 'End date' }}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeDialog} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
+              Create
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={Boolean(renameTarget)} onClose={closeRenameDialog} fullWidth maxWidth="xs">
+          <DialogTitle>Rename trip</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                label="Trip name"
+                value={renameForm.name}
+                onChange={(e) => setRenameForm((f) => ({ ...f, name: e.target.value }))}
+                error={Boolean(renameErrors.name)}
+                helperText={renameErrors.name}
+                autoFocus
+                fullWidth
+                inputProps={{ 'aria-label': 'Rename trip name' }}
+              />
+              <TextField
+                label="Start date"
+                type="date"
+                value={renameForm.start}
+                onChange={(e) => setRenameForm((f) => ({ ...f, start: e.target.value }))}
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ 'aria-label': 'Rename start date' }}
+              />
+              <TextField
+                label="End date"
+                type="date"
+                value={renameForm.end}
+                onChange={(e) => setRenameForm((f) => ({ ...f, end: e.target.value }))}
+                error={Boolean(renameErrors.end)}
+                helperText={renameErrors.end}
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ 'aria-label': 'Rename end date' }}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeRenameDialog} disabled={renameSubmitting}>
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={handleRenameSubmit} disabled={renameSubmitting}>
+              Save
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={Boolean(deleteTarget)} onClose={closeDeleteDialog} fullWidth maxWidth="xs">
+          <DialogTitle>Delete trip</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Delete "{deleteTarget?.name}"? This cannot be undone.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeDeleteDialog} disabled={deleteSubmitting}>
+              Cancel
+            </Button>
+            <Button color="error" onClick={handleDeleteConfirm} disabled={deleteSubmitting}>
+              Delete
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
     </Box>
   );
 }

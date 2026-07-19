@@ -19,9 +19,16 @@ export const theme = createTheme({
     h6: { fontWeight: 600, letterSpacing: '-0.01em' },
     body2: { fontSize: '0.8125rem' },
   },
-  shape: { borderRadius: 16 },
+  // 5px is the "main" radius used by boxes/cards/dialogs (directly, or as the
+  // 1x/2x unit behind sx={{ borderRadius: 1 }} etc. throughout the app).
+  // Buttons keep the previous, larger radius via the explicit override below
+  // so this shrink doesn't also flatten button corners.
+  shape: { borderRadius: 5 },
   components: {
-    MuiButton: { defaultProps: { disableElevation: true } },
+    MuiButton: {
+      defaultProps: { disableElevation: true },
+      styleOverrides: { root: { borderRadius: 16 } },
+    },
     MuiPaper: { defaultProps: { elevation: 0 } },
   },
 });

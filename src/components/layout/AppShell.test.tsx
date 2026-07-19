@@ -3,8 +3,6 @@ import { screen, fireEvent } from '@testing-library/react';
 import { AppShell } from './AppShell';
 import { renderWithProviders, resetStores } from '../../test/helpers';
 import { useTripStore } from '../../store/tripStore';
-import { useAuthStore } from '../../store/authStore';
-import type { AuthService } from '../../data/AuthService';
 
 vi.mock('react-map-gl/maplibre', () => ({
   __esModule: true,
@@ -36,25 +34,19 @@ function installMatchMedia({ phone = false, wide = false }: { phone?: boolean; w
   });
 }
 
-const fakeAuthService: AuthService = {
-  getCurrentUser: () => null,
-  onAuthStateChanged: () => () => {},
-  signInWithGoogle: async () => {},
-  signOut: async () => {},
-};
-
 beforeEach(() => {
   resetStores();
   installMatchMedia({});
 });
 
 describe('AppShell — tablet split layout (neither phone nor wide)', () => {
-  it('renders the timeline panel and only the left toggle', () => {
+  it('renders both the timeline and alternatives panels, with both toggles', () => {
     renderWithProviders(<AppShell onBack={vi.fn()} />);
 
     expect(screen.getByText(/no checkpoints yet/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Collapse timeline')).toBeInTheDocument();
-    expect(screen.queryByLabelText(/alternatives/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/no alternatives/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Collapse alternatives')).toBeInTheDocument();
   });
 
   it('collapses and expands the timeline panel via its toggle', () => {
@@ -66,6 +58,17 @@ describe('AppShell — tablet split layout (neither phone nor wide)', () => {
 
     fireEvent.click(screen.getByLabelText('Expand timeline'));
     expect(screen.getByText(/no checkpoints yet/i)).toBeInTheDocument();
+  });
+
+  it('collapses and expands the alternatives panel via its toggle', () => {
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Collapse alternatives'));
+    expect(screen.queryByText(/no alternatives/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Expand alternatives')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Expand alternatives'));
+    expect(screen.getByText(/no alternatives/i)).toBeInTheDocument();
   });
 });
 
@@ -132,42 +135,19 @@ describe('AppShell — app bar', () => {
     expect(screen.getByText('Japan 2026')).toBeInTheDocument();
   });
 
-  it('hides the sign-out button in local mode (no auth service)', () => {
+  it('does not render a sign-out button (sign-out lives only on the trip selector)', () => {
     renderWithProviders(<AppShell onBack={vi.fn()} />);
     expect(screen.queryByTitle('Sign out')).not.toBeInTheDocument();
   });
 
-  it('shows the sign-out button and calls signOut when a service is present', () => {
-    const signOut = vi.fn();
-    useAuthStore.setState({ service: fakeAuthService, signOut });
-
-    renderWithProviders(<AppShell onBack={vi.fn()} />);
-    fireEvent.click(screen.getByTitle('Sign out'));
-    expect(signOut).toHaveBeenCalledTimes(1);
-  });
-
-  it('always shows the back button, before the sign-out button, and calls onBack', () => {
+  it('shows the back button and calls onBack when clicked', () => {
     const onBack = vi.fn();
-    useAuthStore.setState({ service: fakeAuthService });
-
     renderWithProviders(<AppShell onBack={onBack} />);
+
     const backButton = screen.getByTitle('Back to trips');
     expect(backButton).toBeInTheDocument();
 
-    const toolbarButtons = screen
-      .getAllByRole('button')
-      .filter(
-        (btn) =>
-          btn.getAttribute('title') === 'Back to trips' || btn.getAttribute('title') === 'Sign out'
-      );
-    expect(toolbarButtons[0]).toBe(backButton);
-
     fireEvent.click(backButton);
     expect(onBack).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows the back button even in local mode (no auth service)', () => {
-    renderWithProviders(<AppShell onBack={vi.fn()} />);
-    expect(screen.getByTitle('Back to trips')).toBeInTheDocument();
   });
 });

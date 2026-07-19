@@ -6,6 +6,7 @@ import { renderWithProviders, resetStores } from '../../test/helpers';
 import { useAuthStore } from '../../store/authStore';
 import type { TripRepository } from '../../data/TripRepository';
 import type { Trip } from '../../types';
+import type { AuthService } from '../../data/AuthService';
 
 // ── localStorage mock ─────────────────────────────────────────────────────────
 
@@ -60,14 +61,12 @@ function makeRepo(overrides: Partial<TripRepository> = {}): TripRepository {
   return {
     getTrip: vi.fn().mockResolvedValue(TRIP_A),
     listTrips: vi.fn().mockResolvedValue([TRIP_A, TRIP_B]),
-    createTrip: vi
-      .fn()
-      .mockResolvedValue({
-        id: 'trip-new',
-        name: 'New Trip',
-        dateRange: { start: '2027-01-01', end: '2027-01-10' },
-        memberIds: [],
-      }),
+    createTrip: vi.fn().mockResolvedValue({
+      id: 'trip-new',
+      name: 'New Trip',
+      dateRange: { start: '2027-01-01', end: '2027-01-10' },
+      memberIds: [],
+    }),
     updateTrip: vi.fn().mockResolvedValue(undefined),
     deleteTrip: vi.fn().mockResolvedValue(undefined),
     subscribeToCheckpoints: vi.fn().mockReturnValue(() => {}),
@@ -301,5 +300,35 @@ describe('TripSelectorScreen — delete dialog', () => {
 
     expect(repo.deleteTrip).not.toHaveBeenCalled();
     expect(screen.getByText('Japan 2026')).toBeInTheDocument();
+  });
+});
+
+describe('TripSelectorScreen — sign out', () => {
+  const fakeAuthService: AuthService = {
+    getCurrentUser: () => null,
+    onAuthStateChanged: () => () => {},
+    signInWithGoogle: async () => {},
+    signOut: async () => {},
+  };
+
+  it('hides the sign-out button in local mode (no auth service)', async () => {
+    const repo = makeRepo();
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    expect(screen.queryByTitle('Sign out')).not.toBeInTheDocument();
+  });
+
+  it('shows a labeled Logout button and calls signOut when a service is present', async () => {
+    const signOut = vi.fn();
+    useAuthStore.setState({ service: fakeAuthService, signOut });
+    const repo = makeRepo();
+    renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    const logoutButton = screen.getByTitle('Sign out');
+    expect(logoutButton).toHaveTextContent('Logout');
+    await userEvent.setup().click(logoutButton);
+    expect(signOut).toHaveBeenCalledTimes(1);
   });
 });

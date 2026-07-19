@@ -9,11 +9,11 @@ import {
   useMediaQuery,
   useTheme,
   IconButton,
+  Button,
 } from '@mui/material';
 import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
 import MapIcon from '@mui/icons-material/Map';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
-import LogoutIcon from '@mui/icons-material/Logout';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -22,11 +22,67 @@ import { MapView } from '../map/MapView';
 import { AlternativesShelf } from '../alternatives/AlternativesShelf';
 import { OfflineBanner } from './OfflineBanner';
 import { useTripStore } from '../../store/tripStore';
-import { useAuthStore } from '../../store/authStore';
 import appIcon from '../../assets/app-icon.svg';
+import sakuraPattern from '../../assets/sakura-pattern.svg';
+import sakuraBranch from '../../assets/sakura-branch.svg';
 
 interface Props {
   onBack: () => void;
+}
+
+// Dedicated, absolutely-positioned layer so opacity only fades the texture —
+// applying opacity to the panel Box itself would also fade its real content.
+function PanelBackground({
+  image,
+  repeat,
+  size,
+  position = 'center',
+}: {
+  image: string;
+  repeat: 'repeat' | 'no-repeat';
+  size: string;
+  position?: string;
+}) {
+  return (
+    <Box
+      aria-hidden
+      sx={{
+        position: 'absolute',
+        inset: 0,
+        backgroundImage: `url(${image})`,
+        backgroundRepeat: repeat,
+        backgroundSize: size,
+        backgroundPosition: position,
+        opacity: 0.05,
+        pointerEvents: 'none',
+        zIndex: 0,
+      }}
+    />
+  );
+}
+
+// Wraps a panel's real content with the textured background behind it and a
+// stacking context above it, shared by both the phone tab view and the
+// tablet/desktop split view so the two layouts stay visually consistent.
+function TexturedPanel({
+  image,
+  repeat,
+  size,
+  position = 'center',
+  children,
+}: {
+  image: string;
+  repeat: 'repeat' | 'no-repeat';
+  size: string;
+  position?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Box sx={{ position: 'relative', height: '100%' }}>
+      <PanelBackground image={image} repeat={repeat} size={size} position={position} />
+      <Box sx={{ position: 'relative', zIndex: 1, height: '100%' }}>{children}</Box>
+    </Box>
+  );
 }
 
 // Pill-shaped toggle tab stuck to the edge of the map container.
@@ -97,8 +153,6 @@ export function AppShell({ onBack }: Props) {
   const [showTimeline, setShowTimeline] = useState(true);
   const [showAlternatives, setShowAlternatives] = useState(true);
   const trip = useTripStore((s) => s.trip);
-  const signOut = useAuthStore((s) => s.signOut);
-  const service = useAuthStore((s) => s.service);
 
   return (
     <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column' }}>
@@ -109,9 +163,6 @@ export function AppShell({ onBack }: Props) {
         sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
       >
         <Toolbar variant="dense">
-          <IconButton size="small" onClick={onBack} title="Back to trips" sx={{ mr: 1 }}>
-            <ArrowBackIcon fontSize="small" />
-          </IconButton>
           <Box
             component="img"
             src={appIcon}
@@ -121,11 +172,14 @@ export function AppShell({ onBack }: Props) {
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             {trip?.name ?? "Maiyun's Trip Planner"}
           </Typography>
-          {service && (
-            <IconButton size="small" onClick={signOut} title="Sign out">
-              <LogoutIcon fontSize="small" />
-            </IconButton>
-          )}
+          <Button
+            size="small"
+            onClick={onBack}
+            title="Back to trips"
+            startIcon={<ArrowBackIcon fontSize="small" />}
+          >
+            Back to trips
+          </Button>
         </Toolbar>
       </AppBar>
 
@@ -134,9 +188,22 @@ export function AppShell({ onBack }: Props) {
       {isPhone ? (
         <>
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            {tab === 0 && <TimelineView />}
+            {tab === 0 && (
+              <TexturedPanel
+                image={sakuraBranch}
+                repeat="no-repeat"
+                size="contain"
+                position="top center"
+              >
+                <TimelineView />
+              </TexturedPanel>
+            )}
             {tab === 1 && <MapView />}
-            {tab === 2 && <AlternativesShelf />}
+            {tab === 2 && (
+              <TexturedPanel image={sakuraPattern} repeat="repeat" size="360px 360px">
+                <AlternativesShelf />
+              </TexturedPanel>
+            )}
           </Box>
           <BottomNavigation
             value={tab}
@@ -161,7 +228,14 @@ export function AppShell({ onBack }: Props) {
                 overflowY: 'auto',
               }}
             >
-              <TimelineView />
+              <TexturedPanel
+                image={sakuraBranch}
+                repeat="no-repeat"
+                size="contain"
+                position="top center"
+              >
+                <TimelineView />
+              </TexturedPanel>
             </Box>
           )}
 
@@ -176,18 +250,16 @@ export function AppShell({ onBack }: Props) {
               onToggle={() => setShowTimeline((v) => !v)}
             />
 
-            {isWide && (
-              <PanelToggle
-                side="right"
-                open={showAlternatives}
-                label={showAlternatives ? 'Collapse alternatives' : 'Expand alternatives'}
-                onToggle={() => setShowAlternatives((v) => !v)}
-              />
-            )}
+            <PanelToggle
+              side="right"
+              open={showAlternatives}
+              label={showAlternatives ? 'Collapse alternatives' : 'Expand alternatives'}
+              onToggle={() => setShowAlternatives((v) => !v)}
+            />
           </Box>
 
-          {/* Right panel — Alternatives (desktop only) */}
-          {isWide && showAlternatives && (
+          {/* Right panel — Alternatives (tablet/desktop split view) */}
+          {showAlternatives && (
             <Box
               sx={{
                 width: 300,
@@ -197,7 +269,9 @@ export function AppShell({ onBack }: Props) {
                 overflowY: 'auto',
               }}
             >
-              <AlternativesShelf />
+              <TexturedPanel image={sakuraPattern} repeat="repeat" size="360px 360px">
+                <AlternativesShelf />
+              </TexturedPanel>
             </Box>
           )}
         </Box>
