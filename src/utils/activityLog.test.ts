@@ -116,6 +116,14 @@ describe('formatActivityLogEntry', () => {
     );
   });
 
+  it('formats alternative_updated without a name, listing changed fields', () => {
+    expect(
+      formatActivityLogEntry(
+        makeEntry({ type: 'alternative_updated', changedFields: ['location', 'notes'] })
+      )
+    ).toBe('Alice updated an alternative (location, notes)');
+  });
+
   it('formats alternative_deleted', () => {
     expect(
       formatActivityLogEntry(
@@ -146,6 +154,14 @@ describe('formatActivityLogEntry', () => {
     expect(formatActivityLogEntry(makeEntry({ type: 'booking_updated' }))).toBe(
       'Alice updated a booking'
     );
+  });
+
+  it('formats booking_updated without a name, listing changed fields', () => {
+    expect(
+      formatActivityLogEntry(
+        makeEntry({ type: 'booking_updated', changedFields: ['confirmationNumber'] })
+      )
+    ).toBe('Alice updated a booking (confirmationNumber)');
   });
 
   it('falls back to a generic message for an unrecognized type', () => {
