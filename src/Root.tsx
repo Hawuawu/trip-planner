@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import App from './App';
+import { InvitePage } from './components/auth/InvitePage';
 import { SignInPage } from './components/auth/SignInPage';
 import { TripSelectorScreen } from './components/trips/TripSelectorScreen';
 import { useAuthStore } from './store/authStore';
@@ -38,6 +39,11 @@ export function Root({ tripRepo }: Props) {
   }
 
   if (!user) {
+    // App-invite links (#35) land here: no session yet, token in the URL.
+    const inviteToken = new URLSearchParams(location.search).get('invite');
+    if (inviteToken) {
+      return <InvitePage token={inviteToken} />;
+    }
     return <SignInPage />;
   }
 

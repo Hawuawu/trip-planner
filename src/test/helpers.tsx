@@ -27,6 +27,7 @@ const authInitialState = {
   user: null,
   loading: true,
   service: null,
+  authError: null,
 };
 
 export function resetStores() {

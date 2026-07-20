@@ -86,3 +86,30 @@ export interface AuthUser {
   email: string | null;
   displayName: string | null;
 }
+
+export interface AllowedUser {
+  email: string;
+  invitedVia: string; // 'seed' or the invite token that admitted them
+  createdAt: string;
+}
+
+export type AppInviteStatus = 'pending' | 'redeemed' | 'cancelled';
+
+export interface AppInvite {
+  token: string;
+  status: AppInviteStatus;
+  redeemedEmail: string | null;
+  createdAt: string;
+}
+
+export type AppActivityType =
+  'invite_created' | 'invite_redeemed' | 'invite_cancelled' | 'access_revoked' | 'sign_in_rejected';
+
+export interface AppActivityEntry {
+  id: string;
+  type: AppActivityType;
+  email: string | null;
+  token: string | null;
+  actor: 'admin' | 'system';
+  createdAt: string;
+}

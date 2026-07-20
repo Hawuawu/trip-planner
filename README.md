@@ -73,6 +73,24 @@ npm run preview  # preview production build locally
 
 Security rules enforce that only `trips/{tripId}.memberIds` members can read or write a trip's subcollections — see `firestore.rules`.
 
+## Inviting people
+
+### To the app (admin only)
+
+Sign-in is invite-only: an Auth blocking function rejects any account whose email isn't in the `allowedUsers` allowlist, so uninvited accounts never get a session. The app admin (a fixed email, see `src/config/admin.ts`) manages access from the **App access** button in the trip-selector toolbar:
+
+1. Open **App access → Invites → New invite link**, copy the generated link, and send it however you like (there is no automated email sending).
+2. The invitee opens the link, enters the email address they'll sign in with, and accepts — the single-use token is bound to that email and the email is allowlisted.
+3. They then sign in with Google as normal.
+
+The **People** tab lists everyone with access and lets the admin revoke anyone (future sign-ins are rejected; their current session lapses within about an hour; their trips and memberships are kept in case they're re-invited). The **Activity** tab is an audit trail: invites created/redeemed/cancelled, revocations, and rejected sign-in attempts.
+
+> **One-time bootstrap:** `allowedUsers` starts empty, and deploying the blocking function before seeding it would lock out every account, admin included. Before the first deploy of `functions/`, add the existing accounts' emails as `allowedUsers/{email}` docs directly in the Firebase Console's Firestore tab.
+
+### To a trip (any trip owner)
+
+Trip sharing is separate from app access: the trip's owner opens the trip's members dialog and invites a companion by email, which gives them full edit access to that trip. The person must already have app access (see above) and have signed in once. See [WORKFLOW.md](WORKFLOW.md#4-sharing-with-a-travel-companion) for the full workflow.
+
 ## Data model
 
 ```

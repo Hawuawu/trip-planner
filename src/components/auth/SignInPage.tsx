@@ -1,4 +1,4 @@
-import { Box, Button, Typography, Paper } from '@mui/material';
+import { Alert, Box, Button, Typography, Paper } from '@mui/material';
 import GoogleIcon from '@mui/icons-material/Google';
 import { useAuthStore } from '../../store/authStore';
 import signinBg from '../../assets/signin-bg.svg';
@@ -6,6 +6,7 @@ import heroBanner from '../../assets/hero-banner.svg';
 
 export function SignInPage() {
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
+  const authError = useAuthStore((s) => s.authError);
 
   return (
     <Box
@@ -54,6 +55,11 @@ export function SignInPage() {
         >
           Sign in with Google
         </Button>
+        {authError && (
+          <Alert severity="error" sx={{ mt: 2, textAlign: 'left' }}>
+            {authError}
+          </Alert>
+        )}
       </Paper>
     </Box>
   );
