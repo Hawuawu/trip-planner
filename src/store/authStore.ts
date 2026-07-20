@@ -12,9 +12,9 @@ interface AuthState {
   signInWithGoogle(): Promise<void>;
   signOut(): Promise<void>;
   clearAuthError(): void;
-  createInvite(): Promise<string>;
-  redeemInvite(token: string, email: string): Promise<void>;
-  cancelInvite(token: string): Promise<void>;
+  refreshAccess(): Promise<void>;
+  approveAccess(email: string): Promise<void>;
+  denyAccess(email: string): Promise<void>;
   revokeAccess(email: string): Promise<void>;
 }
 
@@ -52,16 +52,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ authError: null });
   },
 
-  async createInvite() {
-    return requireService(get().service).createInvite();
+  // Force-refreshes the ID token so a just-granted appAccess claim takes
+  // effect without a second sign-in ("Check again" on the waiting screen).
+  async refreshAccess() {
+    const user = await requireService(get().service).refreshAccess();
+    if (user) set({ user });
   },
 
-  async redeemInvite(token, email) {
-    await requireService(get().service).redeemInvite(token, email);
+  async approveAccess(email) {
+    await requireService(get().service).approveAccess(email);
   },
 
-  async cancelInvite(token) {
-    await requireService(get().service).cancelInvite(token);
+  async denyAccess(email) {
+    await requireService(get().service).denyAccess(email);
   },
 
   async revokeAccess(email) {

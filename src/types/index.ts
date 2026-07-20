@@ -85,31 +85,34 @@ export interface AuthUser {
   uid: string;
   email: string | null;
   displayName: string | null;
+  // From the appAccess custom claim (stamped at sign-in, see #35). Absent in
+  // contexts where claims aren't available (e.g. getCurrentUser's sync path).
+  appAccess?: boolean;
 }
 
 export interface AllowedUser {
   email: string;
-  invitedVia: string; // 'seed' or the invite token that admitted them
+  invitedVia: string; // 'seed' or 'approved'
   createdAt: string;
 }
 
-export type AppInviteStatus = 'pending' | 'redeemed' | 'cancelled';
+export type AccessRequestStatus = 'pending' | 'approved' | 'denied' | 'revoked';
 
-export interface AppInvite {
-  token: string;
-  status: AppInviteStatus;
-  redeemedEmail: string | null;
-  createdAt: string;
+export interface AccessRequest {
+  email: string;
+  displayName: string | null;
+  status: AccessRequestStatus;
+  firstSeenAt: string;
+  lastSeenAt: string;
 }
 
 export type AppActivityType =
-  'invite_created' | 'invite_redeemed' | 'invite_cancelled' | 'access_revoked' | 'sign_in_rejected';
+  'access_requested' | 'access_approved' | 'access_denied' | 'access_revoked';
 
 export interface AppActivityEntry {
   id: string;
   type: AppActivityType;
   email: string | null;
-  token: string | null;
   actor: 'admin' | 'system';
   createdAt: string;
 }
