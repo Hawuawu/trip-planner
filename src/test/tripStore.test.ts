@@ -29,10 +29,16 @@ function makeCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
 function makeMockRepo(overrides: Partial<TripRepository> = {}): TripRepository {
   return {
     getTrip: vi.fn().mockResolvedValue(TRIP),
+    subscribeToTrip: vi.fn().mockReturnValue(() => {}),
     listTrips: vi.fn().mockResolvedValue([TRIP]),
     createTrip: vi.fn().mockResolvedValue(TRIP),
     updateTrip: vi.fn().mockResolvedValue(undefined),
     deleteTrip: vi.fn().mockResolvedValue(undefined),
+    inviteMember: vi.fn().mockResolvedValue({ status: 'invited', uid: 'invitee-1' }),
+    removeMember: vi.fn().mockResolvedValue(undefined),
+    leaveTrip: vi.fn().mockResolvedValue(undefined),
+    recordAccess: vi.fn().mockResolvedValue(undefined),
+    subscribeToActivityLog: vi.fn().mockReturnValue(() => {}),
     subscribeToCheckpoints: vi.fn().mockReturnValue(() => {}),
     addCheckpoint: vi.fn().mockResolvedValue(makeCheckpoint({ id: 'saved-1' })),
     addCheckpoints: vi.fn().mockResolvedValue([makeCheckpoint({ id: 'saved-1' })]),
@@ -64,12 +70,19 @@ beforeEach(() => {
 });
 
 describe('tripStore — init', () => {
-  it('calls getTrip and both subscribe methods on init', () => {
+  it('calls subscribeToTrip and both subscribe methods on init', () => {
     const repo = makeMockRepo();
     useTripStore.getState().init('trip-1', repo);
-    expect(repo.getTrip).toHaveBeenCalledWith('trip-1');
+    expect(repo.subscribeToTrip).toHaveBeenCalledWith('trip-1', expect.any(Function));
     expect(repo.subscribeToCheckpoints).toHaveBeenCalledWith('trip-1', expect.any(Function));
     expect(repo.subscribeToAlternatives).toHaveBeenCalledWith('trip-1', expect.any(Function));
+  });
+
+  it('subscribes to the activity log and records access on init', () => {
+    const repo = makeMockRepo();
+    useTripStore.getState().init('trip-1', repo);
+    expect(repo.subscribeToActivityLog).toHaveBeenCalledWith('trip-1', expect.any(Function));
+    expect(repo.recordAccess).toHaveBeenCalledWith('trip-1');
   });
 
   it('sets tripId and repo in state', () => {
@@ -78,6 +91,42 @@ describe('tripStore — init', () => {
     const { tripId, repo: storedRepo } = useTripStore.getState();
     expect(tripId).toBe('trip-1');
     expect(storedRepo).toBe(repo);
+  });
+});
+
+describe('tripStore — membership', () => {
+  it('inviteMember passes through to repo.inviteMember and returns the result', async () => {
+    const inviteMember = vi.fn().mockResolvedValue({ status: 'invited', uid: 'invitee-1' });
+    const repo = makeMockRepo({ inviteMember });
+    useTripStore.getState().init('trip-1', repo);
+    const result = await useTripStore.getState().inviteMember('friend@example.com');
+    expect(inviteMember).toHaveBeenCalledWith('trip-1', 'friend@example.com');
+    expect(result).toEqual({ status: 'invited', uid: 'invitee-1' });
+  });
+
+  it('removeMember optimistically removes the uid from trip.memberIds', async () => {
+    const repo = makeMockRepo();
+    useTripStore.getState().init('trip-1', repo);
+    useTripStore.setState({ trip: { ...TRIP, memberIds: ['u1', 'u2'] } });
+    await useTripStore.getState().removeMember('u2');
+    expect(repo.removeMember).toHaveBeenCalledWith('trip-1', 'u2');
+    expect(useTripStore.getState().trip?.memberIds).toEqual(['u1']);
+  });
+
+  it('removeMember rolls back on failure', async () => {
+    const removeMember = vi.fn().mockRejectedValue(new Error('denied'));
+    const repo = makeMockRepo({ removeMember });
+    useTripStore.getState().init('trip-1', repo);
+    useTripStore.setState({ trip: { ...TRIP, memberIds: ['u1', 'u2'] } });
+    await useTripStore.getState().removeMember('u2');
+    expect(useTripStore.getState().trip?.memberIds).toEqual(['u1', 'u2']);
+  });
+
+  it('leaveTrip calls repo.leaveTrip with the current tripId', async () => {
+    const repo = makeMockRepo();
+    useTripStore.getState().init('trip-1', repo);
+    await useTripStore.getState().leaveTrip();
+    expect(repo.leaveTrip).toHaveBeenCalledWith('trip-1');
   });
 });
 

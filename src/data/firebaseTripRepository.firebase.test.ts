@@ -211,8 +211,32 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
     await assertSucceeds(db.collection('trips').doc(TRIP_ID).delete());
   });
 
-  it('any member CAN remove a member (memberIds shrinks)', async () => {
-    const TRIP_ID = 'trip-remove-member';
+  it('owner CAN remove a non-owner member', async () => {
+    const TRIP_ID = 'trip-owner-removes-member';
+    await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
+    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    await assertSucceeds(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({ memberIds: ['owner-uid'] })
+    );
+  });
+
+  it('non-owner member CANNOT remove another member', async () => {
+    const TRIP_ID = 'trip-non-owner-removes-member';
+    await seedTrip(TRIP_ID, ['owner-uid', 'member-uid', 'member2-uid'], 'owner-uid');
+    const db = testEnv.authenticatedContext('member-uid').firestore();
+    await assertFails(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({ memberIds: ['owner-uid', 'member-uid'] })
+    );
+  });
+
+  it('non-owner member CAN remove themselves (leave)', async () => {
+    const TRIP_ID = 'trip-member-leaves';
     await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
     const db = testEnv.authenticatedContext('member-uid').firestore();
     await assertSucceeds(
@@ -220,6 +244,103 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
         .collection('trips')
         .doc(TRIP_ID)
         .update({ memberIds: ['owner-uid'] })
+    );
+  });
+
+  it("owner's own uid CANNOT be removed while other members remain (owner can't leave/be removed)", async () => {
+    const TRIP_ID = 'trip-owner-cannot-leave';
+    await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
+    const ownerDb = testEnv.authenticatedContext('owner-uid').firestore();
+    await assertFails(
+      ownerDb
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({ memberIds: ['member-uid'] })
+    );
+    const memberDb = testEnv.authenticatedContext('member-uid').firestore();
+    await assertFails(
+      memberDb
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({ memberIds: ['member-uid'] })
+    );
+  });
+
+  it('a client CANNOT shrink memberIds by more than one at once', async () => {
+    const TRIP_ID = 'trip-shrink-multiple';
+    await seedTrip(TRIP_ID, ['owner-uid', 'member-uid', 'member2-uid'], 'owner-uid');
+    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    await assertFails(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({ memberIds: ['owner-uid'] })
+    );
+  });
+
+  it('a client CANNOT shrink and add a uid in the same update', async () => {
+    const TRIP_ID = 'trip-shrink-and-add';
+    await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
+    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    await assertFails(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({ memberIds: ['owner-uid', 'intruder-uid'] })
+    );
+  });
+
+  it('a member CAN self-heal their own memberProfiles entry (no memberIds change)', async () => {
+    const TRIP_ID = 'trip-self-heal-profile';
+    await seedTrip(TRIP_ID, ['owner-uid'], 'owner-uid');
+    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    await assertSucceeds(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({
+          memberProfiles: { 'owner-uid': { email: 'owner@example.com', displayName: null } },
+        })
+    );
+  });
+
+  it('a client CANNOT write a memberProfiles entry for a different uid (invite requires the Cloud Function)', async () => {
+    const TRIP_ID = 'trip-add-profile-for-other';
+    await seedTrip(TRIP_ID, ['owner-uid'], 'owner-uid');
+    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    await assertFails(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({
+          memberProfiles: { 'intruder-uid': { email: 'intruder@example.com', displayName: null } },
+        })
+    );
+  });
+
+  it("a client CANNOT modify another member's existing memberProfiles entry while self-healing their own", async () => {
+    const TRIP_ID = 'trip-mixed-profile-write';
+    await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .firestore()
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({
+          memberProfiles: { 'member-uid': { email: 'member@example.com', displayName: null } },
+        });
+    });
+    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    await assertFails(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({
+          memberProfiles: {
+            'owner-uid': { email: 'owner@example.com', displayName: null },
+            'member-uid': { email: 'hijacked@example.com', displayName: null },
+          },
+        })
     );
   });
 
@@ -391,6 +512,92 @@ describe('Security rules — trips/{tripId}/bookings', () => {
     const db = testEnv.authenticatedContext(OUTSIDER_UID).firestore();
     await assertFails(
       db.collection('trips').doc(TRIP_ID).collection('bookings').doc('booking-1').get()
+    );
+  });
+});
+
+describe('Security rules — trips/{tripId}/activityLog', () => {
+  const TRIP_ID = 'trip-log-rules-1';
+  const OWNER_UID = 'owner-log';
+  const MEMBER_UID = 'member-log';
+  const OUTSIDER_UID = 'outsider-log';
+
+  beforeEach(async () => {
+    await seedTrip(TRIP_ID, [OWNER_UID, MEMBER_UID], OWNER_UID);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .firestore()
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('activityLog')
+        .doc('e1')
+        .set({
+          type: 'checkpoint_added',
+          actorUid: MEMBER_UID,
+          actorLabel: 'Member',
+          entityName: 'Senso-ji',
+          createdAt: Timestamp.now(),
+        });
+    });
+  });
+
+  it('owner CAN read the activity log', async () => {
+    const db = testEnv.authenticatedContext(OWNER_UID).firestore();
+    await assertSucceeds(
+      db.collection('trips').doc(TRIP_ID).collection('activityLog').doc('e1').get()
+    );
+  });
+
+  it('non-owner member CANNOT read the activity log', async () => {
+    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    await assertFails(
+      db.collection('trips').doc(TRIP_ID).collection('activityLog').doc('e1').get()
+    );
+  });
+
+  it('outsider CANNOT read the activity log', async () => {
+    const db = testEnv.authenticatedContext(OUTSIDER_UID).firestore();
+    await assertFails(
+      db.collection('trips').doc(TRIP_ID).collection('activityLog').doc('e1').get()
+    );
+  });
+
+  it('a member CAN create a self-attributed activity log entry', async () => {
+    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    await assertSucceeds(
+      db.collection('trips').doc(TRIP_ID).collection('activityLog').add({
+        type: 'checkpoint_updated',
+        actorUid: MEMBER_UID,
+        actorLabel: 'Member',
+        createdAt: Timestamp.now(),
+      })
+    );
+  });
+
+  it('a member CANNOT create an activity log entry attributed to another uid (spoofing)', async () => {
+    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    await assertFails(
+      db.collection('trips').doc(TRIP_ID).collection('activityLog').add({
+        type: 'checkpoint_updated',
+        actorUid: OWNER_UID,
+        actorLabel: 'Owner',
+        createdAt: Timestamp.now(),
+      })
+    );
+  });
+
+  it('the log is append-only — no one can update or delete an entry', async () => {
+    const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    await assertFails(
+      ownerDb
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('activityLog')
+        .doc('e1')
+        .update({ entityName: 'Tampered' })
+    );
+    await assertFails(
+      ownerDb.collection('trips').doc(TRIP_ID).collection('activityLog').doc('e1').delete()
     );
   });
 });

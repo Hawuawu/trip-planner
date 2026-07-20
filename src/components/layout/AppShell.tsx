@@ -29,11 +29,17 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import AddIcon from '@mui/icons-material/Add';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import PeopleIcon from '@mui/icons-material/People';
+import HistoryIcon from '@mui/icons-material/History';
 import { TimelineView } from '../timeline/TimelineView';
 import { MapView } from '../map/MapView';
 import { AlternativesShelf } from '../alternatives/AlternativesShelf';
 import { OfflineBanner } from './OfflineBanner';
 import { useTripStore } from '../../store/tripStore';
+import { useAuthStore } from '../../store/authStore';
+import { canManage } from '../../utils/tripPermissions';
+import { TripMembersDialog } from '../trips/TripMembersDialog';
+import { ActivityLogView } from '../trips/ActivityLogView';
 import appIcon from '../../assets/app-icon.svg';
 import sakuraPattern from '../../assets/sakura-pattern.svg';
 import sakuraBranch from '../../assets/sakura-branch.svg';
@@ -174,9 +180,14 @@ export function AppShell({ onBack }: Props) {
   const trip = useTripStore((s) => s.trip);
   const checkpoints = useTripStore((s) => s.checkpoints);
   const alternatives = useTripStore((s) => s.alternatives);
+  const activityLog = useTripStore((s) => s.activityLog);
+  const currentUid = useAuthStore((s) => s.user?.uid);
+  const isOwner = trip ? canManage(trip, currentUid) : false;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [activityLogOpen, setActivityLogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [addCheckpointSignal, setAddCheckpointSignal] = useState(0);
   const [addAlternativeSignal, setAddAlternativeSignal] = useState(0);
@@ -213,6 +224,20 @@ export function AppShell({ onBack }: Props) {
         parsed.alternatives.length
       } alternative${parsed.alternatives.length === 1 ? '' : 's'}.`
     );
+  }
+
+  async function handleInviteMember(email: string) {
+    return useTripStore.getState().inviteMember(email);
+  }
+
+  async function handleRemoveMember(uid: string) {
+    await useTripStore.getState().removeMember(uid);
+  }
+
+  async function handleLeaveTrip() {
+    await useTripStore.getState().leaveTrip();
+    setMembersOpen(false);
+    onBack();
   }
 
   return (
@@ -261,17 +286,6 @@ export function AppShell({ onBack }: Props) {
               </List>
               <Divider />
               <List>
-                <ListItemButton
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onBack();
-                  }}
-                >
-                  <ListItemIcon>
-                    <ArrowBackIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText>Back to trips</ListItemText>
-                </ListItemButton>
                 <ListItemButton onClick={handleExportTrip}>
                   <ListItemIcon>
                     <FileDownloadIcon fontSize="small" />
@@ -288,6 +302,51 @@ export function AppShell({ onBack }: Props) {
                     <UploadFileIcon fontSize="small" />
                   </ListItemIcon>
                   <ListItemText>Import checkpoints…</ListItemText>
+                </ListItemButton>
+              </List>
+              {trip && (
+                <>
+                  <Divider />
+                  <List>
+                    <ListItemButton
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setMembersOpen(true);
+                      }}
+                    >
+                      <ListItemIcon>
+                        <PeopleIcon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText>Members</ListItemText>
+                    </ListItemButton>
+                    {isOwner && (
+                      <ListItemButton
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setActivityLogOpen(true);
+                        }}
+                      >
+                        <ListItemIcon>
+                          <HistoryIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText>Activity log</ListItemText>
+                      </ListItemButton>
+                    )}
+                  </List>
+                </>
+              )}
+              <Divider />
+              <List>
+                <ListItemButton
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onBack();
+                  }}
+                >
+                  <ListItemIcon>
+                    <ArrowBackIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Back to trips</ListItemText>
                 </ListItemButton>
               </List>
             </Box>
@@ -399,6 +458,27 @@ export function AppShell({ onBack }: Props) {
         parse={parseCheckpointsYaml}
         onConfirm={handleImportCheckpointsConfirm}
       />
+
+      {trip && (
+        <TripMembersDialog
+          open={membersOpen}
+          onClose={() => setMembersOpen(false)}
+          trip={trip}
+          currentUid={currentUid}
+          onInvite={handleInviteMember}
+          onRemove={handleRemoveMember}
+          onLeave={handleLeaveTrip}
+        />
+      )}
+
+      {trip && (
+        <ActivityLogView
+          open={activityLogOpen}
+          onClose={() => setActivityLogOpen(false)}
+          entries={activityLog}
+          isOwner={isOwner}
+        />
+      )}
 
       <Snackbar open={Boolean(snackbar)} autoHideDuration={4000} onClose={() => setSnackbar(null)}>
         <Alert onClose={() => setSnackbar(null)} severity="success" sx={{ width: '100%' }}>

@@ -31,6 +31,7 @@ import { useAuthStore } from '../../store/authStore';
 import emptyStateBanner from '../../assets/empty-state-banner.svg';
 import { serializeTrip, parseTripYaml, type ParsedTripYaml } from '../../data/tripYaml';
 import { downloadTextFile, slugifyFilename } from '../../utils/fileTransfer';
+import { canManage } from '../../utils/tripPermissions';
 import { YamlImportDialog } from './YamlImportDialog';
 
 interface Props {
@@ -45,10 +46,6 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { name: '', start: '', end: '' };
-
-function canManage(trip: Trip, uid: string | undefined): boolean {
-  return !trip.ownerId || trip.ownerId === uid;
-}
 
 // One-shot fetch of a trip's checkpoints/alternatives — there's no dedicated
 // repo method for this, so we subscribe, wait for the first callback from

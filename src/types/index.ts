@@ -33,13 +33,53 @@ export interface Booking {
   notes?: string;
 }
 
+export interface MemberProfile {
+  email: string | null;
+  displayName: string | null;
+  joinedAt?: string;
+}
+
 export interface Trip {
   id: string;
   name: string;
   dateRange: { start: string; end: string };
   memberIds: string[];
   ownerId?: string;
+  memberProfiles?: Record<string, MemberProfile>;
 }
+
+export type ActivityLogEntryType =
+  | 'member_invited'
+  | 'member_joined'
+  | 'member_removed'
+  | 'member_left'
+  | 'trip_renamed'
+  | 'checkpoint_added'
+  | 'checkpoint_updated'
+  | 'checkpoint_deleted'
+  | 'checkpoints_imported'
+  | 'alternative_added'
+  | 'alternative_updated'
+  | 'alternative_deleted'
+  | 'alternatives_imported'
+  | 'alternative_promoted'
+  | 'booking_added'
+  | 'booking_updated'
+  | 'booking_deleted';
+
+export interface ActivityLogEntry {
+  id: string;
+  type: ActivityLogEntryType;
+  actorUid: string;
+  actorLabel: string;
+  entityName?: string;
+  changedFields?: string[];
+  count?: number;
+  createdAt: string;
+}
+
+export type InviteMemberResult =
+  { status: 'invited'; uid: string } | { status: 'already-member'; uid: string };
 
 export interface AuthUser {
   uid: string;
