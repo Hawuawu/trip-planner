@@ -1,49 +1,51 @@
-import type { ActivityLogEntry } from '../types';
+import type { ActivityLogEntry, ActivityLogEntryType } from '../types';
+
+type Formatter = (entry: ActivityLogEntry) => string;
+
+// "who <verb> <noun> "<name>"" — shared by every add/delete entry type.
+function quoted(verb: string, noun: string): Formatter {
+  return (entry) => `${entry.actorLabel} ${verb} ${noun} "${entry.entityName ?? ''}"`;
+}
+
+// "who updated <noun> "<name>"", or — when no name was captured — "who
+// updated a/an <noun> (field, field)" listing whatever changed.
+function updated(noun: string, article: 'a' | 'an'): Formatter {
+  return (entry) => {
+    if (entry.entityName) return `${entry.actorLabel} updated ${noun} "${entry.entityName}"`;
+    const fields = entry.changedFields?.length ? ` (${entry.changedFields.join(', ')})` : '';
+    return `${entry.actorLabel} updated ${article} ${noun}${fields}`;
+  };
+}
+
+// "who imported N <noun>(s)" — shared by the two bulk-import entry types.
+function imported(noun: string): Formatter {
+  return (entry) => {
+    const count = entry.count ?? 0;
+    return `${entry.actorLabel} imported ${count} ${noun}${count === 1 ? '' : 's'}`;
+  };
+}
+
+const FORMATTERS: Record<ActivityLogEntryType, Formatter> = {
+  member_invited: (e) => `${e.actorLabel} invited ${e.entityName ?? 'a new member'}`,
+  member_joined: (e) => `${e.actorLabel} joined the trip`,
+  member_removed: (e) => `${e.actorLabel} removed ${e.entityName ?? 'a member'}`,
+  member_left: (e) => `${e.actorLabel} left the trip`,
+  trip_renamed: (e) => `${e.actorLabel} renamed the trip to "${e.entityName ?? ''}"`,
+  checkpoint_added: quoted('added', 'checkpoint'),
+  checkpoint_updated: updated('checkpoint', 'a'),
+  checkpoint_deleted: quoted('deleted', 'checkpoint'),
+  checkpoints_imported: imported('checkpoint'),
+  alternative_added: quoted('added', 'alternative'),
+  alternative_updated: updated('alternative', 'an'),
+  alternative_deleted: quoted('deleted', 'alternative'),
+  alternatives_imported: imported('alternative'),
+  alternative_promoted: (e) => `${e.actorLabel} promoted "${e.entityName ?? ''}" to the timeline`,
+  booking_added: quoted('added', 'booking'),
+  booking_updated: updated('booking', 'a'),
+  booking_deleted: quoted('deleted', 'booking'),
+};
 
 export function formatActivityLogEntry(entry: ActivityLogEntry): string {
-  const who = entry.actorLabel;
-  switch (entry.type) {
-    case 'member_invited':
-      return `${who} invited ${entry.entityName ?? 'a new member'}`;
-    case 'member_joined':
-      return `${who} joined the trip`;
-    case 'member_removed':
-      return `${who} removed ${entry.entityName ?? 'a member'}`;
-    case 'member_left':
-      return `${who} left the trip`;
-    case 'trip_renamed':
-      return `${who} renamed the trip to "${entry.entityName ?? ''}"`;
-    case 'checkpoint_added':
-      return `${who} added checkpoint "${entry.entityName ?? ''}"`;
-    case 'checkpoint_updated':
-      return entry.entityName
-        ? `${who} updated checkpoint "${entry.entityName}"`
-        : `${who} updated a checkpoint${entry.changedFields?.length ? ` (${entry.changedFields.join(', ')})` : ''}`;
-    case 'checkpoint_deleted':
-      return `${who} deleted checkpoint "${entry.entityName ?? ''}"`;
-    case 'checkpoints_imported':
-      return `${who} imported ${entry.count ?? 0} checkpoint${entry.count === 1 ? '' : 's'}`;
-    case 'alternative_added':
-      return `${who} added alternative "${entry.entityName ?? ''}"`;
-    case 'alternative_updated':
-      return entry.entityName
-        ? `${who} updated alternative "${entry.entityName}"`
-        : `${who} updated an alternative`;
-    case 'alternative_deleted':
-      return `${who} deleted alternative "${entry.entityName ?? ''}"`;
-    case 'alternatives_imported':
-      return `${who} imported ${entry.count ?? 0} alternative${entry.count === 1 ? '' : 's'}`;
-    case 'alternative_promoted':
-      return `${who} promoted "${entry.entityName ?? ''}" to the timeline`;
-    case 'booking_added':
-      return `${who} added booking "${entry.entityName ?? ''}"`;
-    case 'booking_updated':
-      return entry.entityName
-        ? `${who} updated booking "${entry.entityName}"`
-        : `${who} updated a booking`;
-    case 'booking_deleted':
-      return `${who} deleted booking "${entry.entityName ?? ''}"`;
-    default:
-      return `${who} made a change`;
-  }
+  const format = FORMATTERS[entry.type];
+  return format ? format(entry) : `${entry.actorLabel} made a change`;
 }
