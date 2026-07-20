@@ -1,12 +1,23 @@
 import type { TripRepository } from './TripRepository';
-import type { Trip, Checkpoint, Alternative, Booking } from '../types';
+import type {
+  Trip,
+  Checkpoint,
+  Alternative,
+  Booking,
+  ActivityLogEntry,
+  ActivityLogEntryType,
+  InviteMemberResult,
+} from '../types';
+
+const LOCAL_UID = 'local-user';
 
 const DEMO_TRIP: Trip = {
   id: 'demo',
   name: 'Japan 2026',
   dateRange: { start: '2026-10-01', end: '2026-10-14' },
-  memberIds: ['local-user'],
-  ownerId: 'local-user',
+  memberIds: [LOCAL_UID],
+  ownerId: LOCAL_UID,
+  memberProfiles: { [LOCAL_UID]: { email: null, displayName: 'You' } },
 };
 
 const now = new Date().toISOString();
@@ -87,6 +98,7 @@ const LS_CP = 'trip-planner:checkpoints';
 const LS_ALT = 'trip-planner:alternatives';
 const LS_BOOKINGS = 'trip-planner:bookings';
 const LS_TRIPS = 'trip-planner:trips';
+const LS_ACTIVITY = 'trip-planner:activityLog';
 
 function loadTrips(): Trip[] {
   try {
@@ -140,13 +152,117 @@ function saveBookings(b: Booking[]) {
   localStorage.setItem(LS_BOOKINGS, JSON.stringify(b));
 }
 
+function loadLog(): ActivityLogEntry[] {
+  try {
+    const raw = localStorage.getItem(LS_ACTIVITY);
+    return raw ? (JSON.parse(raw) as ActivityLogEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLog(entries: ActivityLogEntry[]) {
+  localStorage.setItem(LS_ACTIVITY, JSON.stringify(entries));
+}
+
 export class LocalTripRepository implements TripRepository {
   private cpSubs = new Map<string, Set<(c: Checkpoint[]) => void>>();
   private altSubs = new Map<string, Set<(a: Alternative[]) => void>>();
   private bookingSubs = new Map<string, Set<(b: Booking[]) => void>>();
+  private tripSubs = new Map<string, Set<(t: Trip) => void>>();
+  private logSubs = new Map<string, Set<(e: ActivityLogEntry[]) => void>>();
+
+  private findTrip(tripId: string): Trip {
+    return loadTrips().find((t) => t.id === tripId) ?? { ...DEMO_TRIP, id: tripId };
+  }
+
+  private saveTrip(trip: Trip) {
+    const trips = loadTrips();
+    saveTrips(
+      trips.some((t) => t.id === trip.id)
+        ? trips.map((t) => (t.id === trip.id ? trip : t))
+        : [...trips, trip]
+    );
+  }
+
+  private notifyTrip(tripId: string) {
+    this.tripSubs.get(tripId)?.forEach((cb) => cb(this.findTrip(tripId)));
+  }
+
+  private notifyLog(tripId: string) {
+    this.logSubs.get(tripId)?.forEach((cb) => cb(loadLog()));
+  }
+
+  private pushActivity(
+    tripId: string,
+    entry: Omit<ActivityLogEntry, 'id' | 'createdAt' | 'actorUid' | 'actorLabel'>
+  ) {
+    const full: ActivityLogEntry = {
+      ...entry,
+      id: `local-log-${Date.now()}`,
+      actorUid: LOCAL_UID,
+      actorLabel: 'You',
+      createdAt: new Date().toISOString(),
+    };
+    saveLog([full, ...loadLog()]);
+    this.notifyLog(tripId);
+  }
+
+  private async mutateMembers(
+    tripId: string,
+    uid: string,
+    logType: Extract<ActivityLogEntryType, 'member_removed' | 'member_left'>
+  ): Promise<void> {
+    const trip = this.findTrip(tripId);
+    this.saveTrip({
+      ...trip,
+      memberIds: trip.memberIds.filter((id) => id !== uid),
+      memberProfiles: Object.fromEntries(
+        Object.entries(trip.memberProfiles ?? {}).filter(([id]) => id !== uid)
+      ),
+    });
+    this.pushActivity(tripId, { type: logType, entityName: uid });
+    this.notifyTrip(tripId);
+  }
 
   async getTrip(tripId: string): Promise<Trip> {
     return { ...DEMO_TRIP, id: tripId };
+  }
+
+  subscribeToTrip(tripId: string, cb: (trip: Trip) => void): () => void {
+    if (!this.tripSubs.has(tripId)) this.tripSubs.set(tripId, new Set());
+    this.tripSubs.get(tripId)!.add(cb);
+    cb(this.findTrip(tripId));
+    return () => {
+      this.tripSubs.get(tripId)?.delete(cb);
+    };
+  }
+
+  async inviteMember(_tripId: string, _email: string): Promise<InviteMemberResult> {
+    throw new Error(
+      'Inviting members requires the Firebase backend — not available in local/offline mode.'
+    );
+  }
+
+  async removeMember(tripId: string, uid: string): Promise<void> {
+    await this.mutateMembers(tripId, uid, 'member_removed');
+  }
+
+  async leaveTrip(tripId: string): Promise<void> {
+    await this.mutateMembers(tripId, LOCAL_UID, 'member_left');
+  }
+
+  async recordAccess(_tripId: string): Promise<void> {
+    // no-op — local/offline mode has no invite flow, so there's nothing to record
+  }
+
+  subscribeToActivityLog(tripId: string, cb: (entries: ActivityLogEntry[]) => void): () => void {
+    if (!this.logSubs.has(tripId)) this.logSubs.set(tripId, new Set());
+    this.logSubs.get(tripId)!.add(cb);
+    cb(loadLog());
+    return () => {
+      this.logSubs.get(tripId)?.delete(cb);
+    };
   }
 
   subscribeToCheckpoints(tripId: string, cb: (c: Checkpoint[]) => void): () => void {
@@ -177,6 +293,7 @@ export class LocalTripRepository implements TripRepository {
     };
     saveCp([...loadCp(), saved]);
     this.notifyCp(tripId);
+    this.pushActivity(tripId, { type: 'checkpoint_added', entityName: cp.name });
     return saved;
   }
 
@@ -192,6 +309,9 @@ export class LocalTripRepository implements TripRepository {
     }));
     saveCp([...loadCp(), ...saved]);
     this.notifyCp(tripId);
+    if (checkpoints.length > 0) {
+      this.pushActivity(tripId, { type: 'checkpoints_imported', count: checkpoints.length });
+    }
     return saved;
   }
 
@@ -206,11 +326,18 @@ export class LocalTripRepository implements TripRepository {
       )
     );
     this.notifyCp(tripId);
+    this.pushActivity(tripId, {
+      type: 'checkpoint_updated',
+      entityName: changes.name,
+      changedFields: Object.keys(changes),
+    });
   }
 
   async deleteCheckpoint(tripId: string, id: string): Promise<void> {
+    const target = loadCp().find((c) => c.id === id);
     saveCp(loadCp().filter((c) => c.id !== id));
     this.notifyCp(tripId);
+    this.pushActivity(tripId, { type: 'checkpoint_deleted', entityName: target?.name });
   }
 
   subscribeToAlternatives(tripId: string, cb: (a: Alternative[]) => void): () => void {
@@ -230,6 +357,7 @@ export class LocalTripRepository implements TripRepository {
     const saved: Alternative = { ...alt, id: `local-alt-${Date.now()}` };
     saveAlt([...loadAlt(), saved]);
     this.notifyAlt(tripId);
+    this.pushActivity(tripId, { type: 'alternative_added', entityName: alt.name });
     return saved;
   }
 
@@ -243,6 +371,9 @@ export class LocalTripRepository implements TripRepository {
     }));
     saveAlt([...loadAlt(), ...saved]);
     this.notifyAlt(tripId);
+    if (alternatives.length > 0) {
+      this.pushActivity(tripId, { type: 'alternatives_imported', count: alternatives.length });
+    }
     return saved;
   }
 
@@ -253,11 +384,18 @@ export class LocalTripRepository implements TripRepository {
   ): Promise<void> {
     saveAlt(loadAlt().map((a) => (a.id === id ? { ...a, ...changes } : a)));
     this.notifyAlt(tripId);
+    this.pushActivity(tripId, {
+      type: 'alternative_updated',
+      entityName: changes.name,
+      changedFields: Object.keys(changes),
+    });
   }
 
   async deleteAlternative(tripId: string, id: string): Promise<void> {
+    const target = loadAlt().find((a) => a.id === id);
     saveAlt(loadAlt().filter((a) => a.id !== id));
     this.notifyAlt(tripId);
+    this.pushActivity(tripId, { type: 'alternative_deleted', entityName: target?.name });
   }
 
   async promoteAlternative(
@@ -275,6 +413,7 @@ export class LocalTripRepository implements TripRepository {
       notes: alt.notes,
     });
     await this.deleteAlternative(tripId, alternativeId);
+    this.pushActivity(tripId, { type: 'alternative_promoted', entityName: alt.name });
   }
 
   subscribeToBookings(tripId: string, cb: (b: Booking[]) => void): () => void {
@@ -294,6 +433,7 @@ export class LocalTripRepository implements TripRepository {
     const saved: Booking = { ...booking, id: `local-booking-${Date.now()}` };
     saveBookings([...loadBookings(), saved]);
     this.notifyBookings(tripId);
+    this.pushActivity(tripId, { type: 'booking_added', entityName: booking.provider });
     return saved;
   }
 
@@ -304,11 +444,18 @@ export class LocalTripRepository implements TripRepository {
   ): Promise<void> {
     saveBookings(loadBookings().map((b) => (b.id === id ? { ...b, ...changes } : b)));
     this.notifyBookings(tripId);
+    this.pushActivity(tripId, {
+      type: 'booking_updated',
+      entityName: changes.provider,
+      changedFields: Object.keys(changes),
+    });
   }
 
   async deleteBooking(tripId: string, id: string): Promise<void> {
+    const target = loadBookings().find((b) => b.id === id);
     saveBookings(loadBookings().filter((b) => b.id !== id));
     this.notifyBookings(tripId);
+    this.pushActivity(tripId, { type: 'booking_deleted', entityName: target?.provider });
   }
 
   async listTrips(): Promise<Trip[]> {
@@ -321,8 +468,9 @@ export class LocalTripRepository implements TripRepository {
       id: `trip-${Date.now()}`,
       name,
       dateRange,
-      memberIds: ['local-user'],
-      ownerId: 'local-user',
+      memberIds: [LOCAL_UID],
+      ownerId: LOCAL_UID,
+      memberProfiles: { [LOCAL_UID]: { email: null, displayName: 'You' } },
     };
     const existing = trips.find((t) => t.id === DEMO_TRIP.id);
     saveTrips([...(existing ? trips : [DEMO_TRIP, ...trips]), trip]);
@@ -334,6 +482,10 @@ export class LocalTripRepository implements TripRepository {
     changes: Partial<Pick<Trip, 'name' | 'dateRange'>>
   ): Promise<void> {
     saveTrips(loadTrips().map((t) => (t.id === tripId ? { ...t, ...changes } : t)));
+    this.notifyTrip(tripId);
+    if (changes.name) {
+      this.pushActivity(tripId, { type: 'trip_renamed', entityName: changes.name });
+    }
   }
 
   async deleteTrip(tripId: string): Promise<void> {

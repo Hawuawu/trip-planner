@@ -1,11 +1,24 @@
-import type { Trip, Checkpoint, Alternative, Booking } from '../types';
+import type {
+  Trip,
+  Checkpoint,
+  Alternative,
+  Booking,
+  ActivityLogEntry,
+  InviteMemberResult,
+} from '../types';
 
 export interface TripRepository {
   getTrip(tripId: string): Promise<Trip>;
+  subscribeToTrip(tripId: string, cb: (trip: Trip) => void): () => void;
   listTrips(): Promise<Trip[]>;
   createTrip(name: string, dateRange: { start: string; end: string }): Promise<Trip>;
   updateTrip(tripId: string, changes: Partial<Pick<Trip, 'name' | 'dateRange'>>): Promise<void>;
   deleteTrip(tripId: string): Promise<void>;
+  inviteMember(tripId: string, email: string): Promise<InviteMemberResult>;
+  removeMember(tripId: string, uid: string): Promise<void>;
+  leaveTrip(tripId: string): Promise<void>;
+  recordAccess(tripId: string): Promise<void>;
+  subscribeToActivityLog(tripId: string, cb: (entries: ActivityLogEntry[]) => void): () => void;
   subscribeToCheckpoints(tripId: string, cb: (checkpoints: Checkpoint[]) => void): () => void;
   addCheckpoint(tripId: string, cp: Omit<Checkpoint, 'id' | 'updatedAt'>): Promise<Checkpoint>;
   addCheckpoints(

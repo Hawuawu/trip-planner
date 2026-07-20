@@ -587,3 +587,121 @@ describe('LocalTripRepository — bookings', () => {
     expect(cb).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('LocalTripRepository — subscribeToTrip', () => {
+  it('immediately calls back with the demo trip for an unknown id', () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToTrip('unknown-trip', cb);
+    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ id: 'unknown-trip' }));
+  });
+
+  it('reflects membership changes after leaveTrip', async () => {
+    const repo = makeRepo();
+    const trip = await repo.createTrip('Test Trip', { start: '2026-01-01', end: '2026-01-05' });
+    const cb = vi.fn();
+    repo.subscribeToTrip(trip.id, cb);
+    cb.mockClear();
+    await repo.leaveTrip(trip.id);
+    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ memberIds: [] }));
+  });
+
+  it('unsubscribe stops future notifications', async () => {
+    const repo = makeRepo();
+    const trip = await repo.createTrip('Test Trip', { start: '2026-01-01', end: '2026-01-05' });
+    const cb = vi.fn();
+    const unsub = repo.subscribeToTrip(trip.id, cb);
+    unsub();
+    const callsBefore = cb.mock.calls.length;
+    await repo.leaveTrip(trip.id);
+    expect(cb.mock.calls.length).toBe(callsBefore);
+  });
+});
+
+describe('LocalTripRepository — membership', () => {
+  it('removeMember removes the uid from memberIds and memberProfiles', async () => {
+    const repo = makeRepo();
+    const trip = await repo.createTrip('Test Trip', { start: '2026-01-01', end: '2026-01-05' });
+    await repo.removeMember(trip.id, 'local-user');
+    const [updated] = (await repo.listTrips()).filter((t) => t.id === trip.id);
+    expect(updated.memberIds).not.toContain('local-user');
+    expect(updated.memberProfiles?.['local-user']).toBeUndefined();
+  });
+
+  it('leaveTrip removes the local user', async () => {
+    const repo = makeRepo();
+    const trip = await repo.createTrip('Test Trip', { start: '2026-01-01', end: '2026-01-05' });
+    await repo.leaveTrip(trip.id);
+    const [updated] = (await repo.listTrips()).filter((t) => t.id === trip.id);
+    expect(updated.memberIds).toEqual([]);
+  });
+
+  it('inviteMember throws — not available in local/offline mode', async () => {
+    const repo = makeRepo();
+    await expect(repo.inviteMember('t1', 'friend@example.com')).rejects.toThrow(
+      /local\/offline mode/
+    );
+  });
+
+  it('recordAccess resolves without error (no-op)', async () => {
+    const repo = makeRepo();
+    await expect(repo.recordAccess('t1')).resolves.toBeUndefined();
+  });
+});
+
+describe('LocalTripRepository — activity log', () => {
+  it('subscribeToActivityLog immediately calls back with the current log', () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToActivityLog('t1', cb);
+    expect(cb).toHaveBeenCalledWith(expect.any(Array));
+  });
+
+  it('logs a checkpoint_added entry when a checkpoint is added', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToActivityLog('t1', cb);
+    cb.mockClear();
+    await repo.addCheckpoint('t1', {
+      type: 'poi',
+      name: 'Senso-ji',
+      startTime: '2026-01-01T00:00:00.000Z',
+    });
+    expect(cb).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'checkpoint_added', entityName: 'Senso-ji' }),
+      ])
+    );
+  });
+
+  it('logs a single checkpoints_imported entry (not one per item) for a batch add', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToActivityLog('t1', cb);
+    cb.mockClear();
+    await repo.addCheckpoints('t1', [
+      { type: 'poi', name: 'A', startTime: '2026-01-01T00:00:00.000Z' },
+      { type: 'poi', name: 'B', startTime: '2026-01-02T00:00:00.000Z' },
+    ]);
+    const lastCallEntries = cb.mock.calls[cb.mock.calls.length - 1][0];
+    const importEntries = lastCallEntries.filter(
+      (e: { type: string }) => e.type === 'checkpoints_imported'
+    );
+    expect(importEntries).toHaveLength(1);
+    expect(importEntries[0].count).toBe(2);
+  });
+
+  it('unsubscribe stops future notifications', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    const unsub = repo.subscribeToActivityLog('t1', cb);
+    unsub();
+    const callsBefore = cb.mock.calls.length;
+    await repo.addCheckpoint('t1', {
+      type: 'poi',
+      name: 'After Unsub',
+      startTime: '2026-01-01T00:00:00.000Z',
+    });
+    expect(cb.mock.calls.length).toBe(callsBefore);
+  });
+});
