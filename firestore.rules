@@ -1,6 +1,33 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function tripData(tripId) {
+      return get(/databases/$(database)/documents/trips/$(tripId)).data;
+    }
+
+    function isMember(tripId) {
+      return request.auth != null && request.auth.uid in tripData(tripId).memberIds;
+    }
+
+    function isOwner(tripId, uid) {
+      return !('ownerId' in tripData(tripId)) || tripData(tripId).ownerId == uid;
+    }
+
+    // A membership update may only ever remove exactly one uid, and that uid
+    // must be either the caller themselves (leave) or — only if the caller is
+    // the trip owner — any other member. The owner's own uid can never be the
+    // one removed while an ownerId is set (no ownership-transfer mechanism
+    // exists, so an owner cannot leave/be removed while others remain).
+    function canShrinkMembership(before, after, uid) {
+      let removed = before.memberIds.removeAll(after.memberIds);
+      return removed.size() == 1
+        && after.memberIds.size() >= 1
+        && after.memberIds.size() == before.memberIds.size() - 1
+        && after.memberIds.hasOnly(before.memberIds)
+        && (removed[0] == uid || (('ownerId' in before) && before.ownerId == uid))
+        && (!('ownerId' in before) || removed[0] != before.ownerId);
+    }
+
     match /trips/{tripId} {
       allow read: if request.auth != null
         && request.auth.uid in resource.data.memberIds;
@@ -10,10 +37,19 @@ service cloud.firestore {
       allow update: if request.auth != null
         && request.auth.uid in resource.data.memberIds
         && (
-          // membership-only change (remove a member) — any current member
+          // membership-only change (remove a member, self-leave or owner-removal)
           (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'memberProfiles'])
-            && request.resource.data.memberIds.size() >= 1
-            && request.resource.data.memberIds.hasOnly(resource.data.memberIds))
+            && canShrinkMembership(resource.data, request.resource.data, request.auth.uid)
+            && request.resource.data.get('memberProfiles', {}).keys()
+                .hasOnly(resource.data.get('memberProfiles', {}).keys()))
+          ||
+          // self-heal: a member may write ONLY their own memberProfiles entry
+          // (no memberIds change) — backfills display name/email for trips
+          // created before memberProfiles existed, or for a member who
+          // hasn't opened the trip since being added.
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberProfiles'])
+            && request.resource.data.memberProfiles.diff(resource.data.get('memberProfiles', {}))
+                .affectedKeys().hasOnly([request.auth.uid]))
           ||
           // trip metadata change (rename/date range) — owner only, or unowned legacy trip
           (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'dateRange'])
@@ -24,10 +60,29 @@ service cloud.firestore {
         && request.auth.uid in resource.data.memberIds
         && (!('ownerId' in resource.data) || resource.data.ownerId == request.auth.uid);
 
-      match /{subcollection}/{docId} {
-        allow read, write: if request.auth != null
-          && request.auth.uid in
-            get(/databases/$(database)/documents/trips/$(tripId)).data.memberIds;
+      match /checkpoints/{docId} {
+        allow read, write: if isMember(tripId);
+      }
+
+      match /alternatives/{docId} {
+        allow read, write: if isMember(tripId);
+      }
+
+      match /bookings/{docId} {
+        allow read, write: if isMember(tripId);
+      }
+
+      // Append-only, owner-readable activity log. Explicit matches (not the
+      // generic subcollection wildcard) so this can be locked down separately
+      // from checkpoints/alternatives/bookings — Firestore ORs every matching
+      // rule block for a given path, so a wildcard sibling would otherwise
+      // silently grant every member full read/write here too.
+      match /activityLog/{entryId} {
+        allow read: if request.auth != null && isMember(tripId) && isOwner(tripId, request.auth.uid);
+        allow create: if request.auth != null
+          && isMember(tripId)
+          && request.resource.data.actorUid == request.auth.uid;
+        allow update, delete: if false;
       }
     }
   }

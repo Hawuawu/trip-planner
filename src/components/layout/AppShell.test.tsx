@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
 import { renderWithProviders, resetStores } from '../../test/helpers';
 import { useTripStore } from '../../store/tripStore';
+import { useAuthStore } from '../../store/authStore';
 import type { TripRepository } from '../../data/TripRepository';
 import { downloadTextFile } from '../../utils/fileTransfer';
 
@@ -45,10 +46,16 @@ function installMatchMedia({ phone = false, wide = false }: { phone?: boolean; w
 function makeMockRepo(overrides: Partial<TripRepository> = {}): TripRepository {
   return {
     getTrip: vi.fn().mockResolvedValue(null),
+    subscribeToTrip: vi.fn().mockReturnValue(() => {}),
     listTrips: vi.fn().mockResolvedValue([]),
     createTrip: vi.fn(),
     updateTrip: vi.fn(),
     deleteTrip: vi.fn(),
+    inviteMember: vi.fn().mockResolvedValue({ status: 'invited', uid: 'invitee-1' }),
+    removeMember: vi.fn().mockResolvedValue(undefined),
+    leaveTrip: vi.fn().mockResolvedValue(undefined),
+    recordAccess: vi.fn().mockResolvedValue(undefined),
+    subscribeToActivityLog: vi.fn().mockReturnValue(() => {}),
     subscribeToCheckpoints: vi.fn().mockReturnValue(() => {}),
     addCheckpoint: vi.fn(),
     addCheckpoints: vi.fn().mockResolvedValue([]),
@@ -335,5 +342,67 @@ alternatives:
     await waitFor(() => {
       expect(screen.getByText(/imported 1 checkpoint and 1 alternative\./i)).toBeInTheDocument();
     });
+  });
+});
+
+describe('AppShell — members and activity log menu entries', () => {
+  const TRIP = {
+    id: 't1',
+    name: 'Japan 2026',
+    dateRange: { start: '2026-09-01', end: '2026-09-10' },
+    memberIds: ['owner-uid', 'member-uid'],
+    ownerId: 'owner-uid',
+    memberProfiles: {
+      'owner-uid': { email: 'owner@example.com', displayName: 'Owner Person' },
+      'member-uid': { email: 'member@example.com', displayName: 'Member Person' },
+    },
+  };
+
+  it('does not show Members/Activity log entries when no trip is loaded', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    await user.click(screen.getByLabelText('Menu'));
+    expect(withinMenu().queryByText('Members')).not.toBeInTheDocument();
+    expect(withinMenu().queryByText('Activity log')).not.toBeInTheDocument();
+  });
+
+  it('shows both Members and Activity log for the owner', async () => {
+    const user = userEvent.setup();
+    useTripStore.setState({ trip: TRIP });
+    useAuthStore.setState({ user: { uid: 'owner-uid', email: null, displayName: null } });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    await user.click(screen.getByLabelText('Menu'));
+    expect(withinMenu().getByText('Members')).toBeInTheDocument();
+    expect(withinMenu().getByText('Activity log')).toBeInTheDocument();
+  });
+
+  it('shows Members but hides Activity log for a non-owner member', async () => {
+    const user = userEvent.setup();
+    useTripStore.setState({ trip: TRIP });
+    useAuthStore.setState({ user: { uid: 'member-uid', email: null, displayName: null } });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    await user.click(screen.getByLabelText('Menu'));
+    expect(withinMenu().getByText('Members')).toBeInTheDocument();
+    expect(withinMenu().queryByText('Activity log')).not.toBeInTheDocument();
+  });
+
+  it('opens the members dialog from the menu', async () => {
+    const user = userEvent.setup();
+    useTripStore.setState({ trip: TRIP });
+    useAuthStore.setState({ user: { uid: 'owner-uid', email: null, displayName: null } });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByText('Members'));
+    expect(screen.getByText('Trip members')).toBeInTheDocument();
+  });
+
+  it('opens the activity log dialog from the menu for the owner', async () => {
+    const user = userEvent.setup();
+    useTripStore.setState({ trip: TRIP });
+    useAuthStore.setState({ user: { uid: 'owner-uid', email: null, displayName: null } });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByText('Activity log'));
+    expect(screen.getByRole('heading', { name: 'Activity log' })).toBeInTheDocument();
   });
 });

@@ -1,12 +1,20 @@
 import { create } from 'zustand';
 import type { TripRepository } from '../data/TripRepository';
-import type { Trip, Checkpoint, Alternative, Booking } from '../types';
+import type {
+  Trip,
+  Checkpoint,
+  Alternative,
+  Booking,
+  ActivityLogEntry,
+  InviteMemberResult,
+} from '../types';
 
 interface TripState {
   trip: Trip | null;
   checkpoints: Checkpoint[];
   alternatives: Alternative[];
   bookings: Booking[];
+  activityLog: ActivityLogEntry[];
   selectedId: string | null;
   undoCheckpoint: Checkpoint | null;
   undoAlternative: Alternative | null;
@@ -15,6 +23,10 @@ interface TripState {
 
   init(tripId: string, repo: TripRepository): void;
   selectCheckpoint(id: string | null): void;
+
+  inviteMember(email: string): Promise<InviteMemberResult>;
+  removeMember(uid: string): Promise<void>;
+  leaveTrip(): Promise<void>;
 
   addCheckpoint(cp: Omit<Checkpoint, 'id' | 'updatedAt'>): Promise<void>;
   updateCheckpoint(
@@ -49,6 +61,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   checkpoints: [],
   alternatives: [],
   bookings: [],
+  activityLog: [],
   selectedId: null,
   undoCheckpoint: null,
   undoAlternative: null,
@@ -57,10 +70,36 @@ export const useTripStore = create<TripState>((set, get) => ({
 
   init(tripId, repo) {
     set({ repo, tripId });
-    repo.getTrip(tripId).then((trip) => set({ trip }));
+    repo.subscribeToTrip(tripId, (trip) => set({ trip }));
     repo.subscribeToCheckpoints(tripId, (checkpoints) => set({ checkpoints }));
     repo.subscribeToAlternatives(tripId, (alternatives) => set({ alternatives }));
     repo.subscribeToBookings(tripId, (bookings) => set({ bookings }));
+    repo.subscribeToActivityLog(tripId, (activityLog) => set({ activityLog }));
+    repo.recordAccess(tripId).catch(() => {});
+  },
+
+  async inviteMember(email) {
+    const { repo, tripId } = get();
+    if (!repo || !tripId) throw new Error('No repo or tripId');
+    return repo.inviteMember(tripId, email);
+  },
+
+  async removeMember(uid) {
+    const { repo, tripId, trip } = get();
+    if (!repo || !tripId || !trip) return;
+    const prev = trip;
+    set({ trip: { ...trip, memberIds: trip.memberIds.filter((id) => id !== uid) } });
+    try {
+      await repo.removeMember(tripId, uid);
+    } catch {
+      set({ trip: prev });
+    }
+  },
+
+  async leaveTrip() {
+    const { repo, tripId } = get();
+    if (!repo || !tripId) return;
+    await repo.leaveTrip(tripId);
   },
 
   selectCheckpoint(id) {

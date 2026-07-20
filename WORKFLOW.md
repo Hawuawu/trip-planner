@@ -50,15 +50,30 @@ think it through.
 
 ## 4. Sharing with a travel companion
 
-1. User invites a friend to the trip (by email/account).
-2. The friend gets full read/edit access to the same trip — they see the
-   same timeline and map, not a separate copy.
-3. Either person can add, edit, or remove checkpoints and alternatives.
-   Changes made by one person appear for the other without either having to
-   manually refresh or re-share anything, as long as both are online.
+1. The trip's owner (whoever created it) invites a friend by email. Only the
+   owner can invite or remove people — this is the one place the app has an
+   owner/member distinction; it governs membership only, never content.
+2. The invitee must already have signed into the app at least once (with
+   Google) before they can be invited — the owner is told to ask them to
+   sign in once, then try the invite again, if it fails.
+3. Once invited, the friend gets full read/edit access to the same trip —
+   they see the same timeline and map, not a separate copy. There is no
+   read-only or reduced-access role: every member can add, edit, or remove
+   checkpoints and alternatives, exactly as the owner can. Changes made by
+   one person appear for the other without either having to manually
+   refresh or re-share anything, as long as both are online.
 4. If one person edits while offline, their changes sync in once they're
    back online — they don't need to be connected at the moment they make an
    edit.
+5. Any member (including a non-owner) can leave a trip at any time. The
+   owner can remove any other member. The owner themself can't leave or be
+   removed while other members remain — there's no way yet to hand
+   ownership to someone else, so an owner stepping back mid-trip isn't
+   supported.
+6. The owner can open an activity log for the trip — who was invited, who
+   joined, who left or was removed, and a running record of what changed
+   (checkpoints, alternatives, bookings, the trip's name) and by whom.
+   Non-owner members don't see this log.
 
 ## 5. During the trip
 

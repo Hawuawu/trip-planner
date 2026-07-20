@@ -16,6 +16,7 @@ const tripInitialState = {
   checkpoints: [],
   alternatives: [],
   bookings: [],
+  activityLog: [],
   selectedId: null,
   undoCheckpoint: null,
   repo: null,

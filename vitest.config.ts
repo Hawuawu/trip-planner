@@ -12,6 +12,7 @@ export default defineConfig({
       '**/dist/**',
       '**/.claude/worktrees/**',
       '**/*.firebase.test.ts',
+      'functions/**',
     ],
     coverage: {
       provider: 'v8',
