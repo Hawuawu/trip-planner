@@ -495,14 +495,21 @@ checkpoints:
   });
 });
 
-describe('TripSelectorScreen — sign out', () => {
-  const fakeAuthService: AuthService = {
-    getCurrentUser: () => null,
-    onAuthStateChanged: () => () => {},
-    signInWithGoogle: async () => {},
-    signOut: async () => {},
-  };
+const fakeAuthService: AuthService = {
+  getCurrentUser: () => null,
+  onAuthStateChanged: () => () => {},
+  signInWithGoogle: async () => {},
+  signOut: async () => {},
+  createInvite: async () => 'token-1',
+  redeemInvite: async () => {},
+  cancelInvite: async () => {},
+  revokeAccess: async () => {},
+  subscribeToAllowedUsers: () => () => {},
+  subscribeToInvites: () => () => {},
+  subscribeToAppActivity: () => () => {},
+};
 
+describe('TripSelectorScreen — sign out', () => {
   it('hides the sign-out button in local mode (no auth service)', async () => {
     const repo = makeRepo();
     renderWithProviders(<TripSelectorScreen repo={repo} onSelect={vi.fn()} />);
@@ -522,5 +529,33 @@ describe('TripSelectorScreen — sign out', () => {
     expect(logoutButton).toHaveTextContent('Logout');
     await userEvent.setup().click(logoutButton);
     expect(signOut).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TripSelectorScreen — app access (admin)', () => {
+  const adminUser = { uid: 'admin-uid', email: 'hawuawu@gmail.com', displayName: 'Admin' };
+  const regularUser = { uid: 'user-uid', email: 'someone@example.com', displayName: 'Someone' };
+
+  it('hides the App access button without an auth service', async () => {
+    renderWithProviders(<TripSelectorScreen repo={makeRepo()} onSelect={vi.fn()} />);
+    await waitFor(() => screen.getByText('Japan 2026'));
+    expect(screen.queryByTitle('App access')).not.toBeInTheDocument();
+  });
+
+  it('hides the App access button for a non-admin user', async () => {
+    useAuthStore.setState({ service: fakeAuthService, user: regularUser });
+    renderWithProviders(<TripSelectorScreen repo={makeRepo()} onSelect={vi.fn()} />);
+    await waitFor(() => screen.getByText('Japan 2026'));
+    expect(screen.queryByTitle('App access')).not.toBeInTheDocument();
+  });
+
+  it('shows the App access button for the admin and opens the dialog', async () => {
+    useAuthStore.setState({ service: fakeAuthService, user: adminUser });
+    renderWithProviders(<TripSelectorScreen repo={makeRepo()} onSelect={vi.fn()} />);
+
+    await waitFor(() => screen.getByText('Japan 2026'));
+    await userEvent.setup().click(screen.getByTitle('App access'));
+    expect(screen.getByText('App access', { selector: 'h2' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'People' })).toBeInTheDocument();
   });
 });

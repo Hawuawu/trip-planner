@@ -23,6 +23,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LogoutIcon from '@mui/icons-material/Logout';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import type { TripRepository } from '../../data/TripRepository';
@@ -33,6 +34,8 @@ import { serializeTrip, parseTripYaml, type ParsedTripYaml } from '../../data/tr
 import { downloadTextFile, slugifyFilename } from '../../utils/fileTransfer';
 import { canManage } from '../../utils/tripPermissions';
 import { YamlImportDialog } from './YamlImportDialog';
+import { AppAccessDialog } from './AppAccessDialog';
+import { isAdminEmail } from '../../config/admin';
 
 interface Props {
   repo: TripRepository;
@@ -89,6 +92,7 @@ function fetchTripDataOnce(
 
 export function TripSelectorScreen({ repo, onSelect }: Props) {
   const currentUid = useAuthStore((s) => s.user?.uid);
+  const isAdmin = useAuthStore((s) => isAdminEmail(s.user?.email));
   const signOut = useAuthStore((s) => s.signOut);
   const service = useAuthStore((s) => s.service);
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -107,6 +111,7 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [appAccessOpen, setAppAccessOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -254,6 +259,16 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
           sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
         >
           <Toolbar variant="dense" sx={{ justifyContent: 'flex-end' }}>
+            {isAdmin && (
+              <Button
+                size="small"
+                onClick={() => setAppAccessOpen(true)}
+                title="App access"
+                startIcon={<PersonAddIcon fontSize="small" />}
+              >
+                App access
+              </Button>
+            )}
             <Button
               size="small"
               onClick={signOut}
@@ -265,6 +280,8 @@ export function TripSelectorScreen({ repo, onSelect }: Props) {
           </Toolbar>
         </AppBar>
       )}
+
+      {isAdmin && <AppAccessDialog open={appAccessOpen} onClose={() => setAppAccessOpen(false)} />}
 
       <Box
         sx={{

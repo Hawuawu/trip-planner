@@ -5,9 +5,17 @@ import type { AuthService } from '../data/AuthService';
 
 function makeMockAuthService(overrides: Partial<AuthService> = {}): AuthService {
   return {
+    getCurrentUser: vi.fn().mockReturnValue(null),
     onAuthStateChanged: vi.fn(),
     signInWithGoogle: vi.fn().mockResolvedValue(undefined),
     signOut: vi.fn().mockResolvedValue(undefined),
+    createInvite: vi.fn().mockResolvedValue('token-1'),
+    redeemInvite: vi.fn().mockResolvedValue(undefined),
+    cancelInvite: vi.fn().mockResolvedValue(undefined),
+    revokeAccess: vi.fn().mockResolvedValue(undefined),
+    subscribeToAllowedUsers: vi.fn().mockReturnValue(() => {}),
+    subscribeToInvites: vi.fn().mockReturnValue(() => {}),
+    subscribeToAppActivity: vi.fn().mockReturnValue(() => {}),
     ...overrides,
   };
 }
@@ -59,6 +67,74 @@ describe('authStore — signInWithGoogle', () => {
   it('does nothing when service is null', async () => {
     // service is null by default (resetStores sets it to null)
     await expect(useAuthStore.getState().signInWithGoogle()).resolves.toBeUndefined();
+  });
+});
+
+describe('authStore — sign-in error handling', () => {
+  it('sets authError with the extracted message when sign-in is rejected', async () => {
+    const err = Object.assign(
+      new Error('Firebase: This app is invite-only. (auth/internal-error).'),
+      {
+        code: 'auth/internal-error',
+      }
+    );
+    const service = makeMockAuthService({ signInWithGoogle: vi.fn().mockRejectedValue(err) });
+    useAuthStore.getState().init(service);
+
+    await useAuthStore.getState().signInWithGoogle();
+    expect(useAuthStore.getState().authError).toBe('This app is invite-only.');
+  });
+
+  it('leaves authError null when the user just closed the popup', async () => {
+    const err = Object.assign(new Error('Firebase: Error (auth/popup-closed-by-user).'), {
+      code: 'auth/popup-closed-by-user',
+    });
+    const service = makeMockAuthService({ signInWithGoogle: vi.fn().mockRejectedValue(err) });
+    useAuthStore.getState().init(service);
+
+    await useAuthStore.getState().signInWithGoogle();
+    expect(useAuthStore.getState().authError).toBeNull();
+  });
+
+  it('clears a previous authError on retry and on clearAuthError', async () => {
+    useAuthStore.setState({ authError: 'old error' });
+    const service = makeMockAuthService();
+    useAuthStore.getState().init(service);
+    await useAuthStore.getState().signInWithGoogle();
+    expect(useAuthStore.getState().authError).toBeNull();
+
+    useAuthStore.setState({ authError: 'old error' });
+    useAuthStore.getState().clearAuthError();
+    expect(useAuthStore.getState().authError).toBeNull();
+  });
+});
+
+describe('authStore — app invite actions', () => {
+  it('delegates createInvite/redeemInvite/cancelInvite/revokeAccess to the service', async () => {
+    const service = makeMockAuthService();
+    useAuthStore.getState().init(service);
+
+    await expect(useAuthStore.getState().createInvite()).resolves.toBe('token-1');
+    await useAuthStore.getState().redeemInvite('token-1', 'friend@example.com');
+    await useAuthStore.getState().cancelInvite('token-1');
+    await useAuthStore.getState().revokeAccess('friend@example.com');
+
+    expect(service.createInvite).toHaveBeenCalledTimes(1);
+    expect(service.redeemInvite).toHaveBeenCalledWith('token-1', 'friend@example.com');
+    expect(service.cancelInvite).toHaveBeenCalledWith('token-1');
+    expect(service.revokeAccess).toHaveBeenCalledWith('friend@example.com');
+  });
+
+  it('rethrows service failures for the caller to display', async () => {
+    const service = makeMockAuthService({
+      revokeAccess: vi.fn().mockRejectedValue(new Error('nope')),
+    });
+    useAuthStore.getState().init(service);
+    await expect(useAuthStore.getState().revokeAccess('x@example.com')).rejects.toThrow('nope');
+  });
+
+  it('throws when there is no service (local mode)', async () => {
+    await expect(useAuthStore.getState().createInvite()).rejects.toThrow(/local mode/);
   });
 });
 
