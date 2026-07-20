@@ -15,7 +15,12 @@ import {
 } from '@firebase/rules-unit-testing';
 import { ADMIN_EMAIL } from '../config/admin';
 
-const PROJECT_ID = 'demo-trip-planner-test';
+// Deliberately NOT the shared 'demo-trip-planner-test' project id: vitest runs
+// test files in parallel, and clearFirestore() wipes the entire project — with
+// a shared id, this file's afterEach would race the other firebase test file
+// and delete its seeded docs mid-test. A distinct id isolates the two suites
+// inside the one emulator.
+const PROJECT_ID = 'demo-trip-planner-allowlist-test';
 const RULES_PATH = resolve(__dirname, '../../firestore.rules');
 
 const COLLECTIONS = ['allowedUsers', 'invites', 'appActivityLog'] as const;
