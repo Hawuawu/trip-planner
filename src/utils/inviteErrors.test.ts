@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractInviteErrorMessage } from './inviteErrors';
+import { extractInviteErrorMessage, extractSignInErrorMessage } from './inviteErrors';
 
 function makeFirebaseError(code: string, message: string): Error {
   const err = new Error(message);
@@ -48,5 +48,54 @@ describe('extractInviteErrorMessage', () => {
     expect(extractInviteErrorMessage(new Error('Network request failed'))).toBe(
       'Network request failed'
     );
+  });
+});
+
+describe('extractSignInErrorMessage', () => {
+  const BLOCKING_MESSAGE =
+    'This app is invite-only. Ask the admin for an invite link, then try signing in again.';
+
+  it('returns null for a user-closed popup', () => {
+    expect(
+      extractSignInErrorMessage(
+        makeFirebaseError(
+          'auth/popup-closed-by-user',
+          'Firebase: Error (auth/popup-closed-by-user).'
+        )
+      )
+    ).toBeNull();
+    expect(
+      extractSignInErrorMessage(
+        makeFirebaseError(
+          'auth/cancelled-popup-request',
+          'Firebase: Error (auth/cancelled-popup-request).'
+        )
+      )
+    ).toBeNull();
+  });
+
+  it('extracts the blocking-function message from an older-SDK JSON payload', () => {
+    const err = makeFirebaseError(
+      'auth/internal-error',
+      `Firebase: HTTP Cloud Function returned an error: {"error":{"message":"${BLOCKING_MESSAGE}","status":"PERMISSION_DENIED"}} (auth/internal-error).`
+    );
+    expect(extractSignInErrorMessage(err)).toBe(BLOCKING_MESSAGE);
+  });
+
+  it('keeps a directly-preserved blocking-function message, stripping Firebase decoration', () => {
+    const err = makeFirebaseError(
+      'auth/internal-error',
+      `Firebase: ${BLOCKING_MESSAGE} (auth/internal-error).`
+    );
+    expect(extractSignInErrorMessage(err)).toBe(BLOCKING_MESSAGE);
+  });
+
+  it('falls back to a generic message for an opaque internal error', () => {
+    const err = makeFirebaseError('auth/internal-error', 'Firebase: Error (auth/internal-error).');
+    expect(extractSignInErrorMessage(err)).toBe('Sign-in failed. Please try again.');
+  });
+
+  it('falls back to a generic message for a non-Error thrown value', () => {
+    expect(extractSignInErrorMessage('boom')).toBe('Sign-in failed. Please try again.');
   });
 });

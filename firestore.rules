@@ -28,6 +28,32 @@ service cloud.firestore {
         && (!('ownerId' in before) || removed[0] != before.ownerId);
     }
 
+    function isAppAdmin() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'hawuawu@gmail.com';
+    }
+
+    // App-wide invite gate (#35): clients never write these collections —
+    // every mutation goes through the Admin SDK inside Cloud Functions
+    // (createAppInvite / redeemAppInvite / cancelAppInvite / revokeAppAccess
+    // and the enforceAllowlist blocking function), so writes stay validated
+    // and logged server-side. The admin gets read-only visibility.
+    match /allowedUsers/{email} {
+      allow read: if isAppAdmin();
+      allow write: if false;
+    }
+
+    match /invites/{token} {
+      allow read: if isAppAdmin();
+      allow write: if false;
+    }
+
+    match /appActivityLog/{entryId} {
+      allow read: if isAppAdmin();
+      allow write: if false;
+    }
+
     match /trips/{tripId} {
       allow read: if request.auth != null
         && request.auth.uid in resource.data.memberIds;
