@@ -3,7 +3,7 @@ import type { AuthBlockingEvent } from 'firebase-functions/v2/identity';
 import { getDb } from './firebaseAdmin';
 import { stampAppAccess } from './authGate';
 
-type GateResponse = { customClaims: { appAccess: boolean } };
+type GateResponse = { customClaims: { appAccess: boolean; admin: boolean } };
 
 function uniqueEmail(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
@@ -22,9 +22,10 @@ const runGate = (event: AuthBlockingEvent) =>
     }
   ).run(event);
 
-async function allowEmail(email: string) {
+async function allowEmail(email: string, role: 'admin' | 'member' = 'member') {
   await getDb().collection('allowedUsers').doc(email).set({
     invitedVia: 'seed',
+    role,
     createdAt: new Date(),
   });
 }
@@ -43,27 +44,35 @@ async function requestLogEntries(email: string) {
 }
 
 describe('stampAppAccess', () => {
-  it('grants the appAccess claim for an allowlisted email without recording a request', async () => {
+  it('grants appAccess without admin for a regular allowlisted email, without recording a request', async () => {
     const email = uniqueEmail('allowed');
     await allowEmail(email);
 
     const response = await runGate(signInEvent(email));
-    expect(response.customClaims).toEqual({ appAccess: true });
+    expect(response.customClaims).toEqual({ appAccess: true, admin: false });
     expect((await requestDoc(email)).exists).toBe(false);
+  });
+
+  it('grants both appAccess and admin when the allowedUsers doc has role: admin', async () => {
+    const email = uniqueEmail('admin');
+    await allowEmail(email, 'admin');
+
+    const response = await runGate(signInEvent(email));
+    expect(response.customClaims).toEqual({ appAccess: true, admin: true });
   });
 
   it('matches the allowlist case-insensitively and ignores whitespace', async () => {
     const email = uniqueEmail('mixed');
     await allowEmail(email);
     const response = await runGate(signInEvent(`  ${email.toUpperCase()}  `));
-    expect(response.customClaims).toEqual({ appAccess: true });
+    expect(response.customClaims).toEqual({ appAccess: true, admin: false });
   });
 
   it('denies the claim for an unknown email and records a pending access request + log entry', async () => {
     const email = uniqueEmail('newcomer');
 
     const response = await runGate(signInEvent(email, 'New Person'));
-    expect(response.customClaims).toEqual({ appAccess: false });
+    expect(response.customClaims).toEqual({ appAccess: false, admin: false });
 
     const request = (await requestDoc(email)).data()!;
     expect(request.status).toBe('pending');
@@ -87,12 +96,12 @@ describe('stampAppAccess', () => {
     await getDb().collection('accessRequests').doc(email).update({ status: 'denied' });
 
     const response = await runGate(signInEvent(email));
-    expect(response.customClaims).toEqual({ appAccess: false });
+    expect(response.customClaims).toEqual({ appAccess: false, admin: false });
     expect((await requestDoc(email)).data()!.status).toBe('denied');
   });
 
   it('denies the claim for a sign-in without an email and records nothing', async () => {
     const response = await runGate(signInEvent(undefined));
-    expect(response.customClaims).toEqual({ appAccess: false });
+    expect(response.customClaims).toEqual({ appAccess: false, admin: false });
   });
 });

@@ -48,7 +48,7 @@ function toAuthUser(u: {
 // a claim the admin just granted is picked up without re-signing-in.
 async function toAuthUserWithClaims(u: User, forceRefresh = false): Promise<AuthUser> {
   const { claims } = await u.getIdTokenResult(forceRefresh);
-  return { ...toAuthUser(u), appAccess: claims.appAccess === true };
+  return { ...toAuthUser(u), appAccess: claims.appAccess === true, admin: claims.admin === true };
 }
 
 function toIso(val: unknown): string {
@@ -104,6 +104,14 @@ export class FirebaseAuthService implements AuthService {
     await callable({ email });
   }
 
+  async setAdminRole(email: string, isAdmin: boolean): Promise<void> {
+    const callable = httpsCallable<{ email: string; isAdmin: boolean }, void>(
+      this.functions,
+      'setAdminRole'
+    );
+    await callable({ email, isAdmin });
+  }
+
   subscribeToAllowedUsers(cb: (users: AllowedUser[]) => void): () => void {
     const q = query(collection(getFirestore(), 'allowedUsers'), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snap) => {
@@ -111,6 +119,7 @@ export class FirebaseAuthService implements AuthService {
         snap.docs.map((d) => ({
           email: d.id,
           invitedVia: typeof d.data().invitedVia === 'string' ? d.data().invitedVia : 'seed',
+          role: d.data().role === 'admin' ? 'admin' : 'member',
           createdAt: toIso(d.data().createdAt),
         }))
       );

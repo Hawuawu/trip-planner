@@ -16,6 +16,7 @@ interface AuthState {
   approveAccess(email: string): Promise<void>;
   denyAccess(email: string): Promise<void>;
   revokeAccess(email: string): Promise<void>;
+  setAdminRole(email: string, isAdmin: boolean): Promise<void>;
 }
 
 function requireService(service: AuthService | null): AuthService {
@@ -69,5 +70,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   async revokeAccess(email) {
     await requireService(get().service).revokeAccess(email);
+  },
+
+  async setAdminRole(email, isAdmin) {
+    await requireService(get().service).setAdminRole(email, isAdmin);
   },
 }));

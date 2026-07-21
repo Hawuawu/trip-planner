@@ -85,14 +85,20 @@ export interface AuthUser {
   uid: string;
   email: string | null;
   displayName: string | null;
-  // From the appAccess custom claim (stamped at sign-in, see #35). Absent in
-  // contexts where claims aren't available (e.g. getCurrentUser's sync path).
+  // From the appAccess/admin custom claims (stamped at sign-in, see #35).
+  // Absent in contexts where claims aren't available (e.g. getCurrentUser's
+  // sync path). admin is data-driven — copied from the allowedUsers doc's
+  // role field, not a hardcoded identity.
   appAccess?: boolean;
+  admin?: boolean;
 }
+
+export type AllowedUserRole = 'admin' | 'member';
 
 export interface AllowedUser {
   email: string;
   invitedVia: string; // 'seed' or 'approved'
+  role: AllowedUserRole;
   createdAt: string;
 }
 
@@ -107,7 +113,12 @@ export interface AccessRequest {
 }
 
 export type AppActivityType =
-  'access_requested' | 'access_approved' | 'access_denied' | 'access_revoked';
+  | 'access_requested'
+  | 'access_approved'
+  | 'access_denied'
+  | 'access_revoked'
+  | 'admin_granted'
+  | 'admin_revoked';
 
 export interface AppActivityEntry {
   id: string;

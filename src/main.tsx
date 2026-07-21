@@ -21,7 +21,13 @@ if (authService) {
   useAuthStore.getState().init(authService);
 } else {
   useAuthStore.setState({
-    user: { uid: 'local-user', email: null, displayName: 'Local User', appAccess: true },
+    user: {
+      uid: 'local-user',
+      email: null,
+      displayName: 'Local User',
+      appAccess: true,
+      admin: true,
+    },
     loading: false,
   });
 }

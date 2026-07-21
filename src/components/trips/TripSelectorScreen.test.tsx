@@ -504,6 +504,7 @@ const fakeAuthService: AuthService = {
   approveAccess: async () => {},
   denyAccess: async () => {},
   revokeAccess: async () => {},
+  setAdminRole: async () => {},
   subscribeToAllowedUsers: () => () => {},
   subscribeToAccessRequests: () => () => {},
   subscribeToAppActivity: () => () => {},
@@ -533,8 +534,18 @@ describe('TripSelectorScreen — sign out', () => {
 });
 
 describe('TripSelectorScreen — app access (admin)', () => {
-  const adminUser = { uid: 'admin-uid', email: 'hawuawu@gmail.com', displayName: 'Admin' };
-  const regularUser = { uid: 'user-uid', email: 'someone@example.com', displayName: 'Someone' };
+  const adminUser = {
+    uid: 'admin-uid',
+    email: 'admin@example.com',
+    displayName: 'Admin',
+    admin: true,
+  };
+  const regularUser = {
+    uid: 'user-uid',
+    email: 'someone@example.com',
+    displayName: 'Someone',
+    admin: false,
+  };
 
   it('hides the App access button without an auth service', async () => {
     renderWithProviders(<TripSelectorScreen repo={makeRepo()} onSelect={vi.fn()} />);

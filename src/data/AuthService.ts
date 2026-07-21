@@ -15,6 +15,7 @@ export interface AuthService {
   approveAccess(email: string): Promise<void>;
   denyAccess(email: string): Promise<void>;
   revokeAccess(email: string): Promise<void>;
+  setAdminRole(email: string, isAdmin: boolean): Promise<void>;
   subscribeToAllowedUsers(cb: (users: AllowedUser[]) => void): () => void;
   subscribeToAccessRequests(cb: (requests: AccessRequest[]) => void): () => void;
   subscribeToAppActivity(cb: (entries: AppActivityEntry[]) => void): () => void;

@@ -16,13 +16,15 @@ import {
   Stack,
   Tab,
   Tabs,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import RemoveModeratorIcon from '@mui/icons-material/RemoveModerator';
 import { useAuthStore } from '../../store/authStore';
-import { isAdminEmail } from '../../config/admin';
 import { extractInviteErrorMessage } from '../../utils/inviteErrors';
 import type {
   AllowedUser,
@@ -42,6 +44,8 @@ const ACTIVITY_LABELS: Record<AppActivityType, string> = {
   access_approved: 'Access approved',
   access_denied: 'Access denied',
   access_revoked: 'Access revoked',
+  admin_granted: 'Made admin',
+  admin_revoked: 'Admin removed',
 };
 
 const STATUS_COLORS: Record<AccessRequestStatus, 'default' | 'success' | 'warning' | 'error'> = {
@@ -58,11 +62,15 @@ function formatDate(iso: string): string {
 // Admin-only control panel for approval-based app access (#35): who can sign
 // in, who's waiting for approval, and the access audit trail. All three lists
 // are admin-read-only in Firestore rules; the mutations go through callables.
+// Admin status itself is data-driven (the role field on an allowedUsers doc,
+// see setAdminRole) rather than a fixed identity, so any admin can promote or
+// demote any other — the server refuses to demote the last remaining one.
 export function AppAccessDialog({ open, onClose }: Props) {
   const service = useAuthStore((s) => s.service);
   const approveAccess = useAuthStore((s) => s.approveAccess);
   const denyAccess = useAuthStore((s) => s.denyAccess);
   const revokeAccess = useAuthStore((s) => s.revokeAccess);
+  const setAdminRole = useAuthStore((s) => s.setAdminRole);
 
   const [tab, setTab] = useState(0);
   const [allowedUsers, setAllowedUsers] = useState<AllowedUser[]>([]);
@@ -128,29 +136,53 @@ export function AppAccessDialog({ open, onClose }: Props) {
                   No one has access yet.
                 </Typography>
               )}
-              {allowedUsers.map((u) => (
-                <ListItem key={u.email} disableGutters>
-                  <ListItemText
-                    primary={u.email}
-                    secondary={`${u.invitedVia === 'seed' ? 'Seeded' : 'Approved'} · ${formatDate(u.createdAt)}`}
-                  />
-                  <ListItemSecondaryAction>
-                    {isAdminEmail(u.email) ? (
-                      <Chip label="Admin" size="small" color="primary" />
-                    ) : (
-                      <IconButton
-                        size="small"
-                        aria-label={`Revoke access for ${u.email}`}
-                        title="Revoke access"
-                        disabled={busy}
-                        onClick={() => setRevokeTarget(u.email)}
-                      >
-                        <PersonRemoveIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))}
+              {allowedUsers.map((u) => {
+                const isAdmin = u.role === 'admin';
+                return (
+                  <ListItem key={u.email} disableGutters>
+                    <ListItemText
+                      primary={
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <span>{u.email}</span>
+                          {isAdmin && <Chip label="Admin" size="small" color="primary" />}
+                        </Stack>
+                      }
+                      secondary={`${u.invitedVia === 'seed' ? 'Seeded' : 'Approved'} · ${formatDate(u.createdAt)}`}
+                    />
+                    <ListItemSecondaryAction>
+                      <Stack direction="row" spacing={0.5}>
+                        <Tooltip title={isAdmin ? 'Remove admin' : 'Make admin'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              aria-label={
+                                isAdmin ? `Remove admin for ${u.email}` : `Make ${u.email} admin`
+                              }
+                              disabled={busy}
+                              onClick={() => void run(() => setAdminRole(u.email, !isAdmin))}
+                            >
+                              {isAdmin ? (
+                                <RemoveModeratorIcon fontSize="small" />
+                              ) : (
+                                <AdminPanelSettingsIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        <IconButton
+                          size="small"
+                          aria-label={`Revoke access for ${u.email}`}
+                          title="Revoke access"
+                          disabled={busy}
+                          onClick={() => setRevokeTarget(u.email)}
+                        >
+                          <PersonRemoveIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                );
+              })}
             </List>
           )}
 
