@@ -4,12 +4,30 @@ import { MapView } from './MapView';
 import { renderWithProviders, resetStores } from '../../test/helpers';
 import { useTripStore } from '../../store/tripStore';
 import type { Checkpoint } from '../../types';
+import { getPoiAtPoint } from './poi';
+
+const mockedGetPoiAtPoint = vi.mocked(getPoiAtPoint);
 
 const easeTo = vi.fn();
+const jumpTo = vi.fn();
+const zoomIn = vi.fn();
+const zoomOut = vi.fn();
+
+vi.mock('./poi', () => ({ getPoiAtPoint: vi.fn() }));
 
 vi.mock('react-map-gl/maplibre', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div data-testid="map">{children}</div>,
-  NavigationControl: () => <div data-testid="nav-control" />,
+  default: ({
+    children,
+    onClick,
+  }: {
+    children: React.ReactNode;
+    onClick?: (e: unknown) => void;
+  }) => (
+    <div data-testid="map" onClick={() => onClick?.({})}>
+      {children}
+    </div>
+  ),
+  AttributionControl: () => <div data-testid="attribution-control" />,
   Source: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="source">{children}</div>
   ),
@@ -20,7 +38,7 @@ vi.mock('react-map-gl/maplibre', () => ({
     </button>
   ),
   Popup: ({ children }: { children: React.ReactNode }) => <div data-testid="popup">{children}</div>,
-  useMap: () => ({ current: { easeTo } }),
+  useMap: () => ({ current: { easeTo, jumpTo, zoomIn, zoomOut } }),
 }));
 
 function makeCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
@@ -38,6 +56,10 @@ function makeCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
 beforeEach(() => {
   resetStores();
   easeTo.mockClear();
+  jumpTo.mockClear();
+  zoomIn.mockClear();
+  zoomOut.mockClear();
+  mockedGetPoiAtPoint.mockReset();
 });
 
 describe('MapView', () => {
@@ -103,5 +125,38 @@ describe('MapView', () => {
 
     fireEvent.click(screen.getByTestId('marker'));
     expect(useTripStore.getState().selectedId).toBeNull();
+  });
+
+  it('renders the orientation ball and zoom controls', () => {
+    renderWithProviders(<MapView />);
+    expect(screen.getByRole('img', { name: /bearing and pitch/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Zoom in' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Zoom out' })).toBeInTheDocument();
+  });
+
+  it('calls onPoiSelected when a click resolves to a POI', () => {
+    mockedGetPoiAtPoint.mockReturnValue({
+      name: 'Sensō-ji',
+      location: { lat: 35.71, lng: 139.79 },
+    });
+    const onPoiSelected = vi.fn();
+    renderWithProviders(<MapView onPoiSelected={onPoiSelected} />);
+
+    fireEvent.click(screen.getByTestId('map'));
+
+    expect(onPoiSelected).toHaveBeenCalledWith({
+      name: 'Sensō-ji',
+      location: { lat: 35.71, lng: 139.79 },
+    });
+  });
+
+  it('does not call onPoiSelected when a click does not resolve to a POI', () => {
+    mockedGetPoiAtPoint.mockReturnValue(null);
+    const onPoiSelected = vi.fn();
+    renderWithProviders(<MapView onPoiSelected={onPoiSelected} />);
+
+    fireEvent.click(screen.getByTestId('map'));
+
+    expect(onPoiSelected).not.toHaveBeenCalled();
   });
 });

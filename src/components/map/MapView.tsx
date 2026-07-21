@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import Map, { NavigationControl, Source, Layer, useMap } from 'react-map-gl/maplibre';
+import Map, { AttributionControl, Source, Layer, useMap } from 'react-map-gl/maplibre';
 import type { LineLayerSpecification } from 'maplibre-gl';
 import type { FeatureCollection, LineString } from 'geojson';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -15,6 +15,10 @@ import {
 import LayersIcon from '@mui/icons-material/Layers';
 import { useTripStore } from '../../store/tripStore';
 import { CheckpointMarker } from './CheckpointMarker';
+import { MapZoomControl } from './MapZoomControl';
+import { MapOrientationBall } from './MapOrientationBall';
+import { MAX_PITCH } from './mapConstants';
+import { getPoiAtPoint, type Poi } from './poi';
 
 const JAPAN_CENTER = { longitude: 139.69, latitude: 35.68, zoom: 10 };
 
@@ -46,11 +50,29 @@ function StyleSwitcher({
   const [open, setOpen] = useState(false);
 
   return (
-    <Box sx={{ position: 'absolute', bottom: 32, right: 8, zIndex: 1 }}>
+    <Box sx={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+        <IconButton
+          size="small"
+          onClick={() => setOpen((v) => !v)}
+          onMouseEnter={() => setOpen(true)}
+          aria-label="Toggle layer selector"
+          sx={{
+            bgcolor: 'background.paper',
+            border: '2px solid rgba(0,0,0,0.2)',
+            borderRadius: 1,
+            width: 34,
+            height: 34,
+            '&:hover': { bgcolor: 'background.paper' },
+          }}
+        >
+          <LayersIcon fontSize="small" />
+        </IconButton>
+      </Box>
       {open && (
         <Paper
           elevation={2}
-          sx={{ mb: 0.5, p: 1, minWidth: 140 }}
+          sx={{ mt: 0.5, p: 1, minWidth: 140 }}
           onMouseLeave={() => setOpen(false)}
         >
           <Typography variant="caption" color="text.secondary" sx={{ pl: 0.5 }}>
@@ -75,24 +97,6 @@ function StyleSwitcher({
           </RadioGroup>
         </Paper>
       )}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <IconButton
-          size="small"
-          onClick={() => setOpen((v) => !v)}
-          onMouseEnter={() => setOpen(true)}
-          aria-label="Toggle layer selector"
-          sx={{
-            bgcolor: 'background.paper',
-            border: '2px solid rgba(0,0,0,0.2)',
-            borderRadius: 1,
-            width: 34,
-            height: 34,
-            '&:hover': { bgcolor: 'background.paper' },
-          }}
-        >
-          <LayersIcon fontSize="small" />
-        </IconButton>
-      </Box>
     </Box>
   );
 }
@@ -112,7 +116,11 @@ function MapSync() {
   return null;
 }
 
-export function MapView() {
+interface Props {
+  onPoiSelected?: (poi: Poi) => void;
+}
+
+export function MapView({ onPoiSelected }: Props) {
   const [mapStyle, setMapStyle] = useState<string>(STYLES[0].url);
   const { checkpoints, selectedId, selectCheckpoint } = useTripStore();
 
@@ -139,11 +147,33 @@ export function MapView() {
     <Map
       mapStyle={mapStyle}
       initialViewState={JAPAN_CENTER}
+      maxPitch={MAX_PITCH}
+      attributionControl={false}
+      onClick={(e) => {
+        const poi = getPoiAtPoint(e);
+        if (poi) onPoiSelected?.(poi);
+      }}
       style={{ width: '100%', height: '100%' }}
     >
-      <NavigationControl position="top-right" />
       <StyleSwitcher current={mapStyle} onChange={setMapStyle} />
       <MapSync />
+      <AttributionControl position="top-right" compact />
+
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: 8,
+          right: 8,
+          zIndex: 1,
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 1,
+        }}
+      >
+        <MapOrientationBall />
+        <MapZoomControl />
+      </Box>
 
       <Source id="route" type="geojson" data={routeGeoJSON}>
         <Layer {...ROUTE_LAYER} />

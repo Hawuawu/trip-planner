@@ -75,6 +75,31 @@ describe('AlternativesShelf', () => {
     expect(screen.getByRole('heading', { name: /add alternative/i })).toBeInTheDocument();
   });
 
+  it('prefills the add form from a POI clicked on the map', () => {
+    renderWithProviders(
+      <AlternativesShelf
+        openAddSignal={1}
+        prefill={{ name: 'Sensō-ji', location: { lat: 35.71, lng: 139.79 } }}
+      />
+    );
+    expect(screen.getByRole('textbox', { name: /name/i })).toHaveValue('Sensō-ji');
+    expect(screen.getByLabelText('Lat')).toHaveValue(35.71);
+    expect(screen.getByLabelText('Lng')).toHaveValue(139.79);
+  });
+
+  it('does not carry a stale prefill into a manually opened add form', async () => {
+    renderWithProviders(
+      <AlternativesShelf
+        openAddSignal={1}
+        prefill={{ name: 'Sensō-ji', location: { lat: 35.71, lng: 139.79 } }}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add alternative/i }));
+
+    expect(screen.getByRole('textbox', { name: /name/i })).toHaveValue('');
+  });
+
   it('closes the form when Cancel is clicked without calling addAlternative', async () => {
     renderWithProviders(<AlternativesShelf />);
     const spy = vi.spyOn(useTripStore.getState(), 'addAlternative');
