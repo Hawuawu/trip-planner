@@ -19,6 +19,7 @@ import {
   TimelineDot,
 } from '@mui/lab';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
+import EditIcon from '@mui/icons-material/EditOutlined';
 import type { Checkpoint } from '../../types';
 import { CheckpointIcon } from './CheckpointIcon';
 
@@ -28,6 +29,7 @@ interface Props {
   isSelected: boolean;
   isLast: boolean;
   onSelect(): void;
+  onEdit(): void;
   onDelete(): void;
 }
 
@@ -45,6 +47,7 @@ export function CheckpointItem({
   isSelected,
   isLast,
   onSelect,
+  onEdit,
   onDelete,
 }: Props) {
   const theme = useTheme();
@@ -57,7 +60,13 @@ export function CheckpointItem({
     >
       <TimelineSeparator>
         <TimelineDot
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+          aria-label="Edit checkpoint"
           sx={{
+            cursor: 'pointer',
             bgcolor: isActive ? theme.palette.secondary.main : 'transparent',
             border: isActive ? 'none' : `2px solid ${theme.palette.divider}`,
             boxShadow: 'none',
@@ -109,17 +118,28 @@ export function CheckpointItem({
               </Typography>
             )}
           </Box>
-          <IconButton
-            size="small"
-            aria-label="Delete checkpoint"
-            onClick={(e) => {
-              e.stopPropagation();
-              setConfirmOpen(true);
-            }}
-            sx={{ ml: 1, flexShrink: 0 }}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          <Box sx={{ display: 'flex', flexShrink: 0, ml: 1 }}>
+            <IconButton
+              size="small"
+              aria-label="Edit checkpoint"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              aria-label="Delete checkpoint"
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmOpen(true);
+              }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </Box>
       </TimelineContent>
 

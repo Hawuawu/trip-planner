@@ -197,8 +197,8 @@ describe('Flow 2: Edit checkpoint', () => {
       expect(screen.getByText('JFK → NRT')).toBeInTheDocument();
     });
 
-    // Click on the checkpoint name to open edit drawer
-    fireEvent.click(screen.getByText('JFK → NRT'));
+    // Click the first checkpoint's edit button to open the edit drawer
+    fireEvent.click(screen.getAllByRole('button', { name: /edit checkpoint/i })[0]);
 
     // Edit form should appear
     await waitFor(() => {
@@ -237,21 +237,10 @@ describe('Flow 3: Delete and undo', () => {
       expect(screen.getByText('JFK → NRT')).toBeInTheDocument();
     });
 
-    // Find the first non-FAB icon button on the page — that is the delete button
-    // for the first checkpoint in the timeline (renders a DeleteOutline svg).
-    // AppBar buttons (back, sign-out, ...) all carry a `title`, the checkpoint
-    // delete button doesn't — exclude by that rather than by a growing list of
-    // Toolbar labels.
-    const allButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'));
-    const deleteBtn = allButtons.find(
-      (b) =>
-        !b.classList.contains('MuiFab-root') &&
-        b.querySelector('svg') &&
-        !b.title &&
-        !b.textContent?.match(/timeline|map|alternatives/i)
-    );
-    expect(deleteBtn).toBeTruthy();
-    fireEvent.click(deleteBtn!);
+    // Each checkpoint row's delete button carries an explicit aria-label;
+    // click the first checkpoint's.
+    const deleteBtn = screen.getAllByRole('button', { name: /delete checkpoint/i })[0];
+    fireEvent.click(deleteBtn);
 
     // Confirm the deletion in the confirmation dialog
     await waitFor(() => {

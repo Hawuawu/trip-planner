@@ -208,7 +208,7 @@ export function AppAccessDialog({ open, onClose }: Props) {
                         <span>{request.email}</span>
                       </Stack>
                     }
-                    secondary={`${request.displayName ?? 'Unknown name'} · last seen ${formatDate(request.lastSeenAt)}`}
+                    secondary={`${request.displayName ?? request.email} · last seen ${formatDate(request.lastSeenAt)}`}
                   />
                   <ListItemSecondaryAction>
                     {request.status !== 'approved' && (
