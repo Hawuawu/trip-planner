@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -19,12 +19,14 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useTripStore } from '../../store/tripStore';
 import { AlternativeItem } from './AlternativeItem';
 import { AlternativeForm } from './AlternativeForm';
+import type { Alternative } from '../../types';
 
 interface Props {
   openAddSignal?: number;
+  prefill?: Partial<Omit<Alternative, 'id'>> | null;
 }
 
-export function AlternativesShelf({ openAddSignal }: Props) {
+export function AlternativesShelf({ openAddSignal, prefill }: Props) {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -43,13 +45,22 @@ export function AlternativesShelf({ openAddSignal }: Props) {
   const [promoteId, setPromoteId] = useState<string | null>(null);
   const [promoteTime, setPromoteTime] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  const [addPrefill, setAddPrefill] = useState<Partial<Omit<Alternative, 'id'>> | undefined>(
+    undefined
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const promoting = alternatives.find((a) => a.id === promoteId);
   const editing = editingId ? alternatives.find((a) => a.id === editingId) : null;
 
+  // Read via a ref so a fresh `prefill` value doesn't need to be listed as an
+  // effect dependency — only a new openAddSignal should (re)open the drawer.
+  const prefillRef = useRef(prefill);
+  prefillRef.current = prefill;
+
   useEffect(() => {
     if (openAddSignal === undefined) return;
+    setAddPrefill(prefillRef.current ?? undefined);
     setAddOpen(true);
   }, [openAddSignal]);
 
@@ -71,11 +82,16 @@ export function AlternativesShelf({ openAddSignal }: Props) {
   const drawerContent = addOpen ? (
     <AlternativeForm
       title="Add alternative"
+      initial={addPrefill}
       onSave={(data) => {
         addAlternative(data);
         setAddOpen(false);
+        setAddPrefill(undefined);
       }}
-      onCancel={() => setAddOpen(false)}
+      onCancel={() => {
+        setAddOpen(false);
+        setAddPrefill(undefined);
+      }}
     />
   ) : editing ? (
     <AlternativeForm
@@ -108,7 +124,10 @@ export function AlternativesShelf({ openAddSignal }: Props) {
           <Button
             variant="contained"
             startIcon={<AddCircleOutlineIcon />}
-            onClick={() => setAddOpen(true)}
+            onClick={() => {
+              setAddPrefill(undefined);
+              setAddOpen(true);
+            }}
           >
             Add alternative
           </Button>
