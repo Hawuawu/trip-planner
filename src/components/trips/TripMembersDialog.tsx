@@ -94,6 +94,10 @@ export function TripMembersDialog({
             {trip.memberIds.map((uid) => {
               const isSelf = uid === currentUid;
               const isRowOwner = uid === trip.ownerId;
+              // The owner has access from trip creation; every other member
+              // is "pending" until recordTripAccess stamps joinedAt on their
+              // first time actually opening the trip (see tripStore.init).
+              const hasJoined = isRowOwner || Boolean(trip.memberProfiles?.[uid]?.joinedAt);
               return (
                 <ListItem key={uid} disableGutters>
                   <ListItemText
@@ -102,6 +106,12 @@ export function TripMembersDialog({
                         <span>{memberLabel(uid)}</span>
                         {isSelf && <Chip label="You" size="small" variant="outlined" />}
                         {isRowOwner && <Chip label="Owner" size="small" color="primary" />}
+                        {!isRowOwner &&
+                          (hasJoined ? (
+                            <Chip label="Joined" size="small" color="success" variant="outlined" />
+                          ) : (
+                            <Chip label="Pending" size="small" color="warning" />
+                          ))}
                       </Stack>
                     }
                   />
