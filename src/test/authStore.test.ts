@@ -13,6 +13,7 @@ function makeMockAuthService(overrides: Partial<AuthService> = {}): AuthService 
     approveAccess: vi.fn().mockResolvedValue(undefined),
     denyAccess: vi.fn().mockResolvedValue(undefined),
     revokeAccess: vi.fn().mockResolvedValue(undefined),
+    setAdminRole: vi.fn().mockResolvedValue(undefined),
     subscribeToAllowedUsers: vi.fn().mockReturnValue(() => {}),
     subscribeToAccessRequests: vi.fn().mockReturnValue(() => {}),
     subscribeToAppActivity: vi.fn().mockReturnValue(() => {}),
@@ -121,6 +122,14 @@ describe('authStore — app access actions', () => {
     expect(service.approveAccess).toHaveBeenCalledWith('friend@example.com');
     expect(service.denyAccess).toHaveBeenCalledWith('stranger@example.com');
     expect(service.revokeAccess).toHaveBeenCalledWith('friend@example.com');
+  });
+
+  it('delegates setAdminRole to the service', async () => {
+    const service = makeMockAuthService();
+    useAuthStore.getState().init(service);
+
+    await useAuthStore.getState().setAdminRole('friend@example.com', true);
+    expect(service.setAdminRole).toHaveBeenCalledWith('friend@example.com', true);
   });
 
   it('refreshAccess updates the stored user with the refreshed claims', async () => {

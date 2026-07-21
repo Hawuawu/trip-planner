@@ -14,7 +14,6 @@ import {
   assertSucceeds,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { ADMIN_EMAIL } from '../config/admin';
 
 // Deliberately NOT the shared 'demo-trip-planner-test' project id: vitest runs
 // test files in parallel, and clearFirestore() wipes the entire project — with
@@ -47,9 +46,10 @@ afterAll(async () => {
   await testEnv.cleanup();
 });
 
-const admin = () => testEnv.authenticatedContext('admin-uid', { email: ADMIN_EMAIL }).firestore();
-const member = () =>
-  testEnv.authenticatedContext('member-uid', { email: 'someone@example.com' }).firestore();
+// Admin status is the `admin` custom claim (stamped at sign-in from the
+// allowedUsers doc's role field — see stampAppAccess), not an email match.
+const admin = () => testEnv.authenticatedContext('admin-uid', { admin: true }).firestore();
+const member = () => testEnv.authenticatedContext('member-uid', { appAccess: true }).firestore();
 const anon = () => testEnv.unauthenticatedContext().firestore();
 
 async function seedDoc(collection: (typeof COLLECTIONS)[number]): Promise<string> {
@@ -61,28 +61,20 @@ async function seedDoc(collection: (typeof COLLECTIONS)[number]): Promise<string
 }
 
 describe.each(COLLECTIONS)('%s rules', (collection) => {
-  it('lets the admin read (get and list)', async () => {
+  it('lets an admin-claim user read (get and list)', async () => {
     const id = await seedDoc(collection);
     await assertSucceeds(admin().collection(collection).doc(id).get());
     await assertSucceeds(admin().collection(collection).get());
   });
 
-  it('matches the admin email case-insensitively', async () => {
-    const id = await seedDoc(collection);
-    const shoutyAdmin = testEnv
-      .authenticatedContext('admin-uid', { email: ADMIN_EMAIL.toUpperCase() })
-      .firestore();
-    await assertSucceeds(shoutyAdmin.collection(collection).doc(id).get());
-  });
-
-  it('denies reads for a non-admin authenticated user and for unauthenticated', async () => {
+  it('denies reads for an authenticated non-admin user and for unauthenticated', async () => {
     const id = await seedDoc(collection);
     await assertFails(member().collection(collection).doc(id).get());
     await assertFails(member().collection(collection).get());
     await assertFails(anon().collection(collection).doc(id).get());
   });
 
-  it('denies all direct writes, including from the admin', async () => {
+  it('denies all direct writes, including from an admin-claim user', async () => {
     const id = await seedDoc(collection);
     await assertFails(admin().collection(collection).doc('new-doc').set({ sneaky: true }));
     await assertFails(admin().collection(collection).doc(id).update({ sneaky: true }));

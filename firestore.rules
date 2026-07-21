@@ -36,10 +36,12 @@ service cloud.firestore {
         && (!('ownerId' in before) || removed[0] != before.ownerId);
     }
 
+    // Admin status is data-driven (a `role` field on the caller's own
+    // allowedUsers doc, stamped into this claim at sign-in by
+    // stampAppAccess) rather than a hardcoded identity — see
+    // functions/src/appAccess.ts's setAdminRole for how it's granted.
     function isAppAdmin() {
-      return request.auth != null
-        && request.auth.token.email != null
-        && request.auth.token.email.lower() == 'hawuawu@gmail.com';
+      return request.auth != null && request.auth.token.get('admin', false) == true;
     }
 
     // Access-control collections (#35): clients never write these — every

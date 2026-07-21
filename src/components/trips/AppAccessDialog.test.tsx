@@ -8,8 +8,18 @@ import type { AuthService } from '../../data/AuthService';
 import type { AllowedUser, AccessRequest, AppActivityEntry } from '../../types';
 
 const allowedUsers: AllowedUser[] = [
-  { email: 'hawuawu@gmail.com', invitedVia: 'seed', createdAt: '2026-07-01T10:00:00.000Z' },
-  { email: 'friend@example.com', invitedVia: 'approved', createdAt: '2026-07-02T10:00:00.000Z' },
+  {
+    email: 'admin@example.com',
+    invitedVia: 'seed',
+    role: 'admin',
+    createdAt: '2026-07-01T10:00:00.000Z',
+  },
+  {
+    email: 'friend@example.com',
+    invitedVia: 'approved',
+    role: 'member',
+    createdAt: '2026-07-02T10:00:00.000Z',
+  },
 ];
 
 const requests: AccessRequest[] = [
@@ -49,6 +59,7 @@ function makeService(overrides: Partial<AuthService> = {}): AuthService {
     approveAccess: vi.fn().mockResolvedValue(undefined),
     denyAccess: vi.fn().mockResolvedValue(undefined),
     revokeAccess: vi.fn().mockResolvedValue(undefined),
+    setAdminRole: vi.fn().mockResolvedValue(undefined),
     subscribeToAllowedUsers: vi.fn((cb) => {
       cb(allowedUsers);
       return () => {};
@@ -76,18 +87,47 @@ function renderDialog(service = makeService()) {
 }
 
 describe('AppAccessDialog — People', () => {
-  it('lists allowed users, marks the admin, and revokes via the confirm dialog', async () => {
+  it('lists allowed users, marks the admin by role, and revokes via the confirm dialog', async () => {
     const service = renderDialog();
     const user = userEvent.setup();
 
-    expect(screen.getByText('hawuawu@gmail.com')).toBeInTheDocument();
+    expect(screen.getByText('admin@example.com')).toBeInTheDocument();
     expect(screen.getByText('Admin')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Revoke access for hawuawu@gmail.com')).not.toBeInTheDocument();
 
     await user.click(screen.getByLabelText('Revoke access for friend@example.com'));
     await user.click(screen.getByRole('button', { name: /^revoke$/i }));
 
     await waitFor(() => expect(service.revokeAccess).toHaveBeenCalledWith('friend@example.com'));
+  });
+
+  it('promotes a member to admin', async () => {
+    const service = renderDialog();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText('Make friend@example.com admin'));
+    await waitFor(() =>
+      expect(service.setAdminRole).toHaveBeenCalledWith('friend@example.com', true)
+    );
+  });
+
+  it('demotes an admin back to member', async () => {
+    const service = renderDialog();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText('Remove admin for admin@example.com'));
+    await waitFor(() =>
+      expect(service.setAdminRole).toHaveBeenCalledWith('admin@example.com', false)
+    );
+  });
+
+  it('allows revoking an admin row too — the server enforces the last-admin guard', async () => {
+    const service = renderDialog();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText('Revoke access for admin@example.com'));
+    await user.click(screen.getByRole('button', { name: /^revoke$/i }));
+
+    await waitFor(() => expect(service.revokeAccess).toHaveBeenCalledWith('admin@example.com'));
   });
 });
 
@@ -129,5 +169,25 @@ describe('AppAccessDialog — Activity', () => {
     renderDialog();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Activity' }));
     expect(screen.getByText(/Access requested — newcomer@example.com/)).toBeInTheDocument();
+  });
+
+  it('shows readable labels for admin grant/revoke events', async () => {
+    const service = makeService({
+      subscribeToAppActivity: vi.fn((cb) => {
+        cb([
+          {
+            id: 'a2',
+            type: 'admin_granted',
+            email: 'friend@example.com',
+            actor: 'admin',
+            createdAt: '2026-07-04T09:00:00.000Z',
+          },
+        ]);
+        return () => {};
+      }),
+    });
+    renderDialog(service);
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Activity' }));
+    expect(screen.getByText(/Made admin — friend@example.com/)).toBeInTheDocument();
   });
 });

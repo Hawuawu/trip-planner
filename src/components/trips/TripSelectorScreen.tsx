@@ -35,7 +35,6 @@ import { downloadTextFile, slugifyFilename } from '../../utils/fileTransfer';
 import { canManage } from '../../utils/tripPermissions';
 import { YamlImportDialog } from './YamlImportDialog';
 import { AppAccessDialog } from './AppAccessDialog';
-import { isAdminEmail } from '../../config/admin';
 
 interface Props {
   repo: TripRepository;
@@ -92,7 +91,7 @@ function fetchTripDataOnce(
 
 export function TripSelectorScreen({ repo, onSelect }: Props) {
   const currentUid = useAuthStore((s) => s.user?.uid);
-  const isAdmin = useAuthStore((s) => isAdminEmail(s.user?.email));
+  const isAdmin = useAuthStore((s) => s.user?.admin === true);
   const signOut = useAuthStore((s) => s.signOut);
   const service = useAuthStore((s) => s.service);
   const [trips, setTrips] = useState<Trip[]>([]);
