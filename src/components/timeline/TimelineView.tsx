@@ -36,6 +36,7 @@ export function TimelineView({ openAddSignal }: Props) {
   } = useTripStore();
 
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [insertAfterIndex, setInsertAfterIndex] = useState<number | null>(null);
   const now = useRef(new Date().toISOString());
   const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -74,7 +75,7 @@ export function TimelineView({ openAddSignal }: Props) {
     return new Date(midMs).toISOString();
   }
 
-  const editing = selectedId ? checkpoints.find((c) => c.id === selectedId) : null;
+  const editing = editingId ? checkpoints.find((c) => c.id === editingId) : null;
 
   const drawerContent = adding ? (
     <CheckpointForm
@@ -92,9 +93,9 @@ export function TimelineView({ openAddSignal }: Props) {
       initial={editing}
       onSave={async (data) => {
         await updateCheckpoint(editing.id, data);
-        selectCheckpoint(null);
+        setEditingId(null);
       }}
-      onCancel={() => selectCheckpoint(null)}
+      onCancel={() => setEditingId(null)}
     />
   ) : null;
 
@@ -140,6 +141,10 @@ export function TimelineView({ openAddSignal }: Props) {
                 isSelected={cp.id === selectedId}
                 isLast={i === checkpoints.length - 1}
                 onSelect={() => selectCheckpoint(cp.id === selectedId ? null : cp.id)}
+                onEdit={() => {
+                  selectCheckpoint(cp.id);
+                  setEditingId(cp.id);
+                }}
                 onDelete={() => deleteCheckpoint(cp.id)}
               />
               <Box sx={{ display: 'flex', justifyContent: 'center', my: -1 }}>
@@ -170,10 +175,10 @@ export function TimelineView({ openAddSignal }: Props) {
 
       <Drawer
         anchor={isPhone ? 'bottom' : 'right'}
-        open={!!(adding || (selectedId && editing))}
+        open={!!(adding || editing)}
         onClose={() => {
           setAdding(false);
-          selectCheckpoint(null);
+          setEditingId(null);
         }}
         PaperProps={{
           sx: {

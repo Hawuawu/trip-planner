@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
+import EditIcon from '@mui/icons-material/EditOutlined';
 import type { Alternative } from '../../types';
 import { CheckpointIcon } from '../timeline/CheckpointIcon';
 
@@ -27,7 +28,6 @@ export function AlternativeItem({ alternative, onSelect, onPromote, onDelete }: 
 
   return (
     <Box
-      onClick={onSelect}
       sx={{
         display: 'flex',
         alignItems: 'flex-start',
@@ -40,14 +40,20 @@ export function AlternativeItem({ alternative, onSelect, onPromote, onDelete }: 
         px: 1.5,
         py: 1,
         mb: 1,
-        cursor: 'pointer',
       }}
     >
       <Box sx={{ display: 'flex', gap: 1, minWidth: 0 }}>
-        <CheckpointIcon
-          type={alternative.type}
-          sx={{ fontSize: 18, color: 'text.secondary', mt: 0.35, flexShrink: 0 }}
-        />
+        <Box
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+          }}
+          role="button"
+          aria-label="Edit alternative"
+          sx={{ cursor: 'pointer', display: 'flex', mt: 0.35, flexShrink: 0 }}
+        >
+          <CheckpointIcon type={alternative.type} sx={{ fontSize: 18, color: 'text.secondary' }} />
+        </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="body2" fontWeight={500} noWrap>
             {alternative.name}
@@ -65,6 +71,16 @@ export function AlternativeItem({ alternative, onSelect, onPromote, onDelete }: 
         </Box>
       </Box>
       <Box sx={{ display: 'flex', flexShrink: 0, ml: 1 }}>
+        <IconButton
+          size="small"
+          aria-label="Edit alternative"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+          }}
+        >
+          <EditIcon fontSize="small" />
+        </IconButton>
         <IconButton
           size="small"
           aria-label="Add to timeline"

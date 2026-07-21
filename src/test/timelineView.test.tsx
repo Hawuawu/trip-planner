@@ -65,11 +65,18 @@ describe('TimelineView — with checkpoints', () => {
     expect(screen.queryByText(/no checkpoints yet/i)).not.toBeInTheDocument();
   });
 
-  it('clicking a checkpoint selects it (opens edit drawer)', () => {
+  it('clicking a checkpoint highlights it without opening the edit drawer', () => {
     seedCheckpoints([makeCheckpoint({ id: 'cp-1', name: 'JFK → NRT' })]);
     renderWithProviders(<TimelineView />);
     fireEvent.click(screen.getByText('JFK → NRT'));
-    // Edit form should appear with "Edit checkpoint" title
+    expect(useTripStore.getState().selectedId).toBe('cp-1');
+    expect(screen.queryByText('Edit checkpoint')).not.toBeInTheDocument();
+  });
+
+  it('clicking the edit button opens the edit drawer', () => {
+    seedCheckpoints([makeCheckpoint({ id: 'cp-1', name: 'JFK → NRT' })]);
+    renderWithProviders(<TimelineView />);
+    fireEvent.click(screen.getByRole('button', { name: /edit checkpoint/i }));
     expect(screen.getByText('Edit checkpoint')).toBeInTheDocument();
   });
 
@@ -182,15 +189,17 @@ describe('TimelineView — with checkpoints', () => {
     expect(startInput?.value).toBeTruthy();
   });
 
-  it('cancelling from the edit form clears selectedId', () => {
+  it('cancelling from the edit form closes the drawer but keeps the map highlight', () => {
     seedCheckpoints([makeCheckpoint({ id: 'cp-1', name: 'JFK → NRT' })]);
     renderWithProviders(<TimelineView />);
-    // Open edit drawer by selecting the checkpoint
-    fireEvent.click(screen.getByText('JFK → NRT'));
+    // Open edit drawer via the edit button
+    fireEvent.click(screen.getByRole('button', { name: /edit checkpoint/i }));
     expect(useTripStore.getState().selectedId).toBe('cp-1');
-    // Cancel inside the edit form clears the selection
+    expect(screen.getByText('Edit checkpoint')).toBeInTheDocument();
+    // Cancel inside the edit form closes the drawer, selection (map highlight) stays
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
-    expect(useTripStore.getState().selectedId).toBeNull();
+    expect(screen.queryByText('Edit checkpoint')).not.toBeInTheDocument();
+    expect(useTripStore.getState().selectedId).toBe('cp-1');
   });
 
   it('renders the last checkpoint without a connector', () => {
