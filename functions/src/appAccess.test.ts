@@ -46,6 +46,16 @@ async function activityEntries(email: string) {
   return snap.docs.map((d) => d.data());
 }
 
+// The emulator's Firestore isn't reset between tests, and other tests in
+// this file (promote/demote) leave role: 'admin' docs behind — the "last
+// admin" guard tests need a known-clean slate to assert against, or a
+// leftover admin from an earlier test makes the count query see more than
+// one and the guard correctly (from the function's point of view) allows it.
+async function deleteAllAdmins() {
+  const snap = await getDb().collection('allowedUsers').where('role', '==', 'admin').get();
+  await Promise.all(snap.docs.map((d) => d.ref.delete()));
+}
+
 describe('approveAccess', () => {
   it('rejects unauthenticated and non-admin callers', async () => {
     await expect(approveAccess.run(callableRequest({ email: 'a@b.com' }))).rejects.toThrow(/admin/);
@@ -149,6 +159,7 @@ describe('revokeAppAccess', () => {
   });
 
   it('refuses to revoke the last remaining admin', async () => {
+    await deleteAllAdmins();
     const email = uniqueEmail('sole-admin');
     await allowEmail(email, 'admin');
     await expect(revokeAppAccess.run(asAdmin({ email }))).rejects.toThrow(/admin must remain/);
@@ -219,6 +230,7 @@ describe('setAdminRole', () => {
   });
 
   it('refuses to demote the last remaining admin', async () => {
+    await deleteAllAdmins();
     const email = uniqueEmail('sole-admin');
     await allowEmail(email, 'admin');
     await expect(setAdminRole.run(asAdmin({ email, isAdmin: false }))).rejects.toThrow(
