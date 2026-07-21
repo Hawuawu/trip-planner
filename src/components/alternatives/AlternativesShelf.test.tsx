@@ -160,13 +160,13 @@ describe('AlternativesShelf', () => {
     );
   });
 
-  // ── Edit via clicking a card ─────────────────────────────────────────────
+  // ── Edit via the explicit edit button ────────────────────────────────────
 
-  it('opens the edit form with prefilled values when an alternative card is clicked', async () => {
+  it('opens the edit form with prefilled values when an alternative is edited', async () => {
     useTripStore.setState({ alternatives: SEED_ALTS });
     renderWithProviders(<AlternativesShelf />);
 
-    await userEvent.click(screen.getByText('teamLab Borderless'));
+    await userEvent.click(screen.getAllByRole('button', { name: /edit alternative/i })[0]);
 
     expect(screen.getByRole('heading', { name: /edit alternative/i })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /name/i })).toHaveValue('teamLab Borderless');
@@ -177,7 +177,7 @@ describe('AlternativesShelf', () => {
     const spy = vi.spyOn(useTripStore.getState(), 'updateAlternative');
     renderWithProviders(<AlternativesShelf />);
 
-    await userEvent.click(screen.getByText('teamLab Borderless'));
+    await userEvent.click(screen.getAllByRole('button', { name: /edit alternative/i })[0]);
     const nameInput = screen.getByRole('textbox', { name: /name/i });
     await userEvent.clear(nameInput);
     await userEvent.type(nameInput, 'teamLab Planets');
