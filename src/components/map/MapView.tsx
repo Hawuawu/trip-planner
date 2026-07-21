@@ -18,6 +18,7 @@ import { CheckpointMarker } from './CheckpointMarker';
 import { MapZoomControl } from './MapZoomControl';
 import { MapOrientationBall } from './MapOrientationBall';
 import { MAX_PITCH } from './mapConstants';
+import { getPoiAtPoint, type Poi } from './poi';
 
 const JAPAN_CENTER = { longitude: 139.69, latitude: 35.68, zoom: 10 };
 
@@ -115,7 +116,11 @@ function MapSync() {
   return null;
 }
 
-export function MapView() {
+interface Props {
+  onPoiSelected?: (poi: Poi) => void;
+}
+
+export function MapView({ onPoiSelected }: Props) {
   const [mapStyle, setMapStyle] = useState<string>(STYLES[0].url);
   const { checkpoints, selectedId, selectCheckpoint } = useTripStore();
 
@@ -144,6 +149,10 @@ export function MapView() {
       initialViewState={JAPAN_CENTER}
       maxPitch={MAX_PITCH}
       attributionControl={false}
+      onClick={(e) => {
+        const poi = getPoiAtPoint(e);
+        if (poi) onPoiSelected?.(poi);
+      }}
       style={{ width: '100%', height: '100%' }}
     >
       <StyleSwitcher current={mapStyle} onChange={setMapStyle} />

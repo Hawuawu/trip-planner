@@ -191,6 +191,10 @@ export function AppShell({ onBack }: Props) {
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [addCheckpointSignal, setAddCheckpointSignal] = useState(0);
   const [addAlternativeSignal, setAddAlternativeSignal] = useState(0);
+  const [alternativePrefill, setAlternativePrefill] = useState<{
+    name: string;
+    location: { lat: number; lng: number };
+  } | null>(null);
 
   const panelWidth = isWide ? 380 : 320;
 
@@ -211,6 +215,13 @@ export function AppShell({ onBack }: Props) {
   function handleAddAlternative() {
     setMenuOpen(false);
     if (isPhone) setTab(2);
+    setAlternativePrefill(null);
+    setAddAlternativeSignal((n) => n + 1);
+  }
+
+  function handlePoiSelected(poi: { name: string; location: { lat: number; lng: number } }) {
+    if (isPhone) setTab(2);
+    setAlternativePrefill(poi);
     setAddAlternativeSignal((n) => n + 1);
   }
 
@@ -369,10 +380,13 @@ export function AppShell({ onBack }: Props) {
                 <TimelineView openAddSignal={addCheckpointSignal || undefined} />
               </TexturedPanel>
             )}
-            {tab === 1 && <MapView />}
+            {tab === 1 && <MapView onPoiSelected={handlePoiSelected} />}
             {tab === 2 && (
               <TexturedPanel image={sakuraPattern} repeat="repeat" size="360px 360px">
-                <AlternativesShelf openAddSignal={addAlternativeSignal || undefined} />
+                <AlternativesShelf
+                  openAddSignal={addAlternativeSignal || undefined}
+                  prefill={alternativePrefill}
+                />
               </TexturedPanel>
             )}
           </Box>
@@ -413,7 +427,7 @@ export function AppShell({ onBack }: Props) {
 
           {/* Map with toggle buttons anchored to its edges */}
           <Box sx={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            <MapView />
+            <MapView onPoiSelected={handlePoiSelected} />
 
             <PanelToggle
               side="left"
@@ -443,7 +457,10 @@ export function AppShell({ onBack }: Props) {
               }}
             >
               <TexturedPanel image={sakuraPattern} repeat="repeat" size="360px 360px">
-                <AlternativesShelf openAddSignal={addAlternativeSignal || undefined} />
+                <AlternativesShelf
+                  openAddSignal={addAlternativeSignal || undefined}
+                  prefill={alternativePrefill}
+                />
               </TexturedPanel>
             </Box>
           )}
