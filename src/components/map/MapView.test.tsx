@@ -6,10 +6,13 @@ import { useTripStore } from '../../store/tripStore';
 import type { Checkpoint } from '../../types';
 
 const easeTo = vi.fn();
+const jumpTo = vi.fn();
+const zoomIn = vi.fn();
+const zoomOut = vi.fn();
 
 vi.mock('react-map-gl/maplibre', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="map">{children}</div>,
-  NavigationControl: () => <div data-testid="nav-control" />,
+  AttributionControl: () => <div data-testid="attribution-control" />,
   Source: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="source">{children}</div>
   ),
@@ -20,7 +23,7 @@ vi.mock('react-map-gl/maplibre', () => ({
     </button>
   ),
   Popup: ({ children }: { children: React.ReactNode }) => <div data-testid="popup">{children}</div>,
-  useMap: () => ({ current: { easeTo } }),
+  useMap: () => ({ current: { easeTo, jumpTo, zoomIn, zoomOut } }),
 }));
 
 function makeCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
@@ -38,6 +41,9 @@ function makeCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
 beforeEach(() => {
   resetStores();
   easeTo.mockClear();
+  jumpTo.mockClear();
+  zoomIn.mockClear();
+  zoomOut.mockClear();
 });
 
 describe('MapView', () => {
@@ -103,5 +109,12 @@ describe('MapView', () => {
 
     fireEvent.click(screen.getByTestId('marker'));
     expect(useTripStore.getState().selectedId).toBeNull();
+  });
+
+  it('renders the orientation ball and zoom controls', () => {
+    renderWithProviders(<MapView />);
+    expect(screen.getByRole('img', { name: /bearing and pitch/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Zoom in' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Zoom out' })).toBeInTheDocument();
   });
 });

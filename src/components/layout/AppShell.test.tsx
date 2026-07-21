@@ -16,14 +16,16 @@ vi.mock('../../utils/fileTransfer', async (importOriginal) => {
 vi.mock('react-map-gl/maplibre', () => ({
   __esModule: true,
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="map">{children}</div>,
-  NavigationControl: () => null,
+  AttributionControl: () => null,
   Source: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   Layer: () => null,
   Marker: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <div onClick={onClick}>{children}</div>
   ),
   Popup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  useMap: () => ({ current: { easeTo: vi.fn() } }),
+  useMap: () => ({
+    current: { easeTo: vi.fn(), jumpTo: vi.fn(), zoomIn: vi.fn(), zoomOut: vi.fn() },
+  }),
 }));
 vi.mock('maplibre-gl', () => ({ __esModule: true, default: {} }));
 
