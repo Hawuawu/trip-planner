@@ -46,6 +46,36 @@ describe('TripMembersDialog', () => {
     expect(screen.getByText('You')).toBeInTheDocument();
   });
 
+  it('shows a Pending chip for an invited member who has not yet opened the trip', () => {
+    renderDialog();
+    expect(screen.getByText('Pending')).toBeInTheDocument();
+  });
+
+  it('shows a Joined chip once the member has opened the trip (joinedAt set)', () => {
+    renderDialog({
+      trip: {
+        ...OWNED_TRIP,
+        memberProfiles: {
+          ...OWNED_TRIP.memberProfiles,
+          'member-uid': {
+            email: 'member@example.com',
+            displayName: 'Member Person',
+            joinedAt: '2026-07-10T00:00:00.000Z',
+          },
+        },
+      },
+    });
+    expect(screen.getByText('Joined')).toBeInTheDocument();
+    expect(screen.queryByText('Pending')).not.toBeInTheDocument();
+  });
+
+  it('does not show a Pending/Joined chip on the owner row', () => {
+    renderDialog();
+    const ownerRow = screen.getByText('owner@example.com').closest('li');
+    expect(ownerRow).not.toBeNull();
+    expect(ownerRow!.textContent).not.toMatch(/Pending|Joined/);
+  });
+
   it('falls back to display name when a member has no email', () => {
     renderDialog({
       trip: {

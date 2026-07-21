@@ -35,6 +35,13 @@ const RULES_PATH = resolve(__dirname, '../../firestore.rules');
 
 let testEnv: RulesTestEnvironment;
 
+// Every trip rule additionally requires the appAccess custom claim (stamped
+// at sign-in by the stampAppAccess blocking function; see #35). This helper
+// models an approved, signed-in user; use authenticatedContext directly (no
+// claims) to model a signed-in but unapproved account.
+const approvedDb = (uid: string) =>
+  testEnv.authenticatedContext(uid, { appAccess: true }).firestore();
+
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -81,7 +88,7 @@ describe('Firestore CRUD (rules disabled — data layer shape)', () => {
     const TRIP_ID = 'trip-crud-1';
     await seedTrip(TRIP_ID, ['user-a']);
 
-    const db = testEnv.authenticatedContext('user-a').firestore();
+    const db = approvedDb('user-a');
 
     const checkpointRef = await db
       .collection('trips')
@@ -110,7 +117,7 @@ describe('Firestore CRUD (rules disabled — data layer shape)', () => {
     const TRIP_ID = 'trip-crud-2';
     await seedTrip(TRIP_ID, ['user-b']);
 
-    const db = testEnv.authenticatedContext('user-b').firestore();
+    const db = approvedDb('user-b');
     const date = new Date('2026-10-01T00:00:00Z');
 
     const ref = await db
@@ -153,12 +160,12 @@ describe('Security rules — trips/{tripId}', () => {
   });
 
   it('member can read their trip', async () => {
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     await assertSucceeds(db.collection('trips').doc(TRIP_ID).get());
   });
 
   it('non-member CANNOT read a trip they are not in', async () => {
-    const db = testEnv.authenticatedContext(OUTSIDER_UID).firestore();
+    const db = approvedDb(OUTSIDER_UID);
     await assertFails(db.collection('trips').doc(TRIP_ID).get());
   });
 
@@ -172,49 +179,49 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
   it('owner CAN rename their own trip', async () => {
     const TRIP_ID = 'trip-owner-rename';
     await seedTrip(TRIP_ID, ['owner-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    const db = approvedDb('owner-uid');
     await assertSucceeds(db.collection('trips').doc(TRIP_ID).update({ name: 'Renamed Trip' }));
   });
 
   it('non-owner member CANNOT rename a trip they do not own', async () => {
     const TRIP_ID = 'trip-non-owner-rename';
     await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('member-uid').firestore();
+    const db = approvedDb('member-uid');
     await assertFails(db.collection('trips').doc(TRIP_ID).update({ name: 'Hijacked' }));
   });
 
   it('any member CAN rename a legacy trip with no ownerId', async () => {
     const TRIP_ID = 'trip-legacy-rename';
     await seedTrip(TRIP_ID, ['member-uid']);
-    const db = testEnv.authenticatedContext('member-uid').firestore();
+    const db = approvedDb('member-uid');
     await assertSucceeds(db.collection('trips').doc(TRIP_ID).update({ name: 'Legacy Renamed' }));
   });
 
   it('owner CAN delete their own trip', async () => {
     const TRIP_ID = 'trip-owner-delete';
     await seedTrip(TRIP_ID, ['owner-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    const db = approvedDb('owner-uid');
     await assertSucceeds(db.collection('trips').doc(TRIP_ID).delete());
   });
 
   it('non-owner member CANNOT delete a trip they do not own', async () => {
     const TRIP_ID = 'trip-non-owner-delete';
     await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('member-uid').firestore();
+    const db = approvedDb('member-uid');
     await assertFails(db.collection('trips').doc(TRIP_ID).delete());
   });
 
   it('any member CAN delete a legacy trip with no ownerId', async () => {
     const TRIP_ID = 'trip-legacy-delete';
     await seedTrip(TRIP_ID, ['member-uid']);
-    const db = testEnv.authenticatedContext('member-uid').firestore();
+    const db = approvedDb('member-uid');
     await assertSucceeds(db.collection('trips').doc(TRIP_ID).delete());
   });
 
   it('owner CAN remove a non-owner member', async () => {
     const TRIP_ID = 'trip-owner-removes-member';
     await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    const db = approvedDb('owner-uid');
     await assertSucceeds(
       db
         .collection('trips')
@@ -226,7 +233,7 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
   it('non-owner member CANNOT remove another member', async () => {
     const TRIP_ID = 'trip-non-owner-removes-member';
     await seedTrip(TRIP_ID, ['owner-uid', 'member-uid', 'member2-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('member-uid').firestore();
+    const db = approvedDb('member-uid');
     await assertFails(
       db
         .collection('trips')
@@ -238,7 +245,7 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
   it('non-owner member CAN remove themselves (leave)', async () => {
     const TRIP_ID = 'trip-member-leaves';
     await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('member-uid').firestore();
+    const db = approvedDb('member-uid');
     await assertSucceeds(
       db
         .collection('trips')
@@ -250,14 +257,14 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
   it("owner's own uid CANNOT be removed while other members remain (owner can't leave/be removed)", async () => {
     const TRIP_ID = 'trip-owner-cannot-leave';
     await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
-    const ownerDb = testEnv.authenticatedContext('owner-uid').firestore();
+    const ownerDb = approvedDb('owner-uid');
     await assertFails(
       ownerDb
         .collection('trips')
         .doc(TRIP_ID)
         .update({ memberIds: ['member-uid'] })
     );
-    const memberDb = testEnv.authenticatedContext('member-uid').firestore();
+    const memberDb = approvedDb('member-uid');
     await assertFails(
       memberDb
         .collection('trips')
@@ -269,7 +276,7 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
   it('a client CANNOT shrink memberIds by more than one at once', async () => {
     const TRIP_ID = 'trip-shrink-multiple';
     await seedTrip(TRIP_ID, ['owner-uid', 'member-uid', 'member2-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    const db = approvedDb('owner-uid');
     await assertFails(
       db
         .collection('trips')
@@ -281,7 +288,7 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
   it('a client CANNOT shrink and add a uid in the same update', async () => {
     const TRIP_ID = 'trip-shrink-and-add';
     await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    const db = approvedDb('owner-uid');
     await assertFails(
       db
         .collection('trips')
@@ -293,7 +300,7 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
   it('a member CAN self-heal their own memberProfiles entry (no memberIds change)', async () => {
     const TRIP_ID = 'trip-self-heal-profile';
     await seedTrip(TRIP_ID, ['owner-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    const db = approvedDb('owner-uid');
     await assertSucceeds(
       db
         .collection('trips')
@@ -307,7 +314,7 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
   it('a client CANNOT write a memberProfiles entry for a different uid (invite requires the Cloud Function)', async () => {
     const TRIP_ID = 'trip-add-profile-for-other';
     await seedTrip(TRIP_ID, ['owner-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    const db = approvedDb('owner-uid');
     await assertFails(
       db
         .collection('trips')
@@ -330,7 +337,7 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
           memberProfiles: { 'member-uid': { email: 'member@example.com', displayName: null } },
         });
     });
-    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    const db = approvedDb('owner-uid');
     await assertFails(
       db
         .collection('trips')
@@ -347,7 +354,7 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
   it('a client CANNOT add a new uid directly to memberIds', async () => {
     const TRIP_ID = 'trip-add-member-directly';
     await seedTrip(TRIP_ID, ['owner-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    const db = approvedDb('owner-uid');
     await assertFails(
       db
         .collection('trips')
@@ -359,7 +366,7 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
   it('a client CANNOT empty memberIds entirely', async () => {
     const TRIP_ID = 'trip-empty-members';
     await seedTrip(TRIP_ID, ['owner-uid'], 'owner-uid');
-    const db = testEnv.authenticatedContext('owner-uid').firestore();
+    const db = approvedDb('owner-uid');
     await assertFails(db.collection('trips').doc(TRIP_ID).update({ memberIds: [] }));
   });
 });
@@ -389,14 +396,14 @@ describe('Security rules — trips/{tripId}/checkpoints', () => {
   });
 
   it('member CAN read checkpoints', async () => {
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     await assertSucceeds(
       db.collection('trips').doc(TRIP_ID).collection('checkpoints').doc('cp-1').get()
     );
   });
 
   it('member CAN write a checkpoint', async () => {
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     await assertSucceeds(
       db.collection('trips').doc(TRIP_ID).collection('checkpoints').add({
         type: 'poi',
@@ -408,7 +415,7 @@ describe('Security rules — trips/{tripId}/checkpoints', () => {
   });
 
   it('non-member CANNOT read checkpoints', async () => {
-    const db = testEnv.authenticatedContext(OUTSIDER_UID).firestore();
+    const db = approvedDb(OUTSIDER_UID);
     await assertFails(
       db.collection('trips').doc(TRIP_ID).collection('checkpoints').doc('cp-1').get()
     );
@@ -418,6 +425,24 @@ describe('Security rules — trips/{tripId}/checkpoints', () => {
     const db = testEnv.unauthenticatedContext().firestore();
     await assertFails(
       db.collection('trips').doc(TRIP_ID).collection('checkpoints').doc('cp-1').get()
+    );
+  });
+
+  it('a member WITHOUT the appAccess claim CANNOT read the trip, its checkpoints, or create trips', async () => {
+    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    await assertFails(db.collection('trips').doc(TRIP_ID).get());
+    await assertFails(
+      db.collection('trips').doc(TRIP_ID).collection('checkpoints').doc('cp-1').get()
+    );
+    await assertFails(
+      db
+        .collection('trips')
+        .doc('unapproved-new-trip')
+        .set({
+          name: 'Sneaky trip',
+          dateRange: { start: '2026-01-01', end: '2026-01-02' },
+          memberIds: [MEMBER_UID],
+        })
     );
   });
 });
@@ -444,14 +469,14 @@ describe('Security rules — trips/{tripId}/alternatives', () => {
   });
 
   it('member CAN read alternatives', async () => {
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     await assertSucceeds(
       db.collection('trips').doc(TRIP_ID).collection('alternatives').doc('alt-1').get()
     );
   });
 
   it('member CAN write alternatives', async () => {
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     await assertSucceeds(
       db
         .collection('trips')
@@ -462,7 +487,7 @@ describe('Security rules — trips/{tripId}/alternatives', () => {
   });
 
   it('non-member CANNOT read alternatives', async () => {
-    const db = testEnv.authenticatedContext(OUTSIDER_UID).firestore();
+    const db = approvedDb(OUTSIDER_UID);
     await assertFails(
       db.collection('trips').doc(TRIP_ID).collection('alternatives').doc('alt-1').get()
     );
@@ -492,14 +517,14 @@ describe('Security rules — trips/{tripId}/bookings', () => {
   });
 
   it('member CAN read bookings', async () => {
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     await assertSucceeds(
       db.collection('trips').doc(TRIP_ID).collection('bookings').doc('booking-1').get()
     );
   });
 
   it('member CAN write bookings', async () => {
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     await assertSucceeds(
       db.collection('trips').doc(TRIP_ID).collection('bookings').add({
         provider: 'JR Pass',
@@ -509,7 +534,7 @@ describe('Security rules — trips/{tripId}/bookings', () => {
   });
 
   it('non-member CANNOT read bookings', async () => {
-    const db = testEnv.authenticatedContext(OUTSIDER_UID).firestore();
+    const db = approvedDb(OUTSIDER_UID);
     await assertFails(
       db.collection('trips').doc(TRIP_ID).collection('bookings').doc('booking-1').get()
     );
@@ -542,28 +567,28 @@ describe('Security rules — trips/{tripId}/activityLog', () => {
   });
 
   it('owner CAN read the activity log', async () => {
-    const db = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const db = approvedDb(OWNER_UID);
     await assertSucceeds(
       db.collection('trips').doc(TRIP_ID).collection('activityLog').doc('e1').get()
     );
   });
 
   it('non-owner member CANNOT read the activity log', async () => {
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     await assertFails(
       db.collection('trips').doc(TRIP_ID).collection('activityLog').doc('e1').get()
     );
   });
 
   it('outsider CANNOT read the activity log', async () => {
-    const db = testEnv.authenticatedContext(OUTSIDER_UID).firestore();
+    const db = approvedDb(OUTSIDER_UID);
     await assertFails(
       db.collection('trips').doc(TRIP_ID).collection('activityLog').doc('e1').get()
     );
   });
 
   it('a member CAN create a self-attributed activity log entry', async () => {
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     await assertSucceeds(
       db.collection('trips').doc(TRIP_ID).collection('activityLog').add({
         type: 'checkpoint_updated',
@@ -575,7 +600,7 @@ describe('Security rules — trips/{tripId}/activityLog', () => {
   });
 
   it('a member CANNOT create an activity log entry attributed to another uid (spoofing)', async () => {
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     await assertFails(
       db.collection('trips').doc(TRIP_ID).collection('activityLog').add({
         type: 'checkpoint_updated',
@@ -587,7 +612,7 @@ describe('Security rules — trips/{tripId}/activityLog', () => {
   });
 
   it('the log is append-only — no one can update or delete an entry', async () => {
-    const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const ownerDb = approvedDb(OWNER_UID);
     await assertFails(
       ownerDb
         .collection('trips')
@@ -611,7 +636,7 @@ describe('Batch writes — trips/{tripId}/checkpoints and alternatives', () => {
     const MEMBER_UID = 'member-batch-cp';
     await seedTrip(TRIP_ID, [MEMBER_UID]);
 
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     const cpCollection = db.collection('trips').doc(TRIP_ID).collection('checkpoints');
     const ref1 = cpCollection.doc();
     const ref2 = cpCollection.doc();
@@ -640,7 +665,7 @@ describe('Batch writes — trips/{tripId}/checkpoints and alternatives', () => {
     const MEMBER_UID = 'member-batch-alt';
     await seedTrip(TRIP_ID, [MEMBER_UID]);
 
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     const altCollection = db.collection('trips').doc(TRIP_ID).collection('alternatives');
     const ref1 = altCollection.doc();
     const ref2 = altCollection.doc();
@@ -661,7 +686,7 @@ describe('Batch writes — trips/{tripId}/checkpoints and alternatives', () => {
     await seedTrip(OWN_TRIP_ID, [MEMBER_UID]);
     await seedTrip(OTHER_TRIP_ID, ['someone-else']);
 
-    const db = testEnv.authenticatedContext(MEMBER_UID).firestore();
+    const db = approvedDb(MEMBER_UID);
     const ownCollection = db.collection('trips').doc(OWN_TRIP_ID).collection('checkpoints');
     const otherCollection = db.collection('trips').doc(OTHER_TRIP_ID).collection('checkpoints');
     const ownRef = ownCollection.doc();

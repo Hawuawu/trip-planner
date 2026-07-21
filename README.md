@@ -75,21 +75,21 @@ Security rules enforce that only `trips/{tripId}.memberIds` members can read or 
 
 ## Inviting people
 
-### To the app (admin only)
+### To the app (admin approves)
 
-Sign-in is invite-only: an Auth blocking function rejects any account whose email isn't in the `allowedUsers` allowlist, so uninvited accounts never get a session. The app admin (a fixed email, see `src/config/admin.ts`) manages access from the **App access** button in the trip-selector toolbar:
+App access is approval-based. Anyone can sign in with Google, but an Auth blocking function stamps every sign-in with `appAccess`/`admin` custom claims read from the person's `allowedUsers` doc — `appAccess: true` only for emails in that collection, `admin: true` only if their doc's `role` field is `'admin'`. Admin isn't a hardcoded identity anywhere in the code; it's just data, so promoting or demoting someone is a Firestore field, not a deploy. Both the UI and the Firestore security rules require the `appAccess` claim, so an unapproved account can't see or touch any data. Signing in _is_ the access request:
 
-1. Open **App access → Invites → New invite link**, copy the generated link, and send it however you like (there is no automated email sending).
-2. The invitee opens the link, enters the email address they'll sign in with, and accepts — the single-use token is bound to that email and the email is allowlisted.
-3. They then sign in with Google as normal.
+1. Tell the person to open the app and sign in with Google once. They'll land on a "waiting for approval" screen, and their request appears for an admin automatically.
+2. An admin opens **App access → Requests** from the trip-selector toolbar and clicks approve (or deny).
+3. The person hits **Check again** on their waiting screen (or just comes back later) — their access claim refreshes and the app opens up. No second sign-in needed.
 
-The **People** tab lists everyone with access and lets the admin revoke anyone (future sign-ins are rejected; their current session lapses within about an hour; their trips and memberships are kept in case they're re-invited). The **Activity** tab is an audit trail: invites created/redeemed/cancelled, revocations, and rejected sign-in attempts.
+The **People** tab lists everyone with access. Each row has a make-admin/remove-admin toggle and a revoke button — any admin can promote or demote any other; the server refuses to demote or revoke the last remaining admin, so the app can never end up unmanageable. Revoking someone: future sign-ins lose the claim, their current session lapses within about an hour, and their trips and memberships are kept in case they're re-approved (revoked people reappear in the Requests tab, and re-approval always starts them back at plain member — admin has to be re-granted deliberately). The **Activity** tab is an audit trail: access requested/approved/denied/revoked, admin made/removed.
 
-> **One-time bootstrap:** `allowedUsers` starts empty, and deploying the blocking function before seeding it would lock out every account, admin included. Before the first deploy of `functions/`, add the existing accounts' emails as `allowedUsers/{email}` docs directly in the Firebase Console's Firestore tab.
+> **One-time bootstrap:** `allowedUsers` starts empty. Before the first deploy of `functions/`, seed at least one admin directly in the Firebase Console's Firestore tab: create `allowedUsers/{email}` with `{ invitedVia: 'seed', role: 'admin', createdAt: <a timestamp> }` for your own account (and plain `role: 'member'` docs for any existing collaborators) — otherwise nobody lands with permission to approve anyone, including themselves. Everyone must also sign in once _after_ the deploy for their access claims to be stamped.
 
 ### To a trip (any trip owner)
 
-Trip sharing is separate from app access: the trip's owner opens the trip's members dialog and invites a companion by email, which gives them full edit access to that trip. The person must already have app access (see above) and have signed in once. See [WORKFLOW.md](WORKFLOW.md#4-sharing-with-a-travel-companion) for the full workflow.
+Trip sharing is separate from app access: the trip's owner opens the trip's members dialog and invites a companion by email, which gives them full edit access to that trip. The person must already be approved for the app (see above) and have signed in once. See [WORKFLOW.md](WORKFLOW.md#4-sharing-with-a-travel-companion) for the full workflow.
 
 ## Data model
 

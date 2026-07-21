@@ -9,12 +9,13 @@ function makeMockAuthService(overrides: Partial<AuthService> = {}): AuthService 
     onAuthStateChanged: vi.fn(),
     signInWithGoogle: vi.fn().mockResolvedValue(undefined),
     signOut: vi.fn().mockResolvedValue(undefined),
-    createInvite: vi.fn().mockResolvedValue('token-1'),
-    redeemInvite: vi.fn().mockResolvedValue(undefined),
-    cancelInvite: vi.fn().mockResolvedValue(undefined),
+    refreshAccess: vi.fn().mockResolvedValue(null),
+    approveAccess: vi.fn().mockResolvedValue(undefined),
+    denyAccess: vi.fn().mockResolvedValue(undefined),
     revokeAccess: vi.fn().mockResolvedValue(undefined),
+    setAdminRole: vi.fn().mockResolvedValue(undefined),
     subscribeToAllowedUsers: vi.fn().mockReturnValue(() => {}),
-    subscribeToInvites: vi.fn().mockReturnValue(() => {}),
+    subscribeToAccessRequests: vi.fn().mockReturnValue(() => {}),
     subscribeToAppActivity: vi.fn().mockReturnValue(() => {}),
     ...overrides,
   };
@@ -109,20 +110,51 @@ describe('authStore — sign-in error handling', () => {
   });
 });
 
-describe('authStore — app invite actions', () => {
-  it('delegates createInvite/redeemInvite/cancelInvite/revokeAccess to the service', async () => {
+describe('authStore — app access actions', () => {
+  it('delegates approveAccess/denyAccess/revokeAccess to the service', async () => {
     const service = makeMockAuthService();
     useAuthStore.getState().init(service);
 
-    await expect(useAuthStore.getState().createInvite()).resolves.toBe('token-1');
-    await useAuthStore.getState().redeemInvite('token-1', 'friend@example.com');
-    await useAuthStore.getState().cancelInvite('token-1');
+    await useAuthStore.getState().approveAccess('friend@example.com');
+    await useAuthStore.getState().denyAccess('stranger@example.com');
     await useAuthStore.getState().revokeAccess('friend@example.com');
 
-    expect(service.createInvite).toHaveBeenCalledTimes(1);
-    expect(service.redeemInvite).toHaveBeenCalledWith('token-1', 'friend@example.com');
-    expect(service.cancelInvite).toHaveBeenCalledWith('token-1');
+    expect(service.approveAccess).toHaveBeenCalledWith('friend@example.com');
+    expect(service.denyAccess).toHaveBeenCalledWith('stranger@example.com');
     expect(service.revokeAccess).toHaveBeenCalledWith('friend@example.com');
+  });
+
+  it('delegates setAdminRole to the service', async () => {
+    const service = makeMockAuthService();
+    useAuthStore.getState().init(service);
+
+    await useAuthStore.getState().setAdminRole('friend@example.com', true);
+    expect(service.setAdminRole).toHaveBeenCalledWith('friend@example.com', true);
+  });
+
+  it('refreshAccess updates the stored user with the refreshed claims', async () => {
+    const refreshed = {
+      uid: 'u1',
+      email: 'a@b.com',
+      displayName: 'A',
+      appAccess: true,
+    };
+    const service = makeMockAuthService({
+      refreshAccess: vi.fn().mockResolvedValue(refreshed),
+    });
+    useAuthStore.getState().init(service);
+
+    await useAuthStore.getState().refreshAccess();
+    expect(useAuthStore.getState().user).toEqual(refreshed);
+  });
+
+  it('refreshAccess leaves the user untouched when the service returns null', async () => {
+    const service = makeMockAuthService();
+    useAuthStore.getState().init(service);
+    useAuthStore.setState({ user: { uid: 'u1', email: null, displayName: null } });
+
+    await useAuthStore.getState().refreshAccess();
+    expect(useAuthStore.getState().user).toEqual({ uid: 'u1', email: null, displayName: null });
   });
 
   it('rethrows service failures for the caller to display', async () => {
@@ -134,7 +166,9 @@ describe('authStore — app invite actions', () => {
   });
 
   it('throws when there is no service (local mode)', async () => {
-    await expect(useAuthStore.getState().createInvite()).rejects.toThrow(/local mode/);
+    await expect(useAuthStore.getState().approveAccess('x@example.com')).rejects.toThrow(
+      /local mode/
+    );
   });
 });
 

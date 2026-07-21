@@ -1,13 +1,12 @@
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 
-// The single app admin: the only account allowed to create/cancel app invites
-// and revoke app access. Mirrored in firestore.rules (isAppAdmin) and
-// src/config/admin.ts (UI gating) — keep all three in sync.
-export const ADMIN_EMAIL = 'hawuawu@gmail.com';
-
+// Admin status is data-driven, not a hardcoded identity: it comes from the
+// `role` field on a user's allowedUsers doc, stamped into the `admin` custom
+// claim at sign-in (see authGate.ts's stampAppAccess). Promoting/demoting an
+// admin is the setAdminRole callable in appAccess.ts — a Firestore edit plus
+// a claim update, not a code change. This just checks the claim.
 export function assertIsAdmin(request: CallableRequest<unknown>): void {
-  const email = request.auth?.token?.email;
-  if (typeof email !== 'string' || email.toLowerCase() !== ADMIN_EMAIL) {
-    throw new HttpsError('permission-denied', 'Only the app admin can perform this action.');
+  if (request.auth?.token?.admin !== true) {
+    throw new HttpsError('permission-denied', 'Only an app admin can perform this action.');
   }
 }
