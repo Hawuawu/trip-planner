@@ -1,9 +1,10 @@
 // Run with: npm run test:firebase (requires Firebase emulators)
 //
-// Security-rules regression tests for the app-invite-gate collections (#35):
-// allowedUsers, invites, and appActivityLog. These are admin-read-only from
-// the client; every mutation happens through the Admin SDK inside Cloud
-// Functions, so ALL direct writes must be denied — even the admin's.
+// Security-rules regression tests for the app access-control collections
+// (#35): allowedUsers, accessRequests, and appActivityLog. These are
+// admin-read-only from the client; every mutation happens through the Admin
+// SDK inside Cloud Functions, so ALL direct writes must be denied — even the
+// admin's.
 
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -23,7 +24,7 @@ import { ADMIN_EMAIL } from '../config/admin';
 const PROJECT_ID = 'demo-trip-planner-allowlist-test';
 const RULES_PATH = resolve(__dirname, '../../firestore.rules');
 
-const COLLECTIONS = ['allowedUsers', 'invites', 'appActivityLog'] as const;
+const COLLECTIONS = ['allowedUsers', 'accessRequests', 'appActivityLog'] as const;
 
 let testEnv: RulesTestEnvironment;
 

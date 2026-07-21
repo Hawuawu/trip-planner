@@ -500,12 +500,12 @@ const fakeAuthService: AuthService = {
   onAuthStateChanged: () => () => {},
   signInWithGoogle: async () => {},
   signOut: async () => {},
-  createInvite: async () => 'token-1',
-  redeemInvite: async () => {},
-  cancelInvite: async () => {},
+  refreshAccess: async () => null,
+  approveAccess: async () => {},
+  denyAccess: async () => {},
   revokeAccess: async () => {},
   subscribeToAllowedUsers: () => () => {},
-  subscribeToInvites: () => () => {},
+  subscribeToAccessRequests: () => () => {},
   subscribeToAppActivity: () => () => {},
 };
 

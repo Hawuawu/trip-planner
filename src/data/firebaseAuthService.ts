@@ -5,6 +5,7 @@ import {
   signInWithPopup,
   signOut as fbSignOut,
   onAuthStateChanged as fbOnAuthStateChanged,
+  type User,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -16,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import type { AuthService } from './AuthService';
-import type { AuthUser, AllowedUser, AppInvite, AppActivityEntry } from '../types';
+import type { AuthUser, AllowedUser, AccessRequest, AppActivityEntry } from '../types';
 
 const FUNCTIONS_REGION = 'europe-west1';
 
@@ -42,6 +43,14 @@ function toAuthUser(u: {
   return { uid: u.uid, email: u.email, displayName: u.displayName };
 }
 
+// Reads the appAccess custom claim (stamped by the stampAppAccess blocking
+// function at sign-in) off the ID token. forceRefresh mints a fresh token so
+// a claim the admin just granted is picked up without re-signing-in.
+async function toAuthUserWithClaims(u: User, forceRefresh = false): Promise<AuthUser> {
+  const { claims } = await u.getIdTokenResult(forceRefresh);
+  return { ...toAuthUser(u), appAccess: claims.appAccess === true };
+}
+
 function toIso(val: unknown): string {
   if (val instanceof Timestamp) return val.toDate().toISOString();
   if (typeof val === 'string') return val;
@@ -58,7 +67,13 @@ export class FirebaseAuthService implements AuthService {
   }
 
   onAuthStateChanged(cb: (user: AuthUser | null) => void): () => void {
-    return fbOnAuthStateChanged(this.auth, (u) => cb(u ? toAuthUser(u) : null));
+    return fbOnAuthStateChanged(this.auth, (u) => {
+      if (!u) {
+        cb(null);
+        return;
+      }
+      void toAuthUserWithClaims(u).then(cb);
+    });
   }
 
   async signInWithGoogle(): Promise<void> {
@@ -69,25 +84,19 @@ export class FirebaseAuthService implements AuthService {
     await fbSignOut(this.auth);
   }
 
-  async createInvite(): Promise<string> {
-    const callable = httpsCallable<Record<string, never>, { token: string }>(
-      this.functions,
-      'createAppInvite'
-    );
-    return (await callable({})).data.token;
+  async refreshAccess(): Promise<AuthUser | null> {
+    const u = this.auth.currentUser;
+    return u ? toAuthUserWithClaims(u, true) : null;
   }
 
-  async redeemInvite(token: string, email: string): Promise<void> {
-    const callable = httpsCallable<{ token: string; email: string }, void>(
-      this.functions,
-      'redeemAppInvite'
-    );
-    await callable({ token, email });
+  async approveAccess(email: string): Promise<void> {
+    const callable = httpsCallable<{ email: string }, void>(this.functions, 'approveAccess');
+    await callable({ email });
   }
 
-  async cancelInvite(token: string): Promise<void> {
-    const callable = httpsCallable<{ token: string }, void>(this.functions, 'cancelAppInvite');
-    await callable({ token });
+  async denyAccess(email: string): Promise<void> {
+    const callable = httpsCallable<{ email: string }, void>(this.functions, 'denyAccess');
+    await callable({ email });
   }
 
   async revokeAccess(email: string): Promise<void> {
@@ -108,15 +117,16 @@ export class FirebaseAuthService implements AuthService {
     });
   }
 
-  subscribeToInvites(cb: (invites: AppInvite[]) => void): () => void {
-    const q = query(collection(getFirestore(), 'invites'), orderBy('createdAt', 'desc'));
+  subscribeToAccessRequests(cb: (requests: AccessRequest[]) => void): () => void {
+    const q = query(collection(getFirestore(), 'accessRequests'), orderBy('lastSeenAt', 'desc'));
     return onSnapshot(q, (snap) => {
       cb(
         snap.docs.map((d) => ({
-          token: d.id,
-          status: d.data().status,
-          redeemedEmail: d.data().redeemedEmail ?? null,
-          createdAt: toIso(d.data().createdAt),
+          email: d.id,
+          displayName: d.data().displayName ?? null,
+          status: d.data().status ?? 'pending',
+          firstSeenAt: toIso(d.data().firstSeenAt),
+          lastSeenAt: toIso(d.data().lastSeenAt),
         }))
       );
     });
@@ -130,7 +140,6 @@ export class FirebaseAuthService implements AuthService {
           id: d.id,
           type: d.data().type,
           email: d.data().email ?? null,
-          token: d.data().token ?? null,
           actor: d.data().actor ?? 'system',
           createdAt: toIso(d.data().createdAt),
         }))

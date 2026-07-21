@@ -54,12 +54,12 @@ think it through.
    owner can invite or remove people — this is the one place the app has an
    owner/member distinction; it governs membership only, never content.
 2. The invitee must have access to the app itself before trip sharing can
-   work: sign-in is invite-only, gated by an app-wide allowlist that only
-   the app admin can add to, via a single-use invite link (see the
-   "Inviting people" section of the README). Once invited to the app, they
-   must also have signed in at least once (with Google) before they can be
-   invited to a trip — the owner is told to ask them to sign in once, then
-   try the invite again, if it fails.
+   work: app access is approval-based — they sign in with Google once,
+   which files an access request, and the app admin approves it from the
+   App access dialog (see the "Inviting people" section of the README).
+   That first sign-in also registers their account, so once approved they
+   can be invited to a trip — the owner is told to ask them to sign in
+   once, then try the invite again, if it fails.
 3. Once invited, the friend gets full read/edit access to the same trip —
    they see the same timeline and map, not a separate copy. There is no
    read-only or reduced-access role: every member can add, edit, or remove
