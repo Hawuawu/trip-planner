@@ -9,33 +9,35 @@ Build a trip's timeline before departure and edit it freely during travel —
 flights, layovers, hotel stays, trains, points of interest — visualized as a
 narrow checkpoint timeline paired with a map.
 
-This repo is currently empty (just `LICENSE` and a placeholder `README.md`).
-If no `package.json` exists yet, the first task is scaffolding per "Initial
-setup" below before anything else.
-
 ## Stack
 
 - Vite + React + TypeScript
 - Zustand for state
 - MUI (`@mui/material`, `@mui/lab` Timeline) for UI
 - Leaflet + OpenStreetMap for the map
-- Firebase: Firestore (data), Auth, Hosting
+- Firebase: Firestore (data), Auth (Google sign-in, approval-gated — see
+  `firestore.rules`'s `hasAppAccess()`), Hosting
 - Installable PWA (`vite-plugin-pwa`)
+
+## Repo structure
+
+`src/` is the web app (this `package.json`). Two sibling sub-projects are
+each their own independent Node package — own `package.json`, own
+dependency tree, not part of the root `npm install`/build:
+
+- `functions/` — Cloud Functions: the app-access blocking function, trip
+  invite/activity-log callables.
+- `mcp/` — MCP server: lets Claude read/edit trip data directly, signed in
+  as a real user via the Firebase client SDK. See `MCP.md` and
+  `mcp/README.md`.
 
 ## Architecture rule — always follow this
 
 **No component or store ever imports from `firebase/*` directly.** All data
-access goes through a `TripRepository` interface:
-
-```typescript
-interface TripRepository {
-  getTrip(tripId: string): Promise<Trip>;
-  subscribeToCheckpoints(tripId: string, cb: (c: Checkpoint[]) => void): () => void;
-  addCheckpoint(tripId: string, checkpoint: Checkpoint): Promise<void>;
-  updateCheckpoint(tripId: string, id: string, changes: Partial<Checkpoint>): Promise<void>;
-  deleteCheckpoint(tripId: string, id: string): Promise<void>;
-}
-```
+access goes through a `TripRepository` interface — see
+`src/data/TripRepository.ts` for the current, full method list (trips,
+checkpoints, alternatives, bookings, membership, activity log; it's grown
+well past a minimal CRUD shape, don't assume it from memory).
 
 `FirebaseTripRepository` (in `src/data/firebaseTripRepository.ts`) is the
 only file allowed to import Firestore/Firebase APIs. It converts Firestore
@@ -48,16 +50,25 @@ be swapped later without touching UI code — don't erode it by reaching for
 ## Data model (Firestore)
 
 ```
-trips/{tripId}                          — name, dateRange, memberIds: [uid]
+trips/{tripId}                          — name, dateRange, memberIds: [uid],
+                                           ownerId?, memberProfiles?
 trips/{tripId}/checkpoints/{id}         — type, name, startTime, endTime?,
                                            location?, notes?, linkedBookingId?
 trips/{tripId}/alternatives/{id}        — same shape as a POI checkpoint,
                                            not attached to the timeline
 trips/{tripId}/bookings/{id}            — provider, confirmationNumber, notes
+trips/{tripId}/activityLog/{id}         — owner-readable audit trail
+
+allowedUsers/{email}                    — app-access allowlist (#35)
+accessRequests/{email}                  — pending/approved/denied/revoked
+appActivityLog/{id}                     — admin-readable app-access audit trail
 ```
 
 `type` is one of: `flight | train | metro | hotel | poi | other`. A layover
 is just a checkpoint between two flight checkpoints, not a separate type.
+The bottom three collections back the approval-based app-access gate (see
+`firestore.rules`'s `hasAppAccess()`) — every trip operation requires the
+`appAccess` claim on top of `memberIds` membership, not just the latter.
 
 ## UI conventions
 
@@ -85,27 +96,12 @@ is just a checkpoint between two flight checkpoints, not a separate type.
   not add CRDT/merge logic — unnecessary at this scale (two people, mostly
   editing different checkpoints).
 
-## Initial setup (if `package.json` doesn't exist yet)
-
-1. `npm create vite@latest . -- --template react-ts`
-2. Add dependencies: `firebase`, `zustand`, `@mui/material`,
-   `@mui/icons-material`, `@mui/lab`, `@emotion/react`, `@emotion/styled`,
-   `react-leaflet`, `leaflet`, `vite-plugin-pwa`
-3. Set up the `TripRepository` interface and `FirebaseTripRepository`
-   before building any UI — the data layer comes first.
-4. Build the timeline (list + add/edit/delete, no styling) before the map
-   or responsive layout.
-
 ## Commands
 
-Once scaffolded:
 - `npm run dev` — local dev server
 - `npm run build` — production build
-- `npm run lint` — lint (add this script if not already present)
+- `npm run lint` — lint
+- `npm test` — unit tests (Vitest)
 
-## Not yet decided (don't assume an answer, ask if it matters)
-
-- Whether to build a shareable, npx-distributable MCP server, vs. keeping
-  the local MCP server (separate from this repo) personal-only.
-- Final hosting target — Firebase Hosting is the plan, but the repository
-  abstraction means this isn't locked in.
+`functions/` and `mcp/` have their own `npm install`/`npm run build` —
+see "Repo structure" above and each directory's own docs.
