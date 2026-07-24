@@ -6,12 +6,13 @@ A personal travel itinerary PWA — build a trip's timeline before departure and
 
 ## Documentation
 
-| File                       | Purpose                                                                 |
-| -------------------------- | ----------------------------------------------------------------------- |
-| [DESIGN.md](DESIGN.md)     | UX direction: layout, visual conventions, editing model, states         |
-| [WORKFLOW.md](WORKFLOW.md) | End-to-end user workflows: planning, sharing, travel, post-trip         |
-| [MCP.md](MCP.md)           | MCP server design: Claude ↔ trip data integration                       |
-| [CLAUDE.md](CLAUDE.md)     | Implementation spec: stack, architecture rules, data model, conventions |
+| File                           | Purpose                                                                 |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| [DESIGN.md](DESIGN.md)         | UX direction: layout, visual conventions, editing model, states         |
+| [WORKFLOW.md](WORKFLOW.md)     | End-to-end user workflows: planning, sharing, travel, post-trip         |
+| [MCP.md](MCP.md)               | MCP server design: Claude ↔ trip data integration                       |
+| [mcp/README.md](mcp/README.md) | MCP server setup: OAuth client, config, running it locally              |
+| [CLAUDE.md](CLAUDE.md)         | Implementation spec: stack, architecture rules, data model, conventions |
 
 ## Stack
 
@@ -23,6 +24,22 @@ A personal travel itinerary PWA — build a trip's timeline before departure and
 - **PWA** — `vite-plugin-pwa`
 
 Architecture rule: no component ever imports from `firebase/*` directly. All Firestore access goes through a `TripRepository` interface — see [CLAUDE.md](CLAUDE.md#architecture-rule--always-follow-this).
+
+## Project structure
+
+```
+src/         the web app (Vite + React) — see "Local development" below
+functions/   Cloud Functions (Node, own package.json) — the app-access gate's
+             blocking function, trip invites, activity logging
+mcp/         MCP server (Node, own package.json) — lets Claude read/edit
+             trip data directly; see mcp/README.md and MCP.md
+scripts/     tooling (e.g. the DAST scan run in CI)
+```
+
+`functions/` and `mcp/` are independent Node packages, each with their own
+`package.json`/dependency tree/build step — neither is part of the root
+`npm install` or the Vite build. Install and build each from inside its own
+directory.
 
 ## Running with Docker
 
@@ -67,11 +84,20 @@ npm run preview  # preview production build locally
 ## Firebase setup
 
 1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com).
-2. Enable **Firestore** and **Authentication** (Email/Password provider).
+2. Enable **Firestore** and **Authentication** (Google provider — sign-in is Google-only, see "Inviting people" below for the app-access model on top of it).
 3. Copy your web app config values into `.env` (see `.env.example`).
 4. Deploy Firestore security rules: `firebase deploy --only firestore:rules`.
+5. Install and deploy Cloud Functions — required for sign-in to work at all, since the app-access gate is enforced by a blocking function:
+   ```bash
+   cd functions
+   npm install
+   npm run build
+   cd ..
+   firebase deploy --only functions
+   ```
+   See the bootstrap note under "Inviting people" below — `allowedUsers` starts empty, so seed your own admin doc before anyone can sign in and get approved.
 
-Security rules enforce that only `trips/{tripId}.memberIds` members can read or write a trip's subcollections — see `firestore.rules`.
+Security rules enforce that only `trips/{tripId}.memberIds` members — and only accounts with the `appAccess` custom claim — can read or write a trip's subcollections. See `firestore.rules` and `functions/src/appAccess.ts`/`functions/src/authGate.ts`.
 
 ## Inviting people
 
@@ -94,17 +120,22 @@ Trip sharing is separate from app access: the trip's owner opens the trip's memb
 ## Data model
 
 ```
-trips/{tripId}                       — name, dateRange, memberIds
-trips/{tripId}/checkpoints/{id}      — type, name, startTime, endTime?, location?, notes?
+trips/{tripId}                       — name, dateRange, memberIds, ownerId?, memberProfiles?
+trips/{tripId}/checkpoints/{id}      — type, name, startTime, endTime?, location?, notes?, linkedBookingId?
 trips/{tripId}/alternatives/{id}     — same shape as a POI checkpoint, not on the timeline
 trips/{tripId}/bookings/{id}         — provider, confirmationNumber, notes
+trips/{tripId}/activityLog/{id}      — owner-readable audit trail for that trip
+
+allowedUsers/{email}                 — app-access allowlist (role: member | admin)
+accessRequests/{email}               — pending/approved/denied/revoked sign-in requests
+appActivityLog/{id}                  — admin-readable audit trail for app access itself
 ```
 
 Checkpoint types: `flight | train | metro | hotel | poi | other`
 
 ## MCP server
 
-Claude can read and edit checkpoints directly via a local MCP server. See [MCP.md](MCP.md) for design, auth model, and the roadmap toward a shareable `npx`-distributable version.
+Claude can read and edit trip data (checkpoints, alternatives, bookings) directly, signed in as you rather than through a shared credential. Lives at [`mcp/`](mcp/) — see [`mcp/README.md`](mcp/README.md) for setup and [MCP.md](MCP.md) for the full design (auth model, tool list, what's deliberately out of scope).
 
 ## License
 

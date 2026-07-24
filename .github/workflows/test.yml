@@ -17,6 +17,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      functions: ${{ steps.filter.outputs.functions }}
+      mcp: ${{ steps.filter.outputs.mcp }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            functions:
+              - 'functions/**'
+            mcp:
+              - 'mcp/**'
+
   unit-integration:
     name: Unit & integration tests
     runs-on: ubuntu-latest
@@ -75,6 +92,63 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npm run test:firebase
       - run: npm run test:functions
+
+  subprojects:
+    name: Build & lint sub-projects (functions, mcp)
+    needs: changes
+    if: needs.changes.outputs.functions == 'true' || needs.changes.outputs.mcp == 'true'
+    runs-on: ubuntu-latest
+    # functions/ and mcp/ are independent Node packages (own package.json,
+    # own lockfile) — not part of the root npm ci/build, so nothing else in
+    # this workflow touches them. functions/ already gets exercised via
+    # test:functions in e2e-firebase, but that runs against root-installed
+    # firebase-admin/firebase-functions rather than functions/'s own
+    # dependency tree, so it wouldn't catch e.g. a functions-only dependency
+    # going missing. mcp/ has no test coverage yet at all (see MCP.md's open
+    # questions) — build + lint is the floor until that exists.
+    #
+    # SAST here reuses ./.github/actions/sast (a small composite action) and
+    # the shared eslint.node-subproject.cjs config at the repo root — the
+    # same two files any future sub-project would reuse: give it its own
+    # .eslintrc.cjs requiring the shared config, a `lint` script, and one
+    # `uses: ./.github/actions/sast` step pointing at its directory.
+    #
+    # Gated on the `changes` job so it only runs (and only touches whichever
+    # side actually changed) instead of on every push/PR regardless of diff.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            functions/package-lock.json
+            mcp/package-lock.json
+
+      - name: functions — install & build
+        if: needs.changes.outputs.functions == 'true'
+        run: |
+          npm ci --prefix functions
+          npm run build --prefix functions
+
+      - name: functions — SAST
+        if: needs.changes.outputs.functions == 'true'
+        uses: ./.github/actions/sast
+        with:
+          working-directory: functions
+
+      - name: mcp — install & build
+        if: needs.changes.outputs.mcp == 'true'
+        run: |
+          npm ci --prefix mcp
+          npm run build --prefix mcp
+
+      - name: mcp — SAST
+        if: needs.changes.outputs.mcp == 'true'
+        uses: ./.github/actions/sast
+        with:
+          working-directory: mcp
 
   security:
     name: Security scans (SAST + DAST)

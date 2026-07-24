@@ -7,112 +7,179 @@ read and edit trip checkpoints directly.
 
 Both the web app and the MCP server should share one source of truth for
 data access. The MCP server is not a separate integration bolted on the
-side — it's another client of the same `TripRepository` interface the web
-app uses (see `CLAUDE.md`). This means checkpoint logic, validation, and
-(for the shareable version below) permission rules live in one place, not
-duplicated between the app and the MCP tools.
+side — it's another client of the same `TripRepository` data model the web
+app uses (see `CLAUDE.md`), just with its own one-shot-request-flavored
+repository implementation rather than the web app's subscription-based one.
 
-## What's already built: the local, personal version
+## Status
 
-A local stdio MCP server, scaffolded in an earlier session, covering:
+Built, at `mcp/` in this repo — its own `package.json`/dependency tree/
+`npm publish` lifecycle, same relationship `functions/` has to the rest of
+`trip-planner`, not part of the Vite build. (Briefly scaffolded as a
+separate `japan-companion-mcp` repository first; moved in-repo per a later
+decision — it was never pushed to GitHub, so nothing was lost in the
+move, just superseded.) `tsc` builds clean, `npm pack` + `npx` from the
+tarball verified. **Not yet verified end-to-end** — needs a real Google
+OAuth client and a signed-in, approved account to exercise against; do
+that before publishing to npm.
 
-**Tools:**
-- `list_checkpoints(tripId)`
-- `get_checkpoint(tripId, checkpointId)`
-- `add_checkpoint(tripId, checkpoint)`
-- `update_checkpoint(tripId, checkpointId, changes)`
-- `delete_checkpoint(tripId, checkpointId)`
-- `list_alternatives(tripId)`
-- `add_alternative(tripId, alternative)`
+This supersedes an earlier local, personal-only version of this server
+(admin-key auth, never distributed) that issue #22 flagged as
+`GOOGLE_APPLICATION_CREDENTIALS`-based and unsafe to share — that version
+no longer exists; `mcp/` fully replaces it, per the original decision to
+have one codebase rather than an admin version and a client-auth version
+side by side.
 
-**Auth model:** a Firebase Admin SDK service account key, loaded via
-`GOOGLE_APPLICATION_CREDENTIALS`. This has full admin access to Firestore —
-it bypasses the app's normal security rules entirely.
+## Authentication
 
-**Distribution:** none — it's a local folder, registered manually in
-`claude_desktop_config.json` with an absolute path to `src/index.js` and to
-the service account key on disk.
+**Per-user OAuth, not a shared admin key.** The server authenticates as an
+actual Google-signed-in user via the Firebase **client** SDK
+(`FirebaseClientTripRepository`, not `firebase-admin`), so every call is
+subject to the same Firestore security rules the web app enforces — a user
+only sees trips where their uid is in `memberIds`, and (see below) only if
+their account has been approved. This is the same trust boundary the web
+app already relies on; the MCP server is just another authenticated
+client, no new security rules needed.
 
-**This version must never be published or shared as-is.** A service
-account key is an admin credential; putting it in a package anyone can
-`npx` would hand out full read/write access to all trip data to anyone who
-installs it.
+**Sign-in flow: OAuth 2.0 device authorization grant (RFC 8628)** — the
+same flow `gcloud auth login --no-launch-browser` uses. Chosen over a
+localhost-loopback-listener flow (the originally planned design, still
+functionally equivalent — both are per-user OAuth against a Google Cloud
+OAuth client) because it needs no local HTTP server: the process prints a
+short code and a verification URL, the user opens that URL on _any_
+device/browser and enters the code, and the server polls Google's token
+endpoint until it's authorized. Requires a Google Cloud OAuth client of
+type **"TVs and Limited Input devices"** (Google's recommended type for
+this flow — a "Desktop app" client type doesn't work with the
+`/device/code` endpoint).
 
-## What "shareable via npx" requires instead
+**App-access gate (#35) — the important thing that changed since this
+server was first planned.** Signing in with Google always succeeds now,
+but `trip-planner` gates actual Firestore access behind an `appAccess`
+custom claim that only an admin grants (approval-based access, not
+membership-based — see `firestore.rules`'s `hasAppAccess()`). A merely
+signed-in, unapproved account would otherwise hit a bare Firestore
+`permission-denied` on every tool call with no explanation. The server
+checks `getIdTokenResult().claims.appAccess` right after sign-in and, if
+false, exits with an explicit message telling the user to ask the trip
+admin to approve them from the app's _App access_ dialog — before ever
+attempting a Firestore call.
 
-The goal: someone else (your friend, or anyone building a similar trip) can
-run `npx <package-name>` and get a working MCP server registered against
-*their own* Firebase project and *their own* account — without you handing
-out any secret, and without them getting access to data they don't own.
+**Session persistence**: the Firebase JS SDK's built-in persistence
+backends assume a browser (`localStorage`/`IndexedDB`), so a plain
+`getAuth()` in Node falls back to in-memory — nothing survives past one
+`npx` invocation. The server implements the SDK's internal `Persistence`
+interface backed by a JSON file at `~/.japan-companion-mcp/credentials.json`
+instead (same pattern as Firebase's own `getReactNativePersistence()`
+helper), so the SDK's normal token-refresh logic keeps working unmodified
+once that file is restored on a later run. This file is server-managed
+state, not something a user edits directly.
 
-### Key design change: per-user auth, not a shared admin key
+## Configuration
 
-Swap the admin-based repository for a client-auth-based one:
+No local config file, no `claude_desktop_config.json` entry with secrets in
+it (both considered and rejected — see `mcp/`'s git history for why).
+Instead, six environment variables set once via `claude mcp add`:
 
-- `FirebaseAdminTripRepository` (current) → `FirebaseClientTripRepository`
-  (new), built on the Firebase **client** SDK instead of `firebase-admin`.
-- The client SDK authenticates as an actual user (email/password, email
-  link, or Google sign-in), not a service account — so it's subject to the
-  same Firestore security rules as the web app: a user only sees trips
-  where their uid is in `memberIds`.
-- This is the same trust boundary the web app already relies on, so no new
-  security rules need to be written — the MCP server just becomes another
-  authenticated client.
+```sh
+claude mcp add --scope user japan-companion \
+  --env FIREBASE_API_KEY=... \
+  --env FIREBASE_AUTH_DOMAIN=maiyun-trip-planner.firebaseapp.com \
+  --env FIREBASE_PROJECT_ID=maiyun-trip-planner \
+  --env FIREBASE_APP_ID=... \
+  --env GOOGLE_OAUTH_CLIENT_ID=... \
+  --env GOOGLE_OAUTH_CLIENT_SECRET=... \
+  -- npx -y @hawuawu/japan-companion-mcp
+```
 
-### First-run login flow
+`--scope user` writes to `~/.claude.json`, available from any Claude Code
+session regardless of working directory — not tied to being inside
+`trip-planner`. The four `FIREBASE_*` values are public client identifiers
+(same as `trip-planner`'s own `.env`); `GOOGLE_OAUTH_CLIENT_SECRET` is the
+one value worth keeping out of anywhere casually shared, hence env-var
+injection at registration time rather than a plaintext file.
 
-1. On first run, if no cached session exists, the server opens the user's
-   browser to a Firebase Auth sign-in page (or prompts for an email link).
-2. Once signed in, the resulting auth token is cached locally (e.g.
-   `~/.japan-companion-mcp/credentials.json`), refreshed automatically on
-   later runs.
-3. Subsequent `npx` runs reuse the cached session — no repeated login.
+## Tools
 
-This means the published package itself contains no secrets at all; every
-user brings their own identity.
+**Add, update, and read only — no delete, no membership management.** Both
+deliberate scope decisions made when this issue was refreshed (2026-07):
+deleting through Claude isn't supported yet for any entity type, and
+inviting/removing trip members is a bigger trust surface than data edits
+and was left out of this pass rather than assumed in.
 
-### Packaging
+```
+list_trips(), get_trip(tripId), create_trip(name, dateRange), update_trip(tripId, changes)
 
-- `package.json` gets a `"bin"` entry pointing at the server's entry file,
-  making `npx <package-name>` work.
-- Published to the public npm registry under a scoped or unique name.
-- README for other users covers: run `npx <package-name>` once to log in,
-  then add the resulting command to their own `claude_desktop_config.json`.
+list_checkpoints(tripId), get_checkpoint(tripId, checkpointId)
+add_checkpoint(tripId, checkpoint), add_checkpoints(tripId, checkpoints[])
+update_checkpoint(tripId, checkpointId, changes)
 
-### Config: which trip?
+list_alternatives(tripId)
+add_alternative(tripId, alternative), add_alternatives(tripId, alternatives[])
+update_alternative(tripId, alternativeId, changes)
+promote_alternative(tripId, alternativeId, startTime)
 
-A user may belong to more than one trip once this is shared beyond a
-single household. Options to decide between:
-- A `select_trip` / `list_trips` tool, so Claude can ask "which trip?" and
-  the user picks conversationally.
-- A local config file caching a "default trip" per user, set once.
+list_bookings(tripId)
+add_booking(tripId, booking), update_booking(tripId, bookingId, changes)
+```
 
-Leaning toward the tool-based option — it avoids a setup step and works
-naturally if someone is on more than one trip at a time.
+`promote_alternative` deletes the promoted alternative after copying it to
+the timeline, matching the web app's own `promoteAlternative` — confirmed
+with the user that the "no delete tools" decision is about standalone
+`delete_*` tools, not this already-shipped promotion behavior's side
+effect.
+
+Not tool-mapped: `recordAccess` and the various `subscribeToX` methods
+collapse into one-shot `listX` reads (an MCP tool call is a single
+request/response, nothing to push realtime updates to).
+
+## Booking repository gap — closed as a prerequisite
+
+`FirebaseTripRepository.addBooking`/`updateBooking` (`src/data/`, not
+`mcp/`) threw `Not implemented` even though the web UI's
+`BookingPanel` already called them — a live, pre-existing bug, discovered
+while refreshing issue #22, unrelated to MCP itself but blocking the new
+`add_booking`/`update_booking` tools. Fixed on `feat/22-booking-repo-impl`
+(PR #57 into `develop`): real Firestore-backed `addBooking`, `updateBooking`,
+and `subscribeToBookings`. `deleteBooking` is intentionally still
+unimplemented — no MCP tool calls it, and the UI's delete-button bug is
+tracked separately, not fixed as part of this.
+
+## Local testing notes
+
+`npm pack` + running the tarball via `npx` (with fake env values) is
+enough to catch real bugs before ever touching a real account — it did:
+the custom Firebase Auth persistence was originally written as a plain
+object implementing the SDK's public `Persistence` shape, which crashed
+on startup with `INTERNAL ASSERTION FAILED: Expected a class definition`.
+Turns out `initializeAuth`'s internal `_getInstance()` asserts
+`cls instanceof Function` and does `new cls()` itself — the `persistence`
+option needs an actual **class** (Firebase's own built-ins like
+`InMemoryPersistence` are exported as bare classes, cast to the public
+`Persistence` type at the API boundary, which hides this). Fixed in
+`mcp/src/auth/filePersistence.ts`.
+
+For interactive tool-by-tool testing once real credentials exist, use
+`@modelcontextprotocol/inspector` against `mcp/dist/index.js` rather than
+registering with Claude Code first — see `mcp/README.md`.
 
 ## Open questions
 
-- Which auth method for first-run login: Firebase's email-link flow (no
-  password to manage) vs. Google sign-in (fewer steps, but ties identity to
-  a Google account) — leaning email-link for simplicity, not decided.
-- Package name and npm scope.
-- Whether `FirebaseClientTripRepository` fully replaces the admin version,
-  or both exist side by side (admin version kept only for your own local,
-  non-shared use).
-- Versioning/publish workflow (manual `npm publish` vs. CI on tag push) —
-  low priority until the server itself is built and working for one user.
+- Package name/npm scope: currently a placeholder,
+  `@hawuawu/japan-companion-mcp`.
+- Publishing workflow (manual `npm publish` vs. CI on tag push) — low
+  priority until verified end-to-end against a real account.
+- Membership tools (`invite_member`/`remove_member`/`leave_trip`) and a
+  read-only activity-log tool were explicitly deferred, not designed —
+  worth a deliberate follow-up decision, not an assumption, if/when wanted.
 
-## Suggested build order
+## Suggested next steps
 
-1. Build `FirebaseClientTripRepository` against the existing
-   `TripRepository` interface — should be a near drop-in swap since both
-   implement the same contract.
-2. Get the login flow working locally (cache + refresh a session) before
-   touching packaging.
-3. Rewire the existing tool handlers (`list_checkpoints`, etc.) to use the
-   new client-auth repository instead of the admin one.
-4. Add `select_trip` / `list_trips` tools.
-5. Add the `bin` entry and test `npx` from a local tarball
-   (`npm pack` + `npx ./package.tgz`) before publishing for real.
-6. Publish, then update `CLAUDE.md`'s "not yet decided" section once this
-   is resolved.
+1. Create the Google Cloud OAuth client ("TVs and Limited Input devices"
+   type) in the `maiyun-trip-planner` GCP project.
+2. Run `claude mcp add` as above (or the Inspector, for faster iteration);
+   verify the device-flow sign-in, the `appAccess` rejection message (test
+   with an unapproved account), and each of the 16 tools end-to-end
+   against a real trip.
+3. `npm pack` + `npx ./package.tgz` from a scratch directory before
+   `npm publish --access public`.

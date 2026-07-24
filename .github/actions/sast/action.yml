@@ -1,0 +1,26 @@
+name: SAST scan
+description: >
+  Reusable SAST step for any Node sub-project in this repo (functions/,
+  mcp/, or a future one). Installs from that directory's own lockfile and
+  runs its own `npm run lint` — self-contained, doesn't assume any prior
+  step already installed dependencies, so it's safe to invoke on its own
+  in any job/order. To onboard a new sub-project: give it its own
+  .eslintrc.cjs that requires ../eslint.node-subproject.cjs, a `lint`
+  script in its package.json, and add one `uses: ./.github/actions/sast`
+  step pointing `working-directory` at it — nothing else to configure.
+
+inputs:
+  working-directory:
+    description: Directory containing the package.json/lockfile to install and lint.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm ci
+
+    - shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm run lint

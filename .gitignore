@@ -3,5 +3,5 @@ dist
 coverage
 .claude/worktrees/
 coverage/
-.env
+.env*
 sast-gate-tmp-*
