@@ -30,5 +30,15 @@ module.exports = {
         'security/detect-non-literal-fs-filename': 'off',
       },
     },
+    {
+      files: ['vite.config.ts'],
+      rules: {
+        // serveKuromojiDictRaw() reads req.url, but only after it's matched
+        // against an anchored `^/dict/[\w.-]+\.dat\.gz$` regex (no `/`, `..`,
+        // or other path-traversal characters allowed), so the derived path
+        // can't escape the public/dist dict directory.
+        'security/detect-non-literal-fs-filename': 'off',
+      },
+    },
   ],
 };

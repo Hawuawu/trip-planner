@@ -20,8 +20,12 @@ import {
 } from '@mui/lab';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/EditOutlined';
+import TranslateIcon from '@mui/icons-material/TranslateOutlined';
 import type { Checkpoint } from '../../types';
 import { CheckpointIcon } from './CheckpointIcon';
+import { hasKanji } from '../../utils/kanjiReading';
+import { useKanjiReading } from '../../hooks/useKanjiReading';
+import { InlineReading } from '../InlineReading';
 
 interface Props {
   checkpoint: Checkpoint;
@@ -52,6 +56,12 @@ export function CheckpointItem({
 }: Props) {
   const theme = useTheme();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const { state: nameReading, reveal: revealName } = useKanjiReading();
+  const { state: notesReading, reveal: revealNotes } = useKanjiReading();
+  const nameHasKanji = hasKanji(checkpoint.name);
+  const notesHasKanji = hasKanji(checkpoint.notes ?? '');
+  const showReadingToggle = nameHasKanji || notesHasKanji;
 
   return (
     <TimelineItem
@@ -101,8 +111,19 @@ export function CheckpointItem({
           }}
         >
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body1" fontWeight={isActive ? 600 : 400} lineHeight={1.3}>
+            <Typography
+              variant="body1"
+              fontWeight={isActive ? 600 : 400}
+              lineHeight={1.3}
+              sx={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
               {checkpoint.name}
+              {revealed && nameHasKanji && <InlineReading state={nameReading} />}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {formatDate(checkpoint.startTime)} · {formatTime(checkpoint.startTime)}
@@ -115,10 +136,27 @@ export function CheckpointItem({
                 sx={{ mt: 0.25, fontStyle: 'italic' }}
               >
                 {checkpoint.notes}
+                {revealed && notesHasKanji && <InlineReading state={notesReading} />}
               </Typography>
             )}
           </Box>
           <Box sx={{ display: 'flex', flexShrink: 0, ml: 1 }}>
+            {showReadingToggle && (
+              <IconButton
+                size="small"
+                aria-label={revealed ? 'Hide reading' : 'Show reading'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!revealed) {
+                    if (nameHasKanji) revealName(checkpoint.name);
+                    if (notesHasKanji) revealNotes(checkpoint.notes ?? '');
+                  }
+                  setRevealed(!revealed);
+                }}
+              >
+                <TranslateIcon fontSize="small" />
+              </IconButton>
+            )}
             <IconButton
               size="small"
               aria-label="Edit checkpoint"

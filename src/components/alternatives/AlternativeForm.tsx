@@ -1,6 +1,18 @@
 import { useState } from 'react';
-import { Box, TextField, MenuItem, Button, Stack, Typography } from '@mui/material';
+import {
+  Box,
+  TextField,
+  MenuItem,
+  Button,
+  Stack,
+  Typography,
+  IconButton,
+  InputAdornment,
+} from '@mui/material';
+import TranslateIcon from '@mui/icons-material/TranslateOutlined';
 import type { Alternative, CheckpointType } from '../../types';
+import { hasKanji } from '../../utils/kanjiReading';
+import { useRomanizeIntoField, romanizeStatusMessage } from '../../hooks/useRomanizeIntoField';
 
 const TYPES: { value: CheckpointType; label: string }[] = [
   { value: 'flight', label: 'Flight' },
@@ -27,6 +39,11 @@ export function AlternativeForm({ initial, onSave, onCancel, title }: Props) {
   const [locLat, setLocLat] = useState(initial?.location ? String(initial.location.lat) : '');
   const [locLng, setLocLng] = useState(initial?.location ? String(initial.location.lng) : '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const {
+    status: nameRomanizeStatus,
+    romanize: romanizeName,
+    resetStatus: resetNameRomanizeStatus,
+  } = useRomanizeIntoField(setName);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,12 +88,30 @@ export function AlternativeForm({ initial, onSave, onCancel, title }: Props) {
         <TextField
           label="Name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            resetNameRomanizeStatus();
+          }}
           required
           size="small"
           fullWidth
           autoFocus
           inputProps={{ 'aria-label': 'Name' }}
+          helperText={romanizeStatusMessage(nameRomanizeStatus)}
+          InputProps={{
+            endAdornment: hasKanji(name) && nameRomanizeStatus !== 'done' && (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  aria-label="Insert romaji reading"
+                  disabled={nameRomanizeStatus === 'loading'}
+                  onClick={() => romanizeName(name)}
+                >
+                  <TranslateIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
         />
 
         <TextField

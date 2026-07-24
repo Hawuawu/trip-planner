@@ -1,8 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { CheckpointItem } from '../components/timeline/CheckpointItem';
 import { renderWithProviders, resetStores } from './helpers';
 import type { Checkpoint } from '../types';
+
+const { convertMock } = vi.hoisted(() => ({ convertMock: vi.fn() }));
+
+vi.mock('@sglkc/kuroshiro', () => ({
+  default: vi.fn().mockImplementation(function KuroshiroMock() {
+    return {
+      init: vi.fn().mockResolvedValue(undefined),
+      convert: convertMock,
+    };
+  }),
+}));
+
+vi.mock('@sglkc/kuroshiro-analyzer-kuromoji', () => ({
+  default: vi.fn().mockImplementation(function KuromojiAnalyzerMock() {
+    return {};
+  }),
+}));
 
 const BASE: Checkpoint = {
   id: 'cp-1',
@@ -13,6 +30,16 @@ const BASE: Checkpoint = {
   notes: 'JL 005, seat 32A',
   updatedAt: '2026-10-01T00:00:00.000Z',
 };
+
+// Save and restore the real navigator.onLine descriptor between tests.
+const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+
+function setOnline(value: boolean) {
+  Object.defineProperty(navigator, 'onLine', {
+    configurable: true,
+    get: () => value,
+  });
+}
 
 function renderItem(
   overrides: Partial<{
@@ -38,6 +65,15 @@ function renderItem(
 
 beforeEach(() => {
   resetStores();
+});
+
+afterEach(() => {
+  if (originalDescriptor) {
+    Object.defineProperty(navigator, 'onLine', originalDescriptor);
+  } else {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true });
+  }
+  convertMock.mockReset();
 });
 
 describe('CheckpointItem', () => {
@@ -142,5 +178,49 @@ describe('CheckpointItem', () => {
   it('renders an svg icon for the checkpoint type', () => {
     const { container } = renderItem();
     expect(container.querySelector('svg')).not.toBeNull();
+  });
+
+  describe('show reading toggle', () => {
+    it('does not render when neither name nor notes contain kanji', () => {
+      renderItem();
+      expect(screen.queryByRole('button', { name: /show reading/i })).not.toBeInTheDocument();
+    });
+
+    it('renders when the name contains kanji', () => {
+      renderItem({ checkpoint: { ...BASE, name: '成田空港', notes: undefined } });
+      expect(screen.getByRole('button', { name: /show reading/i })).toBeInTheDocument();
+    });
+
+    it('renders when notes contain kanji', () => {
+      renderItem({ checkpoint: { ...BASE, name: 'Narita', notes: '成田空港' } });
+      expect(screen.getByRole('button', { name: /show reading/i })).toBeInTheDocument();
+    });
+
+    it('reveals the romaji reading inline, in parentheses, on click', async () => {
+      convertMock.mockResolvedValueOnce('Narita Kūkō');
+      renderItem({ checkpoint: { ...BASE, name: '成田空港', notes: undefined } });
+      fireEvent.click(screen.getByRole('button', { name: /show reading/i }));
+      await waitFor(() => expect(screen.getByText('(Narita Kūkō)')).toBeInTheDocument());
+    });
+
+    it('hides the reading again on a second click', async () => {
+      convertMock.mockResolvedValueOnce('Narita Kūkō');
+      renderItem({ checkpoint: { ...BASE, name: '成田空港', notes: undefined } });
+      const toggle = screen.getByRole('button', { name: /show reading/i });
+      fireEvent.click(toggle);
+      await waitFor(() => expect(screen.getByText('(Narita Kūkō)')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /hide reading/i }));
+      expect(screen.queryByText('(Narita Kūkō)')).not.toBeInTheDocument();
+    });
+
+    it('shows an offline-unavailable message when conversion fails while offline', async () => {
+      setOnline(false);
+      convertMock.mockRejectedValueOnce(new Error('network error'));
+      renderItem({ checkpoint: { ...BASE, name: '成田空港', notes: undefined } });
+      fireEvent.click(screen.getByRole('button', { name: /show reading/i }));
+      await waitFor(() =>
+        expect(screen.getByText('Translation unavailable offline')).toBeInTheDocument()
+      );
+    });
   });
 });

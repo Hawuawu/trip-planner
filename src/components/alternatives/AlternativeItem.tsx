@@ -55,7 +55,16 @@ export function AlternativeItem({ alternative, onSelect, onPromote, onDelete }: 
           <CheckpointIcon type={alternative.type} sx={{ fontSize: 18, color: 'text.secondary' }} />
         </Box>
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" fontWeight={500} noWrap>
+          <Typography
+            variant="body2"
+            fontWeight={500}
+            sx={{
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
             {alternative.name}
           </Typography>
           {(alternative.location?.label || alternative.notes) && (
