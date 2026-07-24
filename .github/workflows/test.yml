@@ -17,6 +17,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      functions: ${{ steps.filter.outputs.functions }}
+      mcp: ${{ steps.filter.outputs.mcp }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            functions:
+              - 'functions/**'
+            mcp:
+              - 'mcp/**'
+
   unit-integration:
     name: Unit & integration tests
     runs-on: ubuntu-latest
@@ -78,6 +95,8 @@ jobs:
 
   subprojects:
     name: Build sub-projects (functions, mcp)
+    needs: changes
+    if: needs.changes.outputs.functions == 'true' || needs.changes.outputs.mcp == 'true'
     runs-on: ubuntu-latest
     # functions/ and mcp/ are independent Node packages (own package.json,
     # own lockfile) — not part of the root npm ci/build, so nothing else in
@@ -88,6 +107,8 @@ jobs:
     # going missing. mcp/ has no CI coverage at all otherwise. This job is
     # deliberately build-only for now — neither sub-project has its own
     # lint config, and mcp/ has no tests yet (see MCP.md's open questions).
+    # Gated on the `changes` job so it only runs (and only builds whichever
+    # side actually changed) instead of on every push/PR regardless of diff.
     steps:
       - uses: actions/checkout@v4
 
@@ -100,11 +121,13 @@ jobs:
             mcp/package-lock.json
 
       - name: functions — install & build
+        if: needs.changes.outputs.functions == 'true'
         run: |
           npm ci --prefix functions
           npm run build --prefix functions
 
       - name: mcp — install & build
+        if: needs.changes.outputs.mcp == 'true'
         run: |
           npm ci --prefix mcp
           npm run build --prefix mcp
