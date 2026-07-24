@@ -435,25 +435,34 @@ export class FirebaseTripRepository implements TripRepository {
     void this.logActivity(tripId, { type: 'alternative_promoted', entityName: alt.name });
   }
 
-  // ── Bookings — to be implemented in the Firebase issue ───────────────────────
-
-  subscribeToBookings(_tripId: string, cb: (bookings: Booking[]) => void): () => void {
-    cb([]);
-    return () => {};
+  subscribeToBookings(tripId: string, cb: (bookings: Booking[]) => void): () => void {
+    return onSnapshot(collection(this.db, 'trips', tripId, 'bookings'), (snap) => {
+      cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Booking));
+    });
   }
 
-  async addBooking(_tripId: string, _booking: Omit<Booking, 'id'>): Promise<Booking> {
-    throw new Error('Not implemented');
+  async addBooking(tripId: string, booking: Omit<Booking, 'id'>): Promise<Booking> {
+    const ref = await addDoc(collection(this.db, 'trips', tripId, 'bookings'), booking);
+    void this.logActivity(tripId, { type: 'booking_added', entityName: booking.provider });
+    return { ...booking, id: ref.id };
   }
 
   async updateBooking(
-    _tripId: string,
-    _id: string,
-    _changes: Partial<Omit<Booking, 'id'>>
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<Booking, 'id'>>
   ): Promise<void> {
-    throw new Error('Not implemented');
+    await updateDoc(doc(this.db, 'trips', tripId, 'bookings', id), { ...changes });
+    void this.logActivity(tripId, {
+      type: 'booking_updated',
+      entityName: changes.provider,
+      changedFields: Object.keys(changes),
+    });
   }
 
+  // Deleting bookings through the app isn't supported yet (#22's refresh
+  // scoped delete out entirely, and the UI-side delete button predates that
+  // decision) — tracked separately, not implemented here.
   async deleteBooking(_tripId: string, _id: string): Promise<void> {
     throw new Error('Not implemented');
   }
