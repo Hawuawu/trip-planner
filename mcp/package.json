@@ -1,0 +1,30 @@
+{
+  "name": "@hawuawu/japan-companion-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for the Japan companion trip-planner app — read and edit trip checkpoints, alternatives, and bookings through Claude, authenticated as yourself via Google sign-in.",
+  "type": "module",
+  "bin": {
+    "japan-companion-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "node dist/index.js",
+    "dev": "tsc -p . --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "firebase": "^11.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "license": "MIT"
+}

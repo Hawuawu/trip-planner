@@ -13,19 +13,22 @@ repository implementation rather than the web app's subscription-based one.
 
 ## Status
 
-Built, in a separate repository: `japan-companion-mcp`
-(`~/Repositories/japan-companion-mcp` on the maintainer's machine — **not
-yet pushed to GitHub**, that's a pending decision, see Open questions).
-`tsc` builds clean. **Not yet verified end-to-end** — needs a real Google
-OAuth client and a signed-in, approved account to exercise against; do that
-before publishing to npm.
+Built, at `mcp/` in this repo — its own `package.json`/dependency tree/
+`npm publish` lifecycle, same relationship `functions/` has to the rest of
+`trip-planner`, not part of the Vite build. (Briefly scaffolded as a
+separate `japan-companion-mcp` repository first; moved in-repo per a later
+decision — it was never pushed to GitHub, so nothing was lost in the
+move, just superseded.) `tsc` builds clean, `npm pack` + `npx` from the
+tarball verified. **Not yet verified end-to-end** — needs a real Google
+OAuth client and a signed-in, approved account to exercise against; do
+that before publishing to npm.
 
 This supersedes an earlier local, personal-only version of this server
 (admin-key auth, never distributed) that issue #22 flagged as
 `GOOGLE_APPLICATION_CREDENTIALS`-based and unsafe to share — that version
-no longer exists; `japan-companion-mcp` fully replaces it, per the original
-decision to have one codebase rather than an admin version and a
-client-auth version side by side.
+no longer exists; `mcp/` fully replaces it, per the original decision to
+have one codebase rather than an admin version and a client-auth version
+side by side.
 
 ## Authentication
 
@@ -75,8 +78,8 @@ state, not something a user edits directly.
 ## Configuration
 
 No local config file, no `claude_desktop_config.json` entry with secrets in
-it (both considered and rejected — see git history on `japan-companion-mcp`
-for why). Instead, six environment variables set once via `claude mcp add`:
+it (both considered and rejected — see `mcp/`'s git history for why).
+Instead, six environment variables set once via `claude mcp add`:
 
 ```sh
 claude mcp add --scope user japan-companion \
@@ -132,8 +135,8 @@ request/response, nothing to push realtime updates to).
 
 ## Booking repository gap — closed as a prerequisite
 
-`FirebaseTripRepository.addBooking`/`updateBooking` (in `trip-planner`,
-not the MCP repo) threw `Not implemented` even though the web UI's
+`FirebaseTripRepository.addBooking`/`updateBooking` (`src/data/`, not
+`mcp/`) threw `Not implemented` even though the web UI's
 `BookingPanel` already called them — a live, pre-existing bug, discovered
 while refreshing issue #22, unrelated to MCP itself but blocking the new
 `add_booking`/`update_booking` tools. Fixed on `feat/22-booking-repo-impl`
@@ -142,10 +145,26 @@ and `subscribeToBookings`. `deleteBooking` is intentionally still
 unimplemented — no MCP tool calls it, and the UI's delete-button bug is
 tracked separately, not fixed as part of this.
 
+## Local testing notes
+
+`npm pack` + running the tarball via `npx` (with fake env values) is
+enough to catch real bugs before ever touching a real account — it did:
+the custom Firebase Auth persistence was originally written as a plain
+object implementing the SDK's public `Persistence` shape, which crashed
+on startup with `INTERNAL ASSERTION FAILED: Expected a class definition`.
+Turns out `initializeAuth`'s internal `_getInstance()` asserts
+`cls instanceof Function` and does `new cls()` itself — the `persistence`
+option needs an actual **class** (Firebase's own built-ins like
+`InMemoryPersistence` are exported as bare classes, cast to the public
+`Persistence` type at the API boundary, which hides this). Fixed in
+`mcp/src/auth/filePersistence.ts`.
+
+For interactive tool-by-tool testing once real credentials exist, use
+`@modelcontextprotocol/inspector` against `mcp/dist/index.js` rather than
+registering with Claude Code first — see `mcp/README.md`.
+
 ## Open questions
 
-- **Push `japan-companion-mcp` to GitHub, or keep it local for now?** Not
-  yet decided — currently a local-only git repo.
 - Package name/npm scope: currently a placeholder,
   `@hawuawu/japan-companion-mcp`.
 - Publishing workflow (manual `npm publish` vs. CI on tag push) — low
@@ -158,9 +177,9 @@ tracked separately, not fixed as part of this.
 
 1. Create the Google Cloud OAuth client ("TVs and Limited Input devices"
    type) in the `maiyun-trip-planner` GCP project.
-2. Run `claude mcp add` as above; verify the device-flow sign-in, the
-   `appAccess` rejection message (test with an unapproved account), and
-   each of the 16 tools end-to-end against a real trip.
-3. Decide on pushing the repo to GitHub.
-4. `npm pack` + `npx ./package.tgz` from a scratch directory before
+2. Run `claude mcp add` as above (or the Inspector, for faster iteration);
+   verify the device-flow sign-in, the `appAccess` rejection message (test
+   with an unapproved account), and each of the 16 tools end-to-end
+   against a real trip.
+3. `npm pack` + `npx ./package.tgz` from a scratch directory before
    `npm publish --access public`.

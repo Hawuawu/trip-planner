@@ -8,7 +8,7 @@ module.exports = {
     'plugin:security/recommended-legacy',
     'plugin:no-unsanitized/recommended-legacy',
   ],
-  ignorePatterns: ['dist', '.eslintrc.cjs', 'functions'],
+  ignorePatterns: ['dist', '.eslintrc.cjs', 'functions', 'mcp'],
   parser: '@typescript-eslint/parser',
   plugins: ['react-refresh', 'no-secrets'],
   rules: {
