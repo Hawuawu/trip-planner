@@ -76,6 +76,39 @@ jobs:
       - run: npm run test:firebase
       - run: npm run test:functions
 
+  subprojects:
+    name: Build sub-projects (functions, mcp)
+    runs-on: ubuntu-latest
+    # functions/ and mcp/ are independent Node packages (own package.json,
+    # own lockfile) — not part of the root npm ci/build, so nothing else in
+    # this workflow touches them. functions/ already gets exercised via
+    # test:functions in e2e-firebase, but that runs against root-installed
+    # firebase-admin/firebase-functions rather than functions/'s own
+    # dependency tree, so it wouldn't catch e.g. a functions-only dependency
+    # going missing. mcp/ has no CI coverage at all otherwise. This job is
+    # deliberately build-only for now — neither sub-project has its own
+    # lint config, and mcp/ has no tests yet (see MCP.md's open questions).
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            functions/package-lock.json
+            mcp/package-lock.json
+
+      - name: functions — install & build
+        run: |
+          npm ci --prefix functions
+          npm run build --prefix functions
+
+      - name: mcp — install & build
+        run: |
+          npm ci --prefix mcp
+          npm run build --prefix mcp
+
   security:
     name: Security scans (SAST + DAST)
     runs-on: ubuntu-latest
