@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Marker, Popup } from 'react-map-gl/maplibre';
-import { Box, IconButton } from '@mui/material';
+import { Box, Button } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import { CheckpointIcon } from '../timeline/CheckpointIcon';
 import type { Alternative } from '../../types';
@@ -55,15 +55,8 @@ export function AlternativeMarker({ alternative, onEdit }: Props) {
           onClose={() => setShowPopup(false)}
           closeOnClick={false}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              gap: 1,
-            }}
-          >
-            <Box sx={{ minWidth: 0 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Box>
               <strong>{alternative.name}</strong>
               {alternative.location.label && (
                 <>
@@ -72,17 +65,29 @@ export function AlternativeMarker({ alternative, onEdit }: Props) {
                 </>
               )}
             </Box>
-            <IconButton
-              size="small"
-              aria-label="Edit alternative"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit();
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                mt: 0.5,
+                pt: 0.5,
+                borderTop: '1px solid',
+                borderColor: 'divider',
               }}
-              sx={{ mt: -0.5, mr: -0.5 }}
             >
-              <EditIcon fontSize="small" />
-            </IconButton>
+              <Button
+                size="small"
+                variant="outlined"
+                aria-label="Edit alternative"
+                startIcon={<EditIcon fontSize="small" />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+              >
+                Edit
+              </Button>
+            </Box>
           </Box>
         </Popup>
       )}
