@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Marker, Popup } from 'react-map-gl/maplibre';
+import { Box, Button } from '@mui/material';
+import EditIcon from '@mui/icons-material/EditOutlined';
 import { CheckpointIcon } from '../timeline/CheckpointIcon';
 import type { Alternative } from '../../types';
 
@@ -9,9 +11,10 @@ const ALTERNATIVE_MARKER_COLOR = '#9B59B6';
 
 interface Props {
   alternative: Alternative;
+  onEdit(): void;
 }
 
-export function AlternativeMarker({ alternative }: Props) {
+export function AlternativeMarker({ alternative, onEdit }: Props) {
   const [showPopup, setShowPopup] = useState(false);
   if (!alternative.location) return null;
 
@@ -52,13 +55,40 @@ export function AlternativeMarker({ alternative }: Props) {
           onClose={() => setShowPopup(false)}
           closeOnClick={false}
         >
-          <strong>{alternative.name}</strong>
-          {alternative.location.label && (
-            <>
-              <br />
-              {alternative.location.label}
-            </>
-          )}
+          <Box sx={{ minWidth: 0 }}>
+            <Box>
+              <strong>{alternative.name}</strong>
+              {alternative.location.label && (
+                <>
+                  <br />
+                  {alternative.location.label}
+                </>
+              )}
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                mt: 0.5,
+                pt: 0.5,
+                borderTop: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Button
+                size="small"
+                variant="outlined"
+                aria-label="Edit alternative"
+                startIcon={<EditIcon fontSize="small" />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+              >
+                Edit
+              </Button>
+            </Box>
+          </Box>
         </Popup>
       )}
     </>

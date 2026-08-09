@@ -38,6 +38,7 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint({ location: undefined })}
         isSelected={false}
         onSelect={() => {}}
+        onEdit={() => {}}
       />
     );
     expect(container).toBeEmptyDOMElement();
@@ -46,7 +47,12 @@ describe('CheckpointMarker', () => {
   it('calls onSelect and opens a popup with the checkpoint name when clicked', () => {
     const onSelect = vi.fn();
     render(
-      <CheckpointMarker checkpoint={makeCheckpoint()} isSelected={false} onSelect={onSelect} />
+      <CheckpointMarker
+        checkpoint={makeCheckpoint()}
+        isSelected={false}
+        onSelect={onSelect}
+        onEdit={() => {}}
+      />
     );
 
     expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
@@ -59,7 +65,14 @@ describe('CheckpointMarker', () => {
   });
 
   it('closes the popup when its close action fires', () => {
-    render(<CheckpointMarker checkpoint={makeCheckpoint()} isSelected onSelect={() => {}} />);
+    render(
+      <CheckpointMarker
+        checkpoint={makeCheckpoint()}
+        isSelected
+        onSelect={() => {}}
+        onEdit={() => {}}
+      />
+    );
 
     fireEvent.click(screen.getByTestId('marker'));
     expect(screen.getByTestId('popup')).toBeInTheDocument();
@@ -74,10 +87,31 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint({ location: { lat: 34.9, lng: 135.77 } })}
         isSelected={false}
         onSelect={() => {}}
+        onEdit={() => {}}
       />
     );
 
     fireEvent.click(screen.getByTestId('marker'));
     expect(screen.queryByText('Kyoto')).not.toBeInTheDocument();
+  });
+
+  it('calls onEdit when the popup edit button is clicked, without re-triggering onSelect', () => {
+    const onSelect = vi.fn();
+    const onEdit = vi.fn();
+    render(
+      <CheckpointMarker
+        checkpoint={makeCheckpoint()}
+        isSelected={false}
+        onSelect={onSelect}
+        onEdit={onEdit}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('marker'));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit checkpoint' }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledTimes(1);
   });
 });

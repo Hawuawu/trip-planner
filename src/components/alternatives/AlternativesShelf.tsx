@@ -9,10 +9,7 @@ import {
   TextField,
   MenuItem,
   DialogActions,
-  Drawer,
   Snackbar,
-  useMediaQuery,
-  useTheme,
   CircularProgress,
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
@@ -20,6 +17,7 @@ import { useTripStore } from '../../store/tripStore';
 import { AlternativeItem } from './AlternativeItem';
 import { AlternativeForm } from './AlternativeForm';
 import { ListControls } from '../shared/ListControls';
+import { ResponsiveEditDrawer } from '../shared/ResponsiveEditDrawer';
 import { collectAllTags } from '../../utils/tags';
 import { filterAlternatives } from '../../utils/alternativesFilter';
 import type { Alternative } from '../../types';
@@ -68,9 +66,6 @@ function compareAlternatives(
 }
 
 export function AlternativesShelf({ openAddSignal, prefill, onSaved, onError }: Props) {
-  const theme = useTheme();
-  const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
-
   const {
     checkpoints,
     alternatives,
@@ -276,24 +271,15 @@ export function AlternativesShelf({ openAddSignal, prefill, onSaved, onError }: 
         </>
       )}
 
-      <Drawer
-        anchor={isPhone ? 'bottom' : 'right'}
+      <ResponsiveEditDrawer
         open={!!(addOpen || editing)}
         onClose={() => {
           setAddOpen(false);
           setEditingId(null);
         }}
-        PaperProps={{
-          sx: {
-            width: isPhone ? '100%' : 380,
-            borderTopLeftRadius: isPhone ? 12 : 0,
-            borderTopRightRadius: isPhone ? 12 : 0,
-            maxHeight: isPhone ? '85vh' : '100vh',
-          },
-        }}
       >
         {drawerContent}
-      </Drawer>
+      </ResponsiveEditDrawer>
 
       {/* Promote dialog */}
       <Dialog open={!!promoteId} onClose={() => setPromoteId(null)}>

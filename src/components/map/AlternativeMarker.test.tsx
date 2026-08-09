@@ -32,13 +32,13 @@ function makeAlternative(overrides: Partial<Alternative> = {}): Alternative {
 describe('AlternativeMarker', () => {
   it('renders nothing when the alternative has no location', () => {
     const { container } = render(
-      <AlternativeMarker alternative={makeAlternative({ location: undefined })} />
+      <AlternativeMarker alternative={makeAlternative({ location: undefined })} onEdit={() => {}} />
     );
     expect(container).toBeEmptyDOMElement();
   });
 
   it('opens a popup with the alternative name when clicked', () => {
-    render(<AlternativeMarker alternative={makeAlternative()} />);
+    render(<AlternativeMarker alternative={makeAlternative()} onEdit={() => {}} />);
 
     expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('marker'));
@@ -49,7 +49,7 @@ describe('AlternativeMarker', () => {
   });
 
   it('closes the popup when its close action fires', () => {
-    render(<AlternativeMarker alternative={makeAlternative()} />);
+    render(<AlternativeMarker alternative={makeAlternative()} onEdit={() => {}} />);
 
     fireEvent.click(screen.getByTestId('marker'));
     expect(screen.getByTestId('popup')).toBeInTheDocument();
@@ -60,10 +60,22 @@ describe('AlternativeMarker', () => {
 
   it('omits the location label line when none is provided', () => {
     render(
-      <AlternativeMarker alternative={makeAlternative({ location: { lat: 34.9, lng: 135.77 } })} />
+      <AlternativeMarker
+        alternative={makeAlternative({ location: { lat: 34.9, lng: 135.77 } })}
+        onEdit={() => {}}
+      />
     );
 
     fireEvent.click(screen.getByTestId('marker'));
     expect(screen.queryByText('Kyoto')).not.toBeInTheDocument();
+  });
+
+  it('calls onEdit when the popup edit button is clicked', () => {
+    const onEdit = vi.fn();
+    render(<AlternativeMarker alternative={makeAlternative()} onEdit={onEdit} />);
+
+    fireEvent.click(screen.getByTestId('marker'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit alternative' }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
   });
 });

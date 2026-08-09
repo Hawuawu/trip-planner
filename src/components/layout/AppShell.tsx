@@ -436,7 +436,13 @@ export function AppShell({ onBack }: Props) {
                 />
               </TexturedPanel>
             )}
-            {tab === 1 && <MapView onPoiSelected={handlePoiSelected} />}
+            {tab === 1 && (
+              <MapView
+                onPoiSelected={handlePoiSelected}
+                onSaved={setSnackbar}
+                onError={setErrorSnackbar}
+              />
+            )}
             {tab === 2 && (
               <TexturedPanel image={sakuraPattern} repeat="repeat" size="360px 360px">
                 <AlternativesShelf
@@ -489,7 +495,11 @@ export function AppShell({ onBack }: Props) {
 
           {/* Map with toggle buttons anchored to its edges */}
           <Box sx={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            <MapView onPoiSelected={handlePoiSelected} />
+            <MapView
+              onPoiSelected={handlePoiSelected}
+              onSaved={setSnackbar}
+              onError={setErrorSnackbar}
+            />
 
             <PanelToggle
               side="left"

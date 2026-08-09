@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MapView } from './MapView';
 import { renderWithProviders, resetStores } from '../../test/helpers';
 import { useTripStore } from '../../store/tripStore';
@@ -54,6 +55,16 @@ function makeCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
   };
 }
 
+function makeAlternative(overrides: Partial<Alternative> = {}): Alternative {
+  return {
+    id: 'alt-1',
+    type: 'poi',
+    name: 'Backup Shrine',
+    location: { lat: 34.9, lng: 135.77 },
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   resetStores();
   easeTo.mockClear();
@@ -62,6 +73,10 @@ beforeEach(() => {
   zoomOut.mockClear();
   getZoom.mockClear();
   mockedGetPoiAtPoint.mockReset();
+  // resetStores() merges in fresh data but preserves action function
+  // references (see helpers.tsx) — vi.spyOn mutates those functions in
+  // place, so a spy from one test otherwise leaks into the next.
+  vi.restoreAllMocks();
 });
 
 describe('MapView', () => {
@@ -206,16 +221,6 @@ describe('MapView', () => {
   });
 
   describe('alternatives layer', () => {
-    function makeAlternative(overrides: Partial<Alternative> = {}): Alternative {
-      return {
-        id: 'alt-1',
-        type: 'poi',
-        name: 'Backup Shrine',
-        location: { lat: 34.9, lng: 135.77 },
-        ...overrides,
-      };
-    }
-
     it('renders the "Show alternatives" switch checked by default', () => {
       renderWithProviders(<MapView />);
       fireEvent.click(screen.getByLabelText('Toggle layer selector'));
@@ -304,6 +309,157 @@ describe('MapView', () => {
 
       renderWithProviders(<MapView />);
       expect(easeTo).toHaveBeenCalledWith({ center: [135.77, 34.9], zoom: 18, duration: 300 });
+    });
+  });
+
+  describe('editing from a pin popup', () => {
+    it('opens the checkpoint edit drawer, pre-filled, and selects the checkpoint', async () => {
+      useTripStore.setState({ checkpoints: [makeCheckpoint({ id: 'a', name: 'Fushimi Inari' })] });
+      renderWithProviders(<MapView />);
+
+      fireEvent.click(screen.getByTestId('marker'));
+      await userEvent.click(screen.getByRole('button', { name: 'Edit checkpoint' }));
+
+      expect(screen.getByRole('heading', { name: /edit checkpoint/i })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: /name/i })).toHaveValue('Fushimi Inari');
+      expect(useTripStore.getState().selectedId).toBe('a');
+    });
+
+    it('saves edits to a checkpoint from the map drawer and reports success', async () => {
+      useTripStore.setState({ checkpoints: [makeCheckpoint({ id: 'a', name: 'Fushimi Inari' })] });
+      const spy = vi.fn().mockResolvedValue(undefined);
+      useTripStore.setState({ updateCheckpoint: spy });
+      const onSaved = vi.fn();
+      renderWithProviders(<MapView onSaved={onSaved} />);
+
+      fireEvent.click(screen.getByTestId('marker'));
+      await userEvent.click(screen.getByRole('button', { name: 'Edit checkpoint' }));
+
+      const nameInput = screen.getByRole('textbox', { name: /name/i });
+      await userEvent.clear(nameInput);
+      await userEvent.type(nameInput, 'Fushimi Inari Shrine');
+      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(spy).toHaveBeenCalledWith(
+        'a',
+        expect.objectContaining({ name: 'Fushimi Inari Shrine' })
+      );
+      expect(onSaved).toHaveBeenCalledWith('Checkpoint "Fushimi Inari Shrine" updated.');
+      expect(screen.queryByRole('heading', { name: /edit checkpoint/i })).not.toBeInTheDocument();
+    });
+
+    it('reports an error via onError when updateCheckpoint rejects', async () => {
+      useTripStore.setState({ checkpoints: [makeCheckpoint({ id: 'a', name: 'Fushimi Inari' })] });
+      const spy = vi.fn().mockRejectedValueOnce(new Error('network down'));
+      useTripStore.setState({ updateCheckpoint: spy });
+      const onError = vi.fn();
+      renderWithProviders(<MapView onError={onError} />);
+
+      fireEvent.click(screen.getByTestId('marker'));
+      await userEvent.click(screen.getByRole('button', { name: 'Edit checkpoint' }));
+      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(onError).toHaveBeenCalledWith('network down');
+    });
+
+    it('cancelling the checkpoint edit drawer does not call updateCheckpoint', async () => {
+      useTripStore.setState({ checkpoints: [makeCheckpoint({ id: 'a', name: 'Fushimi Inari' })] });
+      const spy = vi.fn().mockResolvedValue(undefined);
+      useTripStore.setState({ updateCheckpoint: spy });
+      renderWithProviders(<MapView />);
+
+      fireEvent.click(screen.getByTestId('marker'));
+      await userEvent.click(screen.getByRole('button', { name: 'Edit checkpoint' }));
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(screen.queryByRole('heading', { name: /edit checkpoint/i })).not.toBeInTheDocument();
+    });
+
+    it('opens the alternative edit drawer, pre-filled, and selects the alternative', async () => {
+      useTripStore.setState({
+        alternatives: [makeAlternative({ id: 'alt-1', name: 'Backup Shrine' })],
+      });
+      renderWithProviders(<MapView />);
+
+      fireEvent.click(screen.getByTestId('marker'));
+      await userEvent.click(screen.getByRole('button', { name: 'Edit alternative' }));
+
+      expect(screen.getByRole('heading', { name: /edit alternative/i })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: /name/i })).toHaveValue('Backup Shrine');
+      expect(useTripStore.getState().selectedAlternativeId).toBe('alt-1');
+    });
+
+    it('saves edits to an alternative from the map drawer and reports success', async () => {
+      useTripStore.setState({
+        alternatives: [makeAlternative({ id: 'alt-1', name: 'Backup Shrine' })],
+      });
+      const spy = vi.fn().mockResolvedValue(undefined);
+      useTripStore.setState({ updateAlternative: spy });
+      const onSaved = vi.fn();
+      renderWithProviders(<MapView onSaved={onSaved} />);
+
+      fireEvent.click(screen.getByTestId('marker'));
+      await userEvent.click(screen.getByRole('button', { name: 'Edit alternative' }));
+
+      const nameInput = screen.getByRole('textbox', { name: /name/i });
+      await userEvent.clear(nameInput);
+      await userEvent.type(nameInput, 'Backup Shrine 2');
+      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(spy).toHaveBeenCalledWith(
+        'alt-1',
+        expect.objectContaining({ name: 'Backup Shrine 2' })
+      );
+      expect(onSaved).toHaveBeenCalledWith('Alternative "Backup Shrine 2" updated.');
+      expect(screen.queryByRole('heading', { name: /edit alternative/i })).not.toBeInTheDocument();
+    });
+
+    it('reports an error via onError when updateAlternative rejects', async () => {
+      useTripStore.setState({
+        alternatives: [makeAlternative({ id: 'alt-1', name: 'Backup Shrine' })],
+      });
+      const spy = vi.fn().mockRejectedValueOnce(new Error('network down'));
+      useTripStore.setState({ updateAlternative: spy });
+      const onError = vi.fn();
+      renderWithProviders(<MapView onError={onError} />);
+
+      fireEvent.click(screen.getByTestId('marker'));
+      await userEvent.click(screen.getByRole('button', { name: 'Edit alternative' }));
+      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(onError).toHaveBeenCalledWith('network down');
+    });
+
+    it('cancelling the alternative edit drawer does not call updateAlternative', async () => {
+      useTripStore.setState({
+        alternatives: [makeAlternative({ id: 'alt-1', name: 'Backup Shrine' })],
+      });
+      const spy = vi.fn().mockResolvedValue(undefined);
+      useTripStore.setState({ updateAlternative: spy });
+      renderWithProviders(<MapView />);
+
+      fireEvent.click(screen.getByTestId('marker'));
+      await userEvent.click(screen.getByRole('button', { name: 'Edit alternative' }));
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(screen.queryByRole('heading', { name: /edit alternative/i })).not.toBeInTheDocument();
+    });
+
+    it('opening the checkpoint edit drawer does not also show the alternative form, and vice versa', async () => {
+      useTripStore.setState({
+        checkpoints: [makeCheckpoint({ id: 'a', name: 'Fushimi Inari' })],
+        alternatives: [makeAlternative({ id: 'alt-1', name: 'Backup Shrine' })],
+      });
+      renderWithProviders(<MapView />);
+
+      const markers = screen.getAllByTestId('marker');
+      fireEvent.click(markers[0]);
+      await userEvent.click(screen.getByRole('button', { name: 'Edit checkpoint' }));
+
+      expect(screen.getByRole('heading', { name: /edit checkpoint/i })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: /edit alternative/i })).not.toBeInTheDocument();
     });
   });
 });

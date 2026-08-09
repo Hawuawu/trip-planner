@@ -1,21 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import {
-  Box,
-  Button,
-  IconButton,
-  Snackbar,
-  Typography,
-  Drawer,
-  useMediaQuery,
-  useTheme,
-  CircularProgress,
-} from '@mui/material';
+import { Box, Button, IconButton, Snackbar, Typography, CircularProgress } from '@mui/material';
 import { Timeline } from '@mui/lab';
 import AddIcon from '@mui/icons-material/Add';
 import { useTripStore } from '../../store/tripStore';
 import { CheckpointItem } from './CheckpointItem';
 import { CheckpointForm } from './CheckpointForm';
 import { ListControls } from '../shared/ListControls';
+import { ResponsiveEditDrawer } from '../shared/ResponsiveEditDrawer';
 import { collectAllTags, matchesAnyTag } from '../../utils/tags';
 import { visibleCheckpoints } from '../../utils/checkpointVisibility';
 import { formatDayLabel } from '../../utils/date';
@@ -31,9 +22,6 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 export function TimelineView({ openAddSignal, onSaved, onError }: Props) {
-  const theme = useTheme();
-  const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
-
   const {
     checkpoints,
     checkpointsLoading,
@@ -279,24 +267,15 @@ export function TimelineView({ openAddSignal, onSaved, onError }: Props) {
         </>
       )}
 
-      <Drawer
-        anchor={isPhone ? 'bottom' : 'right'}
+      <ResponsiveEditDrawer
         open={!!(adding || editing)}
         onClose={() => {
           setAdding(false);
           setEditingId(null);
         }}
-        PaperProps={{
-          sx: {
-            width: isPhone ? '100%' : 380,
-            borderTopLeftRadius: isPhone ? 12 : 0,
-            borderTopRightRadius: isPhone ? 12 : 0,
-            maxHeight: isPhone ? '85vh' : '100vh',
-          },
-        }}
       >
         {drawerContent}
-      </Drawer>
+      </ResponsiveEditDrawer>
 
       <Snackbar
         open={!!undoCheckpoint}
