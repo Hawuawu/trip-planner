@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Map, { AttributionControl, Source, Layer, useMap } from 'react-map-gl/maplibre';
 import type { LineLayerSpecification } from 'maplibre-gl';
 import type { FeatureCollection, LineString } from 'geojson';
@@ -24,6 +24,10 @@ import type { Alternative } from '../../types';
 import { getPoiAtPoint, type Poi } from './poi';
 import { visibleCheckpoints } from '../../utils/checkpointVisibility';
 import { filterAlternatives } from '../../utils/alternativesFilter';
+import { collectAllTags } from '../../utils/tags';
+import { CheckpointForm } from '../timeline/CheckpointForm';
+import { AlternativeForm } from '../alternatives/AlternativeForm';
+import { ResponsiveEditDrawer } from '../shared/ResponsiveEditDrawer';
 
 const JAPAN_CENTER = { longitude: 139.69, latitude: 35.68, zoom: 10 };
 
@@ -44,6 +48,12 @@ const ROUTE_LAYER: LineLayerSpecification = {
     'line-opacity': 0.7,
   },
 };
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback;
+}
+
+type MapEditTarget = { kind: 'checkpoint'; id: string } | { kind: 'alternative'; id: string };
 
 function StyleSwitcher({
   current,
@@ -156,9 +166,11 @@ function MapSync() {
 
 interface Props {
   onPoiSelected?: (poi: Poi) => void;
+  onSaved?: (message: string) => void;
+  onError?: (message: string) => void;
 }
 
-export function MapView({ onPoiSelected }: Props) {
+export function MapView({ onPoiSelected, onSaved, onError }: Props) {
   const [mapStyle, setMapStyle] = useState<string>(STYLES[0].url);
   const {
     checkpoints,
@@ -169,10 +181,17 @@ export function MapView({ onPoiSelected }: Props) {
     setShowAlternativesOnMap,
     selectedId,
     selectCheckpoint,
+    selectedAlternativeId,
+    selectAlternative,
+    updateCheckpoint,
+    updateAlternative,
     selectedDay,
     selectedRouteId,
     routes,
   } = useTripStore();
+  void selectedAlternativeId;
+
+  const [editTarget, setEditTarget] = useState<MapEditTarget | null>(null);
 
   const visible = visibleCheckpoints(checkpoints, { selectedDay, selectedRouteId, routes });
   const withLocation = visible.filter((c) => c.location);
@@ -198,6 +217,52 @@ export function MapView({ onPoiSelected }: Props) {
           ]
         : [],
   };
+
+  const editingCheckpoint =
+    editTarget?.kind === 'checkpoint' ? checkpoints.find((c) => c.id === editTarget.id) : undefined;
+  const editingAlternative =
+    editTarget?.kind === 'alternative'
+      ? alternatives.find((a) => a.id === editTarget.id)
+      : undefined;
+
+  const allTags = useMemo(
+    () => collectAllTags(checkpoints, alternatives),
+    [checkpoints, alternatives]
+  );
+
+  const drawerContent = editingCheckpoint ? (
+    <CheckpointForm
+      title="Edit checkpoint"
+      initial={editingCheckpoint}
+      existingTags={allTags}
+      onSave={async (data) => {
+        try {
+          await updateCheckpoint(editingCheckpoint.id, data);
+          setEditTarget(null);
+          onSaved?.(`Checkpoint "${data.name}" updated.`);
+        } catch (err) {
+          onError?.(errorMessage(err, `Failed to update "${data.name}".`));
+        }
+      }}
+      onCancel={() => setEditTarget(null)}
+    />
+  ) : editingAlternative ? (
+    <AlternativeForm
+      title="Edit alternative"
+      initial={editingAlternative}
+      existingTags={allTags}
+      onSave={async (data) => {
+        try {
+          await updateAlternative(editingAlternative.id, data);
+          setEditTarget(null);
+          onSaved?.(`Alternative "${data.name}" updated.`);
+        } catch (err) {
+          onError?.(errorMessage(err, `Failed to update "${data.name}".`));
+        }
+      }}
+      onCancel={() => setEditTarget(null)}
+    />
+  ) : null;
 
   return (
     <Map
@@ -246,11 +311,31 @@ export function MapView({ onPoiSelected }: Props) {
           checkpoint={cp}
           isSelected={cp.id === selectedId}
           onSelect={() => selectCheckpoint(cp.id === selectedId ? null : cp.id)}
+          onEdit={() => {
+            // selectCheckpoint toggles — only call it if the tap that opened
+            // this popup didn't already select this checkpoint, otherwise
+            // it would immediately deselect it again.
+            if (selectedId !== cp.id) selectCheckpoint(cp.id);
+            setEditTarget({ kind: 'checkpoint', id: cp.id });
+          }}
         />
       ))}
 
       {showAlternativesOnMap &&
-        visibleAlternatives.map((alt) => <AlternativeMarker key={alt.id} alternative={alt} />)}
+        visibleAlternatives.map((alt) => (
+          <AlternativeMarker
+            key={alt.id}
+            alternative={alt}
+            onEdit={() => {
+              if (selectedAlternativeId !== alt.id) selectAlternative(alt.id);
+              setEditTarget({ kind: 'alternative', id: alt.id });
+            }}
+          />
+        ))}
+
+      <ResponsiveEditDrawer open={!!editTarget} onClose={() => setEditTarget(null)}>
+        {drawerContent}
+      </ResponsiveEditDrawer>
     </Map>
   );
 }

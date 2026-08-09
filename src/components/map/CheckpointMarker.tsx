@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Marker, Popup } from 'react-map-gl/maplibre';
+import { Box, IconButton } from '@mui/material';
+import EditIcon from '@mui/icons-material/EditOutlined';
 import { CheckpointIcon } from '../timeline/CheckpointIcon';
 import type { Checkpoint } from '../../types';
 
@@ -7,9 +9,10 @@ interface Props {
   checkpoint: Checkpoint;
   isSelected: boolean;
   onSelect(): void;
+  onEdit(): void;
 }
 
-export function CheckpointMarker({ checkpoint, isSelected, onSelect }: Props) {
+export function CheckpointMarker({ checkpoint, isSelected, onSelect, onEdit }: Props) {
   const [showPopup, setShowPopup] = useState(false);
   if (!checkpoint.location) return null;
 
@@ -53,13 +56,35 @@ export function CheckpointMarker({ checkpoint, isSelected, onSelect }: Props) {
           onClose={() => setShowPopup(false)}
           closeOnClick={false}
         >
-          <strong>{checkpoint.name}</strong>
-          {checkpoint.location.label && (
-            <>
-              <br />
-              {checkpoint.location.label}
-            </>
-          )}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <strong>{checkpoint.name}</strong>
+              {checkpoint.location.label && (
+                <>
+                  <br />
+                  {checkpoint.location.label}
+                </>
+              )}
+            </Box>
+            <IconButton
+              size="small"
+              aria-label="Edit checkpoint"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              sx={{ mt: -0.5, mr: -0.5 }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </Popup>
       )}
     </>

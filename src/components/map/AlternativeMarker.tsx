@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Marker, Popup } from 'react-map-gl/maplibre';
+import { Box, IconButton } from '@mui/material';
+import EditIcon from '@mui/icons-material/EditOutlined';
 import { CheckpointIcon } from '../timeline/CheckpointIcon';
 import type { Alternative } from '../../types';
 
@@ -9,9 +11,10 @@ const ALTERNATIVE_MARKER_COLOR = '#9B59B6';
 
 interface Props {
   alternative: Alternative;
+  onEdit(): void;
 }
 
-export function AlternativeMarker({ alternative }: Props) {
+export function AlternativeMarker({ alternative, onEdit }: Props) {
   const [showPopup, setShowPopup] = useState(false);
   if (!alternative.location) return null;
 
@@ -52,13 +55,35 @@ export function AlternativeMarker({ alternative }: Props) {
           onClose={() => setShowPopup(false)}
           closeOnClick={false}
         >
-          <strong>{alternative.name}</strong>
-          {alternative.location.label && (
-            <>
-              <br />
-              {alternative.location.label}
-            </>
-          )}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <strong>{alternative.name}</strong>
+              {alternative.location.label && (
+                <>
+                  <br />
+                  {alternative.location.label}
+                </>
+              )}
+            </Box>
+            <IconButton
+              size="small"
+              aria-label="Edit alternative"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              sx={{ mt: -0.5, mr: -0.5 }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </Popup>
       )}
     </>
