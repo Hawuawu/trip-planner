@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Marker, Popup } from 'react-map-gl/maplibre';
+import { Box, Button } from '@mui/material';
+import EditIcon from '@mui/icons-material/EditOutlined';
 import { CheckpointIcon } from '../timeline/CheckpointIcon';
 import type { Checkpoint } from '../../types';
 
@@ -7,9 +9,10 @@ interface Props {
   checkpoint: Checkpoint;
   isSelected: boolean;
   onSelect(): void;
+  onEdit(): void;
 }
 
-export function CheckpointMarker({ checkpoint, isSelected, onSelect }: Props) {
+export function CheckpointMarker({ checkpoint, isSelected, onSelect, onEdit }: Props) {
   const [showPopup, setShowPopup] = useState(false);
   if (!checkpoint.location) return null;
 
@@ -53,13 +56,40 @@ export function CheckpointMarker({ checkpoint, isSelected, onSelect }: Props) {
           onClose={() => setShowPopup(false)}
           closeOnClick={false}
         >
-          <strong>{checkpoint.name}</strong>
-          {checkpoint.location.label && (
-            <>
-              <br />
-              {checkpoint.location.label}
-            </>
-          )}
+          <Box sx={{ minWidth: 0 }}>
+            <Box>
+              <strong>{checkpoint.name}</strong>
+              {checkpoint.location.label && (
+                <>
+                  <br />
+                  {checkpoint.location.label}
+                </>
+              )}
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                mt: 0.5,
+                pt: 0.5,
+                borderTop: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Button
+                size="small"
+                variant="outlined"
+                aria-label="Edit checkpoint"
+                startIcon={<EditIcon fontSize="small" />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+              >
+                Edit
+              </Button>
+            </Box>
+          </Box>
         </Popup>
       )}
     </>
