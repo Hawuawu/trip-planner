@@ -69,6 +69,16 @@ function makeMockRepo(overrides: Partial<TripRepository> = {}): TripRepository {
     }),
     updateRoute: vi.fn().mockResolvedValue(undefined),
     deleteRoute: vi.fn().mockResolvedValue(undefined),
+    subscribeToWikiSections: vi.fn().mockReturnValue(() => {}),
+    addWikiSection: vi.fn().mockResolvedValue({
+      id: 'wiki-saved-1',
+      title: 'New Section',
+      content: '',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }),
+    updateWikiSection: vi.fn().mockResolvedValue(undefined),
+    deleteWikiSection: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -738,5 +748,110 @@ describe('tripStore — routes', () => {
 
     expect(useTripStore.getState().routes).toHaveLength(1);
     expect(useTripStore.getState().routes[0].name).toBe('Restored');
+  });
+});
+
+describe('tripStore — wikiSections', () => {
+  it('addWikiSection appends optimistically then replaces with saved', async () => {
+    let resolveAdd!: (s: import('../types').WikiSection) => void;
+    const addWikiSection = vi.fn(
+      () =>
+        new Promise<import('../types').WikiSection>((res) => {
+          resolveAdd = res;
+        })
+    );
+    const repo = makeMockRepo({ addWikiSection });
+    useTripStore.setState({ repo, tripId: 'trip-1', wikiSections: [] });
+
+    const promise = useTripStore
+      .getState()
+      .addWikiSection({ title: 'Day 3 — Kyoto', content: 'notes', order: 0 });
+
+    const { wikiSections } = useTripStore.getState();
+    expect(wikiSections).toHaveLength(1);
+    expect(wikiSections[0].id).toMatch(/__optimistic/);
+    expect(wikiSections[0].title).toBe('Day 3 — Kyoto');
+
+    resolveAdd({
+      id: 'wiki-real',
+      title: 'Day 3 — Kyoto',
+      content: 'notes',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await promise;
+
+    expect(useTripStore.getState().wikiSections[0].id).toBe('wiki-real');
+  });
+
+  it('updateWikiSection applies changes optimistically', async () => {
+    const repo = makeMockRepo();
+    const section: import('../types').WikiSection = {
+      id: 'wiki-1',
+      title: 'Before',
+      content: '',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', wikiSections: [section] });
+
+    await useTripStore.getState().updateWikiSection('wiki-1', { title: 'After' });
+
+    expect(useTripStore.getState().wikiSections[0].title).toBe('After');
+    expect(repo.updateWikiSection).toHaveBeenCalledWith('trip-1', 'wiki-1', { title: 'After' });
+  });
+
+  it('updateWikiSection rolls back and rethrows when repo throws', async () => {
+    const updateWikiSection = vi.fn().mockRejectedValue(new Error('network'));
+    const repo = makeMockRepo({ updateWikiSection });
+    const section: import('../types').WikiSection = {
+      id: 'wiki-1',
+      title: 'Original',
+      content: '',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', wikiSections: [section] });
+
+    await expect(
+      useTripStore.getState().updateWikiSection('wiki-1', { title: 'Failed' })
+    ).rejects.toThrow('network');
+
+    expect(useTripStore.getState().wikiSections[0].title).toBe('Original');
+  });
+
+  it('deleteWikiSection removes the entry optimistically', async () => {
+    const repo = makeMockRepo();
+    const section: import('../types').WikiSection = {
+      id: 'wiki-1',
+      title: 'To Remove',
+      content: '',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', wikiSections: [section] });
+
+    await useTripStore.getState().deleteWikiSection('wiki-1');
+
+    expect(useTripStore.getState().wikiSections).toHaveLength(0);
+    expect(repo.deleteWikiSection).toHaveBeenCalledWith('trip-1', 'wiki-1');
+  });
+
+  it('deleteWikiSection restores the section and rethrows when the repo throws', async () => {
+    const deleteWikiSection = vi.fn().mockRejectedValue(new Error('network'));
+    const repo = makeMockRepo({ deleteWikiSection });
+    const section: import('../types').WikiSection = {
+      id: 'wiki-1',
+      title: 'Restored',
+      content: '',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', wikiSections: [section] });
+
+    await expect(useTripStore.getState().deleteWikiSection('wiki-1')).rejects.toThrow('network');
+
+    expect(useTripStore.getState().wikiSections).toHaveLength(1);
+    expect(useTripStore.getState().wikiSections[0].title).toBe('Restored');
   });
 });

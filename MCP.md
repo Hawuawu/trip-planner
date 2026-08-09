@@ -126,6 +126,9 @@ add_booking(tripId, booking), update_booking(tripId, bookingId, changes)
 
 list_routes(tripId), get_route(tripId, routeId)
 add_route(tripId, route), update_route(tripId, routeId, changes)
+
+list_wiki_sections(tripId), get_wiki_section(tripId, sectionId)
+add_wiki_section(tripId, section), update_wiki_section(tripId, sectionId, changes)
 ```
 
 `checkpoint`/`alternative` inputs also accept an optional `tags: string[]`
@@ -153,6 +156,18 @@ matching every other entity's no-delete scope. Day-filtering itself (#53)
 needed no MCP tool changes at all — `list_checkpoints` already returns full
 `startTime` timestamps, so the calling model can already reason about which
 checkpoints fall on a given day without a new filter parameter.
+
+`wiki section` (trip-planner's "Trip Wiki", #87) is one entry in a
+trip-level, freeform markdown document — `{ title, content (markdown),
+order }`. Sections can link to a checkpoint/alternative/route from within
+`content` using `[label](trip://checkpoint/<id>)` (or `alternative`/`route`
+in place of `checkpoint`); the app renders these as in-app jumps rather than
+real links. No `delete_wiki_section` tool, matching every other entity's
+no-delete scope. `list_wiki_sections`/`add_wiki_section`/
+`update_wiki_section`'s descriptions use the same dedup guidance as
+`list_tags`: call `list_wiki_sections` first and update an existing section
+by title instead of creating a near-duplicate (e.g. a new "Day 3" section
+next to an existing "Day 3 - Kyoto").
 
 Not tool-mapped: `recordAccess` and the various `subscribeToX` methods
 collapse into one-shot `listX` reads (an MCP tool call is a single

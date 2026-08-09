@@ -4,6 +4,7 @@ import type {
   Alternative,
   Booking,
   Route,
+  WikiSection,
   ActivityLogEntry,
   InviteMemberResult,
 } from '../types';
@@ -58,4 +59,16 @@ export interface TripRepository {
     changes: Partial<Omit<Route, 'id' | 'updatedAt'>>
   ): Promise<void>;
   deleteRoute(tripId: string, id: string): Promise<void>;
+
+  subscribeToWikiSections(tripId: string, cb: (sections: WikiSection[]) => void): () => void;
+  addWikiSection(
+    tripId: string,
+    section: Omit<WikiSection, 'id' | 'updatedAt'>
+  ): Promise<WikiSection>;
+  updateWikiSection(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<WikiSection, 'id' | 'updatedAt'>>
+  ): Promise<void>;
+  deleteWikiSection(tripId: string, id: string): Promise<void>;
 }

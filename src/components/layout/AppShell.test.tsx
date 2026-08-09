@@ -186,6 +186,50 @@ describe('AppShell — phone layout', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Alternatives' }));
     expect(screen.getByText(/no alternatives/i)).toBeInTheDocument();
   });
+
+  it('a wiki-link navigation to a checkpoint closes the dialog and switches to the Timeline tab', async () => {
+    const user = userEvent.setup();
+    useTripStore.setState({
+      trip: {
+        id: 't1',
+        name: 'Japan 2026',
+        dateRange: { start: '2026-09-01', end: '2026-09-10' },
+        memberIds: [],
+      },
+      checkpoints: [
+        {
+          id: 'cp-1',
+          type: 'poi',
+          name: 'Fushimi Inari',
+          startTime: '2026-09-02T08:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      wikiSections: [
+        {
+          id: 'wiki-1',
+          title: 'Overview',
+          content: 'Visit [Fushimi Inari](trip://checkpoint/cp-1) in the morning.',
+          order: 0,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    // Start on the Alternatives tab so the switch back to Timeline is observable.
+    await user.click(screen.getByRole('button', { name: 'Alternatives' }));
+    expect(screen.getByText(/no alternatives/i)).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByRole('button', { name: 'Trip Wiki' }));
+    await user.click(screen.getByRole('button', { name: 'Fushimi Inari' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Trip Wiki' })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText(/no alternatives/i)).not.toBeInTheDocument();
+  });
 });
 
 describe('AppShell — app bar', () => {
@@ -234,11 +278,40 @@ describe('AppShell — hamburger menu', () => {
     await user.click(screen.getByLabelText('Menu'));
 
     const menu = withinMenu();
+    expect(menu.getByRole('button', { name: 'Trip Wiki' })).toBeInTheDocument();
     expect(menu.getByRole('button', { name: 'Add checkpoint' })).toBeInTheDocument();
     expect(menu.getByRole('button', { name: 'Add alternative' })).toBeInTheDocument();
     expect(menu.getByText('Back to trips')).toBeInTheDocument();
     expect(menu.getByText('Export trip (.yaml)')).toBeInTheDocument();
     expect(menu.getByText('Import checkpoints…')).toBeInTheDocument();
+  });
+
+  it('lists "Trip Wiki" as the first menu item', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+
+    const buttons = withinMenu().getAllByRole('button');
+    expect(buttons[0]).toHaveTextContent('Trip Wiki');
+  });
+
+  it('opens the Trip Wiki wiki dialog when "Trip Wiki" is clicked from the menu', async () => {
+    const user = userEvent.setup();
+    useTripStore.setState({
+      trip: {
+        id: 't1',
+        name: 'Japan 2026',
+        dateRange: { start: '2026-09-01', end: '2026-09-10' },
+        memberIds: [],
+      },
+    });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByRole('button', { name: 'Trip Wiki' }));
+
+    expect(screen.getByRole('heading', { name: 'Trip Wiki' })).toBeInTheDocument();
   });
 
   it('opens the add-checkpoint form when "Add checkpoint" is clicked from the menu', async () => {

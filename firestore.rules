@@ -112,6 +112,10 @@ service cloud.firestore {
         allow read, write: if isMember(tripId);
       }
 
+      match /wikiSections/{docId} {
+        allow read, write: if isMember(tripId);
+      }
+
       // Append-only, owner-readable activity log. Explicit matches (not the
       // generic subcollection wildcard) so this can be locked down separately
       // from checkpoints/alternatives/bookings — Firestore ORs every matching

@@ -542,6 +542,54 @@ describe('Security rules — trips/{tripId}/routes', () => {
   });
 });
 
+describe('Security rules — trips/{tripId}/wikiSections', () => {
+  const TRIP_ID = 'trip-wiki-rules-1';
+  const MEMBER_UID = 'member-wiki';
+  const OUTSIDER_UID = 'outsider-wiki';
+
+  beforeEach(async () => {
+    await seedTrip(TRIP_ID, [MEMBER_UID]);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .firestore()
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('wikiSections')
+        .doc('wiki-1')
+        .set({
+          title: 'Overview',
+          content: 'Trip notes',
+          order: 0,
+        });
+    });
+  });
+
+  it('member CAN read wiki sections', async () => {
+    const db = approvedDb(MEMBER_UID);
+    await assertSucceeds(
+      db.collection('trips').doc(TRIP_ID).collection('wikiSections').doc('wiki-1').get()
+    );
+  });
+
+  it('member CAN write wiki sections', async () => {
+    const db = approvedDb(MEMBER_UID);
+    await assertSucceeds(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('wikiSections')
+        .add({ title: 'Day 3', content: '', order: 1 })
+    );
+  });
+
+  it('non-member CANNOT read wiki sections', async () => {
+    const db = approvedDb(OUTSIDER_UID);
+    await assertFails(
+      db.collection('trips').doc(TRIP_ID).collection('wikiSections').doc('wiki-1').get()
+    );
+  });
+});
+
 describe('Security rules — trips/{tripId}/bookings', () => {
   const TRIP_ID = 'trip-bk-rules-1';
   const MEMBER_UID = 'member-bk';
