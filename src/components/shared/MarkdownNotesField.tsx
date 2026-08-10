@@ -3,24 +3,42 @@ import type { MouseEvent, KeyboardEvent } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
-import { Box, IconButton, Popover, TextField, Button, Stack, Typography } from '@mui/material';
+import {
+  Box,
+  IconButton,
+  Popover,
+  TextField,
+  Button,
+  Stack,
+  Typography,
+  Autocomplete,
+} from '@mui/material';
 import FormatBoldIcon from '@mui/icons-material/FormatBold';
 import FormatItalicIcon from '@mui/icons-material/FormatItalic';
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
 import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
 import LinkIcon from '@mui/icons-material/Link';
+import AddLinkIcon from '@mui/icons-material/AddLink';
+
+export interface Linkable {
+  id: string;
+  label: string;
+  kind: 'checkpoint' | 'alternative' | 'route';
+}
 
 interface Props {
   label: string;
   value: string;
   onChange(value: string): void;
   inputProps?: object;
+  linkables?: Linkable[];
 }
 
-export function MarkdownNotesField({ label, value, onChange, inputProps }: Props) {
+export function MarkdownNotesField({ label, value, onChange, inputProps, linkables }: Props) {
   const [, forceRender] = useState(0);
   const [linkAnchor, setLinkAnchor] = useState<HTMLElement | null>(null);
   const [linkUrl, setLinkUrl] = useState('');
+  const [linkableAnchor, setLinkableAnchor] = useState<HTMLElement | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -34,6 +52,11 @@ export function MarkdownNotesField({ label, value, onChange, inputProps }: Props
         link: {
           autolink: true,
           openOnClick: false,
+          // Tiptap's Link extension strips any href whose scheme isn't in
+          // this allowlist (default: http/https/mailto/etc.) — without this,
+          // trip:// internal links silently lose their mark every time
+          // content round-trips through save/reload into the editor.
+          protocols: [{ scheme: 'trip', optionalSlashes: true }],
           HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' },
         },
       }),
@@ -85,6 +108,25 @@ export function MarkdownNotesField({ label, value, onChange, inputProps }: Props
       e.preventDefault();
       applyLink();
     }
+  }
+
+  function insertLinkable(linkable: Linkable) {
+    editor
+      .chain()
+      .focus()
+      .insertContent([
+        {
+          type: 'text',
+          text: linkable.label,
+          marks: [{ type: 'link', attrs: { href: `trip://${linkable.kind}/${linkable.id}` } }],
+        },
+        // Link is an inclusive mark (needed for autolink-while-typing), so
+        // without this trailing unmarked space, whatever the user types
+        // next silently joins the same link instead of starting plain text.
+        { type: 'text', text: ' ' },
+      ])
+      .run();
+    setLinkableAnchor(null);
   }
 
   return (
@@ -141,6 +183,15 @@ export function MarkdownNotesField({ label, value, onChange, inputProps }: Props
           >
             <LinkIcon fontSize="small" />
           </IconButton>
+          {linkables && linkables.length > 0 && (
+            <IconButton
+              size="small"
+              aria-label="Insert link to trip item"
+              onClick={(e) => setLinkableAnchor(e.currentTarget)}
+            >
+              <AddLinkIcon fontSize="small" />
+            </IconButton>
+          )}
         </Stack>
         <Box
           sx={{
@@ -173,6 +224,28 @@ export function MarkdownNotesField({ label, value, onChange, inputProps }: Props
           <Button onClick={applyLink}>Apply</Button>
         </Stack>
       </Popover>
+      {linkables && (
+        <Popover
+          open={Boolean(linkableAnchor)}
+          anchorEl={linkableAnchor}
+          onClose={() => setLinkableAnchor(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        >
+          <Box sx={{ p: 1.5, width: 280 }}>
+            <Autocomplete
+              options={linkables}
+              groupBy={(option) => option.kind}
+              getOptionLabel={(option) => option.label}
+              autoHighlight
+              openOnFocus
+              onChange={(_e, value) => value && insertLinkable(value)}
+              renderInput={(params) => (
+                <TextField {...params} size="small" label="Link to..." autoFocus />
+              )}
+            />
+          </Box>
+        </Popover>
+      )}
     </Box>
   );
 }

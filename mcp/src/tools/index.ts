@@ -55,6 +55,18 @@ const routeInputSchema = z.object({
   checkpointIds: z.array(z.string()),
 });
 
+const wikiSectionInputSchema = z.object({
+  title: z.string(),
+  content: z
+    .string()
+    .describe(
+      'Markdown. Link to a checkpoint/alternative/route from within the text using an ' +
+        'internal link of the form [label](trip://checkpoint/<id>), ' +
+        '[label](trip://alternative/<id>), or [label](trip://route/<id>).'
+    ),
+  order: z.number().describe("Sort position among the trip's wiki sections, ascending."),
+});
+
 function json(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
 }
@@ -247,6 +259,43 @@ export function registerTools(server: McpServer, repo: FirebaseClientTripReposit
     { tripId: z.string(), routeId: z.string(), changes: routeInputSchema.partial() },
     async ({ tripId, routeId, changes }) => {
       await repo.updateRoute(tripId, routeId, changes);
+      return json({ ok: true });
+    }
+  );
+
+  server.tool(
+    'list_wiki_sections',
+    'List a trip\'s "Trip Wiki" sections, sorted by order. Call this before ' +
+      'add_wiki_section — if a similarly-titled section already exists (e.g. "Day 3" vs a new ' +
+      '"Day 3 - Kyoto"), update the existing one with update_wiki_section instead of creating ' +
+      'a near-duplicate.',
+    { tripId: z.string() },
+    async ({ tripId }) => json(await repo.listWikiSections(tripId))
+  );
+
+  server.tool(
+    'get_wiki_section',
+    'Get a single wiki section by id.',
+    { tripId: z.string(), sectionId: z.string() },
+    async ({ tripId, sectionId }) => json(await repo.getWikiSection(tripId, sectionId))
+  );
+
+  server.tool(
+    'add_wiki_section',
+    'Add a new section to a trip\'s "Trip Wiki". Call list_wiki_sections first and ' +
+      'prefer update_wiki_section on an existing section (matched by title) over creating a ' +
+      'near-duplicate.',
+    { tripId: z.string(), section: wikiSectionInputSchema },
+    async ({ tripId, section }) => json(await repo.addWikiSection(tripId, section))
+  );
+
+  server.tool(
+    'update_wiki_section',
+    'Edit fields on an existing wiki section. Call list_wiki_sections first and prefer this ' +
+      'over add_wiki_section when a section covering the same topic already exists.',
+    { tripId: z.string(), sectionId: z.string(), changes: wikiSectionInputSchema.partial() },
+    async ({ tripId, sectionId, changes }) => {
+      await repo.updateWikiSection(tripId, sectionId, changes);
       return json({ ok: true });
     }
   );

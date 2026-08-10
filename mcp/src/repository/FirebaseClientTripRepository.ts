@@ -15,7 +15,15 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import type { Auth } from 'firebase/auth';
-import type { Trip, Checkpoint, Alternative, Booking, Route, MemberProfile } from '../types.js';
+import type {
+  Trip,
+  Checkpoint,
+  Alternative,
+  Booking,
+  Route,
+  WikiSection,
+  MemberProfile,
+} from '../types.js';
 
 function toIso(val: unknown): string {
   if (val instanceof Timestamp) return val.toDate().toISOString();
@@ -76,6 +84,16 @@ function toRoute(id: string, d: Record<string, unknown>): Route {
     name: d.name as string,
     days: (d.days as string[]) ?? [],
     checkpointIds: (d.checkpointIds as string[]) ?? [],
+    updatedAt: toIso(d.updatedAt),
+  };
+}
+
+function toWikiSection(id: string, d: Record<string, unknown>): WikiSection {
+  return {
+    id,
+    title: d.title as string,
+    content: (d.content as string) ?? '',
+    order: (d.order as number) ?? 0,
     updatedAt: toIso(d.updatedAt),
   };
 }
@@ -309,6 +327,40 @@ export class FirebaseClientTripRepository {
     changes: Partial<Omit<Route, 'id' | 'updatedAt'>>
   ): Promise<void> {
     await updateDoc(doc(this.db, 'trips', tripId, 'routes', id), {
+      ...changes,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async listWikiSections(tripId: string): Promise<WikiSection[]> {
+    const snap = await getDocs(collection(this.db, 'trips', tripId, 'wikiSections'));
+    return snap.docs.map((d) => toWikiSection(d.id, d.data()));
+  }
+
+  async getWikiSection(tripId: string, sectionId: string): Promise<WikiSection> {
+    const snap = await getDoc(doc(this.db, 'trips', tripId, 'wikiSections', sectionId));
+    if (!snap.exists()) throw new Error(`Wiki section ${sectionId} not found`);
+    return toWikiSection(snap.id, snap.data());
+  }
+
+  async addWikiSection(
+    tripId: string,
+    section: Omit<WikiSection, 'id' | 'updatedAt'>
+  ): Promise<WikiSection> {
+    const now = new Date().toISOString();
+    const ref = await addDoc(collection(this.db, 'trips', tripId, 'wikiSections'), {
+      ...section,
+      updatedAt: serverTimestamp(),
+    });
+    return { ...section, id: ref.id, updatedAt: now };
+  }
+
+  async updateWikiSection(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<WikiSection, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    await updateDoc(doc(this.db, 'trips', tripId, 'wikiSections', id), {
       ...changes,
       updatedAt: serverTimestamp(),
     });

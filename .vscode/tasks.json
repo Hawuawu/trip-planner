@@ -6,11 +6,7 @@
       "type": "npm",
       "script": "dev",
       "isBackground": true,
-      "options": {
-        "env": {
-          "VITE_USE_LOCAL": "true"
-        }
-      },
+      
       "problemMatcher": {
         "owner": "vite",
         "pattern": {

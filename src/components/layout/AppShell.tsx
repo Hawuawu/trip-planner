@@ -33,6 +33,7 @@ import AddIcon from '@mui/icons-material/Add';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import PeopleIcon from '@mui/icons-material/People';
 import HistoryIcon from '@mui/icons-material/History';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
 import { TimelineView } from '../timeline/TimelineView';
 import { MapView } from '../map/MapView';
 import { AlternativesShelf } from '../alternatives/AlternativesShelf';
@@ -44,6 +45,8 @@ import { TripMembersDialog } from '../trips/TripMembersDialog';
 import { ActivityLogView } from '../trips/ActivityLogView';
 import { RouteSelectorDialog } from '../routes/RouteSelectorDialog';
 import { DaySelectorMenu } from '../routes/DaySelectorMenu';
+import { WikiView } from '../wiki/WikiView';
+import type { InternalLinkKind } from '../shared/MarkdownNotes';
 import appIcon from '../../assets/app-icon.svg';
 import sakuraPattern from '../../assets/sakura-pattern.svg';
 import sakuraBranch from '../../assets/sakura-branch.svg';
@@ -198,6 +201,7 @@ export function AppShell({ onBack }: Props) {
   const [membersOpen, setMembersOpen] = useState(false);
   const [activityLogOpen, setActivityLogOpen] = useState(false);
   const [routeDialogOpen, setRouteDialogOpen] = useState(false);
+  const [wikiOpen, setWikiOpen] = useState(false);
   const [dayMenuAnchor, setDayMenuAnchor] = useState<HTMLElement | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [errorSnackbar, setErrorSnackbar] = useState<string | null>(null);
@@ -239,6 +243,19 @@ export function AppShell({ onBack }: Props) {
     if (isPhone) setTab(2);
     setAlternativePrefill(poi);
     setAddAlternativeSignal((n) => n + 1);
+  }
+
+  function handleWikiNavigate(kind: InternalLinkKind, id: string) {
+    const { selectCheckpoint, selectAlternative, selectRoute } = useTripStore.getState();
+    if (kind === 'checkpoint') {
+      if (isPhone) setTab(0);
+      selectCheckpoint(id);
+    } else if (kind === 'alternative') {
+      if (isPhone) setTab(2);
+      selectAlternative(id);
+    } else {
+      selectRoute(id);
+    }
   }
 
   async function handleImportCheckpointsConfirm(parsed: ParsedCheckpointsYaml) {
@@ -302,6 +319,17 @@ export function AppShell({ onBack }: Props) {
           <Drawer anchor="left" open={menuOpen} onClose={() => setMenuOpen(false)}>
             <Box sx={{ width: 280 }} role="presentation" data-testid="app-menu">
               <List>
+                <ListItemButton
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setWikiOpen(true);
+                  }}
+                >
+                  <ListItemIcon>
+                    <MenuBookIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Trip Wiki</ListItemText>
+                </ListItemButton>
                 <ListItemButton onClick={handleAddCheckpoint}>
                   <ListItemIcon>
                     <AddIcon fontSize="small" />
@@ -576,6 +604,14 @@ export function AppShell({ onBack }: Props) {
           open={routeDialogOpen}
           onClose={() => setRouteDialogOpen(false)}
           onSaved={setSnackbar}
+        />
+      )}
+
+      {trip && (
+        <WikiView
+          open={wikiOpen}
+          onClose={() => setWikiOpen(false)}
+          onNavigate={handleWikiNavigate}
         />
       )}
 
