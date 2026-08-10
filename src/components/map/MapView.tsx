@@ -189,7 +189,6 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
     selectedRouteId,
     routes,
   } = useTripStore();
-  void selectedAlternativeId;
 
   const [editTarget, setEditTarget] = useState<MapEditTarget | null>(null);
 
@@ -326,6 +325,8 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
           <AlternativeMarker
             key={alt.id}
             alternative={alt}
+            isSelected={alt.id === selectedAlternativeId}
+            onSelect={() => selectAlternative(alt.id === selectedAlternativeId ? null : alt.id)}
             onEdit={() => {
               if (selectedAlternativeId !== alt.id) selectAlternative(alt.id);
               setEditTarget({ kind: 'alternative', id: alt.id });

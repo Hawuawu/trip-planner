@@ -267,6 +267,21 @@ describe('AlternativesShelf', () => {
     expect(screen.queryByRole('heading', { name: /edit alternative/i })).not.toBeInTheDocument();
   });
 
+  it('gives the selected alternative card a non-color border signal, and moves it when selection changes', async () => {
+    useTripStore.setState({ alternatives: SEED_ALTS });
+    renderWithProviders(<AlternativesShelf />);
+
+    await userEvent.click(screen.getByText('teamLab Borderless'));
+    const first = itemContainer('teamLab Borderless');
+    const second = itemContainer('Park Hyatt Tokyo');
+    expect(getComputedStyle(first).borderTopWidth).toBe('2px');
+    expect(getComputedStyle(second).borderTopWidth).not.toBe('2px');
+
+    await userEvent.click(screen.getByText('Park Hyatt Tokyo'));
+    expect(getComputedStyle(itemContainer('teamLab Borderless')).borderTopWidth).not.toBe('2px');
+    expect(getComputedStyle(itemContainer('Park Hyatt Tokyo')).borderTopWidth).toBe('2px');
+  });
+
   it('calls updateAlternative with edited values on save', async () => {
     useTripStore.setState({ alternatives: SEED_ALTS });
     const spy = vi.spyOn(useTripStore.getState(), 'updateAlternative');

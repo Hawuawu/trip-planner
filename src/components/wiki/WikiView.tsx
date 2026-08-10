@@ -137,7 +137,7 @@ export function WikiView({ open, onClose, onNavigate }: Props) {
             return (
               <Box key={section.id} sx={{ mb: 2 }}>
                 {editing?.id === section.id ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
                     <TextField
                       label="Section title"
                       size="small"
@@ -246,12 +246,15 @@ export function WikiView({ open, onClose, onNavigate }: Props) {
           })}
 
           {editing?.id === 'new' && (
+            // mt is at least 1 even with no sections above (MUI zeroes
+            // DialogContent's own top padding right after a DialogTitle,
+            // which otherwise clips this field's floating label).
             <Box
               sx={{
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 1.5,
-                mt: sections.length > 0 ? 2 : 0,
+                mt: sections.length > 0 ? 2 : 1,
               }}
             >
               <TextField
