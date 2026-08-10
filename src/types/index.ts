@@ -54,6 +54,49 @@ export interface WikiSection {
   updatedAt: string;
 }
 
+export type BudgetCategory = 'travel' | 'hotel' | 'meals' | 'merchandise' | 'other';
+export type BudgetRateType = 'constant' | 'per_person' | 'per_night';
+
+export interface BudgetAlternative {
+  id: string;
+  label: string;
+  price: number;
+  rateType: BudgetRateType;
+  quantity: number; // ignored when rateType === 'constant'
+  selected: boolean;
+}
+
+export interface Budget {
+  id: string;
+  name: string;
+  currency: string; // ISO 4217 code, e.g. "JPY"
+  updatedAt: string;
+}
+
+export interface BudgetSection {
+  id: string;
+  budgetId: string;
+  category: BudgetCategory;
+  name: string;
+  price?: number; // flat subtotal, used only when this section has no items
+  notes?: string; // markdown
+  order: number;
+  updatedAt: string;
+}
+
+export interface BudgetItem {
+  id: string;
+  budgetSectionId: string;
+  name: string;
+  price?: number; // flat contribution, used only when alternatives is empty/absent
+  rateType: BudgetRateType;
+  quantity: number;
+  alternatives?: BudgetAlternative[];
+  notes?: string; // markdown
+  order: number;
+  updatedAt: string;
+}
+
 export interface MemberProfile {
   email: string | null;
   displayName: string | null;
@@ -92,7 +135,16 @@ export type ActivityLogEntryType =
   | 'route_deleted'
   | 'wiki_section_added'
   | 'wiki_section_updated'
-  | 'wiki_section_deleted';
+  | 'wiki_section_deleted'
+  | 'budget_added'
+  | 'budget_updated'
+  | 'budget_deleted'
+  | 'budget_section_added'
+  | 'budget_section_updated'
+  | 'budget_section_deleted'
+  | 'budget_item_added'
+  | 'budget_item_updated'
+  | 'budget_item_deleted';
 
 export interface ActivityLogEntry {
   id: string;

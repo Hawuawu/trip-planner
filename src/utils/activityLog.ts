@@ -46,9 +46,18 @@ const FORMATTERS: Record<ActivityLogEntryType, Formatter> = {
   route_added: quoted('added', 'route'),
   route_updated: updated('route', 'a'),
   route_deleted: quoted('deleted', 'route'),
-  wiki_section_added: quoted('added', 'Trip Wiki section'),
-  wiki_section_updated: updated('Trip Wiki section', 'a'),
-  wiki_section_deleted: quoted('deleted', 'Trip Wiki section'),
+  wiki_section_added: quoted('added', 'Wiki section'),
+  wiki_section_updated: updated('Wiki section', 'a'),
+  wiki_section_deleted: quoted('deleted', 'Wiki section'),
+  budget_added: quoted('added', 'budget'),
+  budget_updated: updated('budget', 'a'),
+  budget_deleted: quoted('deleted', 'budget'),
+  budget_section_added: quoted('added', 'budget section'),
+  budget_section_updated: updated('budget section', 'a'),
+  budget_section_deleted: quoted('deleted', 'budget section'),
+  budget_item_added: quoted('added', 'budget item'),
+  budget_item_updated: updated('budget item', 'a'),
+  budget_item_deleted: quoted('deleted', 'budget item'),
 };
 
 export function formatActivityLogEntry(entry: ActivityLogEntry): string {

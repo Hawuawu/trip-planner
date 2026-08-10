@@ -6,6 +6,9 @@ import type {
   Booking,
   Route,
   WikiSection,
+  Budget,
+  BudgetSection,
+  BudgetItem,
   ActivityLogEntry,
   ActivityLogEntryType,
   InviteMemberResult,
@@ -105,6 +108,9 @@ const LS_ALT = 'trip-planner:alternatives';
 const LS_BOOKINGS = 'trip-planner:bookings';
 const LS_ROUTES = 'trip-planner:routes';
 const LS_WIKI_SECTIONS = 'trip-planner:wikiSections';
+const LS_BUDGETS = 'trip-planner:budgets';
+const LS_BUDGET_SECTIONS = 'trip-planner:budgetSections';
+const LS_BUDGET_ITEMS = 'trip-planner:budgetItems';
 const LS_TRIPS = 'trip-planner:trips';
 const LS_ACTIVITY = 'trip-planner:activityLog';
 
@@ -186,6 +192,45 @@ function saveWikiSections(s: WikiSection[]) {
   localStorage.setItem(LS_WIKI_SECTIONS, JSON.stringify(s));
 }
 
+function loadBudgets(): Budget[] {
+  try {
+    const raw = localStorage.getItem(LS_BUDGETS);
+    return raw ? (JSON.parse(raw) as Budget[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBudgets(b: Budget[]) {
+  localStorage.setItem(LS_BUDGETS, JSON.stringify(b));
+}
+
+function loadBudgetSections(): BudgetSection[] {
+  try {
+    const raw = localStorage.getItem(LS_BUDGET_SECTIONS);
+    return raw ? (JSON.parse(raw) as BudgetSection[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBudgetSections(s: BudgetSection[]) {
+  localStorage.setItem(LS_BUDGET_SECTIONS, JSON.stringify(s));
+}
+
+function loadBudgetItems(): BudgetItem[] {
+  try {
+    const raw = localStorage.getItem(LS_BUDGET_ITEMS);
+    return raw ? (JSON.parse(raw) as BudgetItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBudgetItems(i: BudgetItem[]) {
+  localStorage.setItem(LS_BUDGET_ITEMS, JSON.stringify(i));
+}
+
 function loadLog(): ActivityLogEntry[] {
   try {
     const raw = localStorage.getItem(LS_ACTIVITY);
@@ -205,6 +250,9 @@ export class LocalTripRepository implements TripRepository {
   private bookingSubs = new Map<string, Set<(b: Booking[]) => void>>();
   private routeSubs = new Map<string, Set<(r: Route[]) => void>>();
   private wikiSectionSubs = new Map<string, Set<(s: WikiSection[]) => void>>();
+  private budgetSubs = new Map<string, Set<(b: Budget[]) => void>>();
+  private budgetSectionSubs = new Map<string, Set<(s: BudgetSection[]) => void>>();
+  private budgetItemSubs = new Map<string, Set<(i: BudgetItem[]) => void>>();
   private tripSubs = new Map<string, Set<(t: Trip) => void>>();
   private logSubs = new Map<string, Set<(e: ActivityLogEntry[]) => void>>();
 
@@ -606,6 +654,170 @@ export class LocalTripRepository implements TripRepository {
     saveWikiSections(loadWikiSections().filter((s) => s.id !== id));
     this.notifyWikiSections(tripId);
     this.pushActivity(tripId, { type: 'wiki_section_deleted', entityName: target?.title });
+  }
+
+  subscribeToBudgets(tripId: string, cb: (b: Budget[]) => void): () => void {
+    if (!this.budgetSubs.has(tripId)) this.budgetSubs.set(tripId, new Set());
+    this.budgetSubs.get(tripId)!.add(cb);
+    cb(loadBudgets());
+    return () => {
+      this.budgetSubs.get(tripId)?.delete(cb);
+    };
+  }
+
+  private notifyBudgets(tripId: string) {
+    this.budgetSubs.get(tripId)?.forEach((cb) => cb(loadBudgets()));
+  }
+
+  async addBudget(tripId: string, budget: Omit<Budget, 'id' | 'updatedAt'>): Promise<Budget> {
+    const saved: Budget = {
+      ...budget,
+      id: `local-budget-${Date.now()}`,
+      updatedAt: new Date().toISOString(),
+    };
+    saveBudgets([...loadBudgets(), saved]);
+    this.notifyBudgets(tripId);
+    this.pushActivity(tripId, { type: 'budget_added', entityName: budget.name });
+    return saved;
+  }
+
+  async updateBudget(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<Budget, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    saveBudgets(
+      loadBudgets().map((b) =>
+        b.id === id ? { ...b, ...changes, updatedAt: new Date().toISOString() } : b
+      )
+    );
+    this.notifyBudgets(tripId);
+    this.pushActivity(tripId, {
+      type: 'budget_updated',
+      entityName: changes.name,
+      changedFields: Object.keys(changes),
+    });
+  }
+
+  async deleteBudget(tripId: string, id: string): Promise<void> {
+    const target = loadBudgets().find((b) => b.id === id);
+    const sectionsToDelete = loadBudgetSections().filter((s) => s.budgetId === id);
+    const sectionIds = new Set(sectionsToDelete.map((s) => s.id));
+    saveBudgetItems(loadBudgetItems().filter((i) => !sectionIds.has(i.budgetSectionId)));
+    saveBudgetSections(loadBudgetSections().filter((s) => s.budgetId !== id));
+    saveBudgets(loadBudgets().filter((b) => b.id !== id));
+    this.notifyBudgetItems(tripId);
+    this.notifyBudgetSections(tripId);
+    this.notifyBudgets(tripId);
+    this.pushActivity(tripId, { type: 'budget_deleted', entityName: target?.name });
+  }
+
+  subscribeToBudgetSections(tripId: string, cb: (s: BudgetSection[]) => void): () => void {
+    if (!this.budgetSectionSubs.has(tripId)) this.budgetSectionSubs.set(tripId, new Set());
+    this.budgetSectionSubs.get(tripId)!.add(cb);
+    cb(loadBudgetSections());
+    return () => {
+      this.budgetSectionSubs.get(tripId)?.delete(cb);
+    };
+  }
+
+  private notifyBudgetSections(tripId: string) {
+    this.budgetSectionSubs.get(tripId)?.forEach((cb) => cb(loadBudgetSections()));
+  }
+
+  async addBudgetSection(
+    tripId: string,
+    section: Omit<BudgetSection, 'id' | 'updatedAt'>
+  ): Promise<BudgetSection> {
+    const saved: BudgetSection = {
+      ...section,
+      id: `local-budget-section-${Date.now()}`,
+      updatedAt: new Date().toISOString(),
+    };
+    saveBudgetSections([...loadBudgetSections(), saved]);
+    this.notifyBudgetSections(tripId);
+    this.pushActivity(tripId, { type: 'budget_section_added', entityName: section.name });
+    return saved;
+  }
+
+  async updateBudgetSection(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<BudgetSection, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    saveBudgetSections(
+      loadBudgetSections().map((s) =>
+        s.id === id ? { ...s, ...changes, updatedAt: new Date().toISOString() } : s
+      )
+    );
+    this.notifyBudgetSections(tripId);
+    this.pushActivity(tripId, {
+      type: 'budget_section_updated',
+      entityName: changes.name,
+      changedFields: Object.keys(changes),
+    });
+  }
+
+  async deleteBudgetSection(tripId: string, id: string): Promise<void> {
+    const target = loadBudgetSections().find((s) => s.id === id);
+    saveBudgetItems(loadBudgetItems().filter((i) => i.budgetSectionId !== id));
+    saveBudgetSections(loadBudgetSections().filter((s) => s.id !== id));
+    this.notifyBudgetItems(tripId);
+    this.notifyBudgetSections(tripId);
+    this.pushActivity(tripId, { type: 'budget_section_deleted', entityName: target?.name });
+  }
+
+  subscribeToBudgetItems(tripId: string, cb: (i: BudgetItem[]) => void): () => void {
+    if (!this.budgetItemSubs.has(tripId)) this.budgetItemSubs.set(tripId, new Set());
+    this.budgetItemSubs.get(tripId)!.add(cb);
+    cb(loadBudgetItems());
+    return () => {
+      this.budgetItemSubs.get(tripId)?.delete(cb);
+    };
+  }
+
+  private notifyBudgetItems(tripId: string) {
+    this.budgetItemSubs.get(tripId)?.forEach((cb) => cb(loadBudgetItems()));
+  }
+
+  async addBudgetItem(
+    tripId: string,
+    item: Omit<BudgetItem, 'id' | 'updatedAt'>
+  ): Promise<BudgetItem> {
+    const saved: BudgetItem = {
+      ...item,
+      id: `local-budget-item-${Date.now()}`,
+      updatedAt: new Date().toISOString(),
+    };
+    saveBudgetItems([...loadBudgetItems(), saved]);
+    this.notifyBudgetItems(tripId);
+    this.pushActivity(tripId, { type: 'budget_item_added', entityName: item.name });
+    return saved;
+  }
+
+  async updateBudgetItem(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<BudgetItem, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    saveBudgetItems(
+      loadBudgetItems().map((i) =>
+        i.id === id ? { ...i, ...changes, updatedAt: new Date().toISOString() } : i
+      )
+    );
+    this.notifyBudgetItems(tripId);
+    this.pushActivity(tripId, {
+      type: 'budget_item_updated',
+      entityName: changes.name,
+      changedFields: Object.keys(changes),
+    });
+  }
+
+  async deleteBudgetItem(tripId: string, id: string): Promise<void> {
+    const target = loadBudgetItems().find((i) => i.id === id);
+    saveBudgetItems(loadBudgetItems().filter((i) => i.id !== id));
+    this.notifyBudgetItems(tripId);
+    this.pushActivity(tripId, { type: 'budget_item_deleted', entityName: target?.name });
   }
 
   async listTrips(): Promise<Trip[]> {

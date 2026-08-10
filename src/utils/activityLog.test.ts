@@ -182,6 +182,66 @@ describe('formatActivityLogEntry', () => {
     ).toBe('Alice updated a booking (confirmationNumber)');
   });
 
+  it('formats budget_added', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'budget_added', entityName: 'Backpacker' }))
+    ).toBe('Alice added budget "Backpacker"');
+  });
+
+  it('formats budget_updated with a name', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'budget_updated', entityName: 'Backpacker' }))
+    ).toBe('Alice updated budget "Backpacker"');
+  });
+
+  it('formats budget_updated without a name, listing changed fields', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'budget_updated', changedFields: ['currency'] }))
+    ).toBe('Alice updated a budget (currency)');
+  });
+
+  it('formats budget_deleted', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'budget_deleted', entityName: 'Backpacker' }))
+    ).toBe('Alice deleted budget "Backpacker"');
+  });
+
+  it('formats budget_section_added', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'budget_section_added', entityName: 'Hotel' }))
+    ).toBe('Alice added budget section "Hotel"');
+  });
+
+  it('formats budget_section_updated with a name', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'budget_section_updated', entityName: 'Hotel' }))
+    ).toBe('Alice updated budget section "Hotel"');
+  });
+
+  it('formats budget_section_deleted', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'budget_section_deleted', entityName: 'Hotel' }))
+    ).toBe('Alice deleted budget section "Hotel"');
+  });
+
+  it('formats budget_item_added', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'budget_item_added', entityName: 'Ryokan' }))
+    ).toBe('Alice added budget item "Ryokan"');
+  });
+
+  it('formats budget_item_updated with a name', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'budget_item_updated', entityName: 'Ryokan' }))
+    ).toBe('Alice updated budget item "Ryokan"');
+  });
+
+  it('formats budget_item_deleted', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'budget_item_deleted', entityName: 'Ryokan' }))
+    ).toBe('Alice deleted budget item "Ryokan"');
+  });
+
   it('falls back to a generic message for an unrecognized type', () => {
     expect(
       formatActivityLogEntry(

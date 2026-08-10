@@ -107,6 +107,20 @@ describe('MarkdownNotesField', () => {
     expect(lastCall).toContain('trip://checkpoint/cp-1');
   });
 
+  it('inserts a trip://budget_item link when a budget item linkable is picked', async () => {
+    const onChange = vi.fn();
+    const linkables = [{ id: 'item-1', label: 'Ryokan', kind: 'budget_item' as const }];
+    setup({ value: '', onChange, linkables });
+    fireEvent.click(screen.getByRole('button', { name: 'Insert link to trip item' }));
+    const input = await screen.findByRole('combobox', { name: 'Link to...' });
+    fireEvent.change(input, { target: { value: 'Ryokan' } });
+    const option = await screen.findByRole('option', { name: 'Ryokan' });
+    fireEvent.click(option);
+    expect(onChange).toHaveBeenCalled();
+    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1][0] as string;
+    expect(lastCall).toContain('trip://budget_item/item-1');
+  });
+
   it('renders a trip:// link from the initial markdown value as a real link (survives round-trip)', () => {
     setup({ value: 'See [Fushimi Inari](trip://checkpoint/cp-1) for details' });
     const link = screen.getByRole('link', { name: 'Fushimi Inari' });

@@ -62,6 +62,22 @@ describe('MarkdownNotes', () => {
     expect(onInternalLink).toHaveBeenCalledWith('checkpoint', 'cp-1');
   });
 
+  it('renders a trip://budget/<id> link as clickable and fires onInternalLink on click', async () => {
+    const onInternalLink = vi.fn();
+    setup('[Backpacker](trip://budget/budget-1)', { onInternalLink });
+    const button = screen.getByRole('button', { name: 'Backpacker' });
+    await userEvent.click(button);
+    expect(onInternalLink).toHaveBeenCalledWith('budget', 'budget-1');
+  });
+
+  it('renders a trip://budget_item/<id> link as clickable and fires onInternalLink on click', async () => {
+    const onInternalLink = vi.fn();
+    setup('[Ryokan](trip://budget_item/item-1)', { onInternalLink });
+    const button = screen.getByRole('button', { name: 'Ryokan' });
+    await userEvent.click(button);
+    expect(onInternalLink).toHaveBeenCalledWith('budget_item', 'item-1');
+  });
+
   it('strips a trip:// href when onInternalLink is not provided (unchanged legacy behavior)', () => {
     const { container } = setup('[Narita Airport](trip://checkpoint/cp-1)');
     expect(screen.queryByRole('button', { name: 'Narita Airport' })).toBeNull();

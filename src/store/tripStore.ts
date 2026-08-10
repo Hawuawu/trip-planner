@@ -7,6 +7,9 @@ import type {
   Booking,
   Route,
   WikiSection,
+  Budget,
+  BudgetSection,
+  BudgetItem,
   ActivityLogEntry,
   InviteMemberResult,
 } from '../types';
@@ -18,11 +21,15 @@ interface TripState {
   bookings: Booking[];
   routes: Route[];
   wikiSections: WikiSection[];
+  budgets: Budget[];
+  budgetSections: BudgetSection[];
+  budgetItems: BudgetItem[];
   activityLog: ActivityLogEntry[];
   selectedId: string | null;
   selectedDay: string | null;
   selectedRouteId: string | null;
   selectedAlternativeId: string | null;
+  budgetNavigationTarget: { budgetId: string; itemId: string | null } | null;
   alternativesSearchFilter: string;
   alternativesTagFilter: string[];
   showAlternativesOnMap: boolean;
@@ -39,6 +46,8 @@ interface TripState {
   selectDay(day: string | null): void;
   selectRoute(routeId: string | null): void;
   selectAlternative(id: string | null): void;
+  navigateToBudget(budgetId: string): void;
+  navigateToBudgetItem(itemId: string): void;
   setAlternativesSearchFilter(search: string): void;
   toggleAlternativesTagFilter(tag: string): void;
   setShowAlternativesOnMap(value: boolean): void;
@@ -87,6 +96,25 @@ interface TripState {
     changes: Partial<Omit<WikiSection, 'id' | 'updatedAt'>>
   ): Promise<void>;
   deleteWikiSection(id: string): Promise<void>;
+
+  addBudget(budget: Omit<Budget, 'id' | 'updatedAt'>): Promise<void>;
+  updateBudget(id: string, changes: Partial<Omit<Budget, 'id' | 'updatedAt'>>): Promise<void>;
+  deleteBudget(id: string): Promise<void>;
+
+  addBudgetSection(section: Omit<BudgetSection, 'id' | 'updatedAt'>): Promise<void>;
+  updateBudgetSection(
+    id: string,
+    changes: Partial<Omit<BudgetSection, 'id' | 'updatedAt'>>
+  ): Promise<void>;
+  deleteBudgetSection(id: string): Promise<void>;
+
+  addBudgetItem(item: Omit<BudgetItem, 'id' | 'updatedAt'>): Promise<void>;
+  updateBudgetItem(
+    id: string,
+    changes: Partial<Omit<BudgetItem, 'id' | 'updatedAt'>>
+  ): Promise<void>;
+  deleteBudgetItem(id: string): Promise<void>;
+  selectBudgetItemAlternative(itemId: string, alternativeId: string): Promise<void>;
 }
 
 export const useTripStore = create<TripState>((set, get) => ({
@@ -96,11 +124,15 @@ export const useTripStore = create<TripState>((set, get) => ({
   bookings: [],
   routes: [],
   wikiSections: [],
+  budgets: [],
+  budgetSections: [],
+  budgetItems: [],
   activityLog: [],
   selectedId: null,
   selectedDay: null,
   selectedRouteId: null,
   selectedAlternativeId: null,
+  budgetNavigationTarget: null,
   alternativesSearchFilter: '',
   alternativesTagFilter: [],
   showAlternativesOnMap: true,
@@ -124,6 +156,9 @@ export const useTripStore = create<TripState>((set, get) => ({
     repo.subscribeToBookings(tripId, (bookings) => set({ bookings }));
     repo.subscribeToRoutes(tripId, (routes) => set({ routes }));
     repo.subscribeToWikiSections(tripId, (wikiSections) => set({ wikiSections }));
+    repo.subscribeToBudgets(tripId, (budgets) => set({ budgets }));
+    repo.subscribeToBudgetSections(tripId, (budgetSections) => set({ budgetSections }));
+    repo.subscribeToBudgetItems(tripId, (budgetItems) => set({ budgetItems }));
     repo.subscribeToActivityLog(tripId, (activityLog) => set({ activityLog }));
     repo.recordAccess(tripId).catch(() => {});
   },
@@ -171,6 +206,19 @@ export const useTripStore = create<TripState>((set, get) => ({
 
   selectRoute(routeId) {
     set({ selectedRouteId: routeId });
+  },
+
+  navigateToBudget(budgetId) {
+    set({ budgetNavigationTarget: { budgetId, itemId: null } });
+  },
+
+  navigateToBudgetItem(itemId) {
+    const { budgetItems, budgetSections } = get();
+    const item = budgetItems.find((i) => i.id === itemId);
+    if (!item) return;
+    const section = budgetSections.find((s) => s.id === item.budgetSectionId);
+    if (!section) return;
+    set({ budgetNavigationTarget: { budgetId: section.budgetId, itemId } });
   },
 
   setAlternativesSearchFilter(search) {
@@ -488,5 +536,152 @@ export const useTripStore = create<TripState>((set, get) => ({
       set({ wikiSections: prev });
       throw err;
     }
+  },
+
+  async addBudget(budget) {
+    const { repo, tripId, budgets } = get();
+    if (!repo || !tripId) return;
+    const optimistic: Budget = {
+      ...budget,
+      id: `__optimistic-${Date.now()}`,
+      updatedAt: new Date().toISOString(),
+    };
+    set({ budgets: [...budgets, optimistic] });
+    const saved = await repo.addBudget(tripId, budget);
+    set((s) => ({ budgets: s.budgets.map((b) => (b.id === optimistic.id ? saved : b)) }));
+  },
+
+  async updateBudget(id, changes) {
+    const { repo, tripId, budgets } = get();
+    if (!repo || !tripId) return;
+    const prev = budgets.find((b) => b.id === id);
+    set({
+      budgets: budgets.map((b) =>
+        b.id === id ? { ...b, ...changes, updatedAt: new Date().toISOString() } : b
+      ),
+    });
+    try {
+      await repo.updateBudget(tripId, id, changes);
+    } catch (err) {
+      if (prev) set((s) => ({ budgets: s.budgets.map((b) => (b.id === id ? prev : b)) }));
+      throw err;
+    }
+  },
+
+  async deleteBudget(id) {
+    const { repo, tripId, budgets } = get();
+    if (!repo || !tripId) return;
+    const prev = budgets;
+    set({ budgets: budgets.filter((b) => b.id !== id) });
+    try {
+      await repo.deleteBudget(tripId, id);
+    } catch (err) {
+      set({ budgets: prev });
+      throw err;
+    }
+  },
+
+  async addBudgetSection(section) {
+    const { repo, tripId, budgetSections } = get();
+    if (!repo || !tripId) return;
+    const optimistic: BudgetSection = {
+      ...section,
+      id: `__optimistic-${Date.now()}`,
+      updatedAt: new Date().toISOString(),
+    };
+    set({ budgetSections: [...budgetSections, optimistic] });
+    const saved = await repo.addBudgetSection(tripId, section);
+    set((s) => ({
+      budgetSections: s.budgetSections.map((sec) => (sec.id === optimistic.id ? saved : sec)),
+    }));
+  },
+
+  async updateBudgetSection(id, changes) {
+    const { repo, tripId, budgetSections } = get();
+    if (!repo || !tripId) return;
+    const prev = budgetSections.find((s) => s.id === id);
+    set({
+      budgetSections: budgetSections.map((s) =>
+        s.id === id ? { ...s, ...changes, updatedAt: new Date().toISOString() } : s
+      ),
+    });
+    try {
+      await repo.updateBudgetSection(tripId, id, changes);
+    } catch (err) {
+      if (prev)
+        set((s) => ({
+          budgetSections: s.budgetSections.map((sec) => (sec.id === id ? prev : sec)),
+        }));
+      throw err;
+    }
+  },
+
+  async deleteBudgetSection(id) {
+    const { repo, tripId, budgetSections } = get();
+    if (!repo || !tripId) return;
+    const prev = budgetSections;
+    set({ budgetSections: budgetSections.filter((s) => s.id !== id) });
+    try {
+      await repo.deleteBudgetSection(tripId, id);
+    } catch (err) {
+      set({ budgetSections: prev });
+      throw err;
+    }
+  },
+
+  async addBudgetItem(item) {
+    const { repo, tripId, budgetItems } = get();
+    if (!repo || !tripId) return;
+    const optimistic: BudgetItem = {
+      ...item,
+      id: `__optimistic-${Date.now()}`,
+      updatedAt: new Date().toISOString(),
+    };
+    set({ budgetItems: [...budgetItems, optimistic] });
+    const saved = await repo.addBudgetItem(tripId, item);
+    set((s) => ({
+      budgetItems: s.budgetItems.map((i) => (i.id === optimistic.id ? saved : i)),
+    }));
+  },
+
+  async updateBudgetItem(id, changes) {
+    const { repo, tripId, budgetItems } = get();
+    if (!repo || !tripId) return;
+    const prev = budgetItems.find((i) => i.id === id);
+    set({
+      budgetItems: budgetItems.map((i) =>
+        i.id === id ? { ...i, ...changes, updatedAt: new Date().toISOString() } : i
+      ),
+    });
+    try {
+      await repo.updateBudgetItem(tripId, id, changes);
+    } catch (err) {
+      if (prev) set((s) => ({ budgetItems: s.budgetItems.map((i) => (i.id === id ? prev : i)) }));
+      throw err;
+    }
+  },
+
+  async deleteBudgetItem(id) {
+    const { repo, tripId, budgetItems } = get();
+    if (!repo || !tripId) return;
+    const prev = budgetItems;
+    set({ budgetItems: budgetItems.filter((i) => i.id !== id) });
+    try {
+      await repo.deleteBudgetItem(tripId, id);
+    } catch (err) {
+      set({ budgetItems: prev });
+      throw err;
+    }
+  },
+
+  async selectBudgetItemAlternative(itemId, alternativeId) {
+    const item = get().budgetItems.find((i) => i.id === itemId);
+    if (!item?.alternatives) return;
+    await get().updateBudgetItem(itemId, {
+      alternatives: item.alternatives.map((alt) => ({
+        ...alt,
+        selected: alt.id === alternativeId,
+      })),
+    });
   },
 }));

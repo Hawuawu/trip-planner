@@ -3,15 +3,22 @@ import remarkGfm from 'remark-gfm';
 import { Box, Link } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 
-export type InternalLinkKind = 'checkpoint' | 'alternative' | 'route';
+export type InternalLinkKind = 'checkpoint' | 'alternative' | 'route' | 'budget' | 'budget_item';
 
 const INTERNAL_LINK_PREFIX = 'trip://';
+const INTERNAL_LINK_KINDS: InternalLinkKind[] = [
+  'checkpoint',
+  'alternative',
+  'route',
+  'budget',
+  'budget_item',
+];
 
 function parseInternalLink(href: string): { kind: InternalLinkKind; id: string } | null {
   if (!href.startsWith(INTERNAL_LINK_PREFIX)) return null;
   const [kind, id] = href.slice(INTERNAL_LINK_PREFIX.length).split('/');
-  if ((kind === 'checkpoint' || kind === 'alternative' || kind === 'route') && id) {
-    return { kind, id };
+  if (INTERNAL_LINK_KINDS.includes(kind as InternalLinkKind) && id) {
+    return { kind: kind as InternalLinkKind, id };
   }
   return null;
 }
