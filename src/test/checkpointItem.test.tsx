@@ -48,6 +48,7 @@ function renderItem(
     isSelected: boolean;
     isLast: boolean;
     onSelect: () => void;
+    onEdit: () => void;
     onDelete: () => void;
   }> = {}
 ) {
@@ -57,6 +58,7 @@ function renderItem(
     isSelected: false,
     isLast: false,
     onSelect: vi.fn(),
+    onEdit: vi.fn(),
     onDelete: vi.fn(),
     ...overrides,
   };
@@ -126,6 +128,24 @@ describe('CheckpointItem', () => {
     // Click the item root — the TimelineItem wraps everything
     fireEvent.click(screen.getByText('JFK → NRT'));
     expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onSelect when Enter or Space is pressed on the timeline item (keyboard support)', () => {
+    const onSelect = vi.fn();
+    renderItem({ onSelect });
+    const timelineItem = screen.getByText('JFK → NRT').closest('li')!;
+    fireEvent.keyDown(timelineItem, { key: 'Enter' });
+    fireEvent.keyDown(timelineItem, { key: ' ' });
+    expect(onSelect).toHaveBeenCalledTimes(2);
+  });
+
+  it('calls onEdit when Enter is pressed on the checkpoint dot, without also selecting', () => {
+    const onSelect = vi.fn();
+    const onEdit = vi.fn();
+    renderItem({ onSelect, onEdit });
+    fireEvent.keyDown(screen.getAllByLabelText('Edit checkpoint')[0], { key: 'Enter' });
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('clicking delete opens a confirmation dialog without calling onDelete yet', () => {

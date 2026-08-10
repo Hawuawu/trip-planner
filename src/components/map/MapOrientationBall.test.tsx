@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MapOrientationBall } from './MapOrientationBall';
-import { MAX_PITCH } from './mapConstants';
+import { KEYBOARD_BEARING_STEP, KEYBOARD_PITCH_STEP, MAX_PITCH } from './mapConstants';
 
 const jumpTo = vi.fn();
 const easeTo = vi.fn();
@@ -24,6 +24,11 @@ describe('MapOrientationBall', () => {
   it('renders an accessible drag surface', () => {
     render(<MapOrientationBall />);
     expect(screen.getByRole('img', { name: /bearing and pitch/i })).toBeInTheDocument();
+  });
+
+  it('is focusable via tabIndex for keyboard operation', () => {
+    render(<MapOrientationBall />);
+    expect(screen.getByRole('img')).toHaveAttribute('tabindex', '0');
   });
 
   it('rotates bearing proportionally to horizontal drag distance', () => {
@@ -90,5 +95,45 @@ describe('MapOrientationBall', () => {
     drag(ball, { x: 100, y: 100 }, { x: 150, y: 60 });
     fireEvent.doubleClick(ball);
     expect(easeTo).toHaveBeenCalledWith(expect.objectContaining({ bearing: 0, pitch: 0 }));
+  });
+
+  it('rotates bearing right on ArrowRight and left on ArrowLeft', () => {
+    render(<MapOrientationBall />);
+    const ball = screen.getByRole('img');
+    fireEvent.keyDown(ball, { key: 'ArrowRight' });
+    expect(jumpTo).toHaveBeenLastCalledWith(
+      expect.objectContaining({ bearing: KEYBOARD_BEARING_STEP })
+    );
+    fireEvent.keyDown(ball, { key: 'ArrowLeft' });
+    expect(jumpTo).toHaveBeenLastCalledWith(expect.objectContaining({ bearing: 0 }));
+  });
+
+  it('increases pitch on ArrowUp and decreases on ArrowDown, clamped at MAX_PITCH/0', () => {
+    render(<MapOrientationBall />);
+    const ball = screen.getByRole('img');
+    fireEvent.keyDown(ball, { key: 'ArrowUp' });
+    expect(jumpTo).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pitch: KEYBOARD_PITCH_STEP })
+    );
+    fireEvent.keyDown(ball, { key: 'ArrowDown' });
+    expect(jumpTo).toHaveBeenLastCalledWith(expect.objectContaining({ pitch: 0 }));
+    fireEvent.keyDown(ball, { key: 'ArrowDown' });
+    expect(jumpTo).toHaveBeenLastCalledWith(expect.objectContaining({ pitch: 0 }));
+  });
+
+  it('resets bearing and pitch via easeTo on Enter', () => {
+    render(<MapOrientationBall />);
+    const ball = screen.getByRole('img');
+    fireEvent.keyDown(ball, { key: 'ArrowRight' });
+    fireEvent.keyDown(ball, { key: 'Enter' });
+    expect(easeTo).toHaveBeenCalledWith(expect.objectContaining({ bearing: 0, pitch: 0 }));
+  });
+
+  it('ignores unrelated key presses', () => {
+    render(<MapOrientationBall />);
+    const ball = screen.getByRole('img');
+    fireEvent.keyDown(ball, { key: 'Tab' });
+    expect(jumpTo).not.toHaveBeenCalled();
+    expect(easeTo).not.toHaveBeenCalled();
   });
 });

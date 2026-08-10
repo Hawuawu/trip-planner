@@ -54,7 +54,15 @@ export function AlternativeItem({ alternative, onSelect, onEdit, onPromote, onDe
             e.stopPropagation();
             onEdit();
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onEdit();
+            }
+          }}
           role="button"
+          tabIndex={0}
           aria-label="Edit alternative"
           sx={{ cursor: 'pointer', display: 'flex', mt: 0.35, flexShrink: 0 }}
         >
