@@ -1,8 +1,7 @@
 import { beforeUserSignedIn } from 'firebase-functions/v2/identity';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getDb } from './firebaseAdmin';
-
-const REGION = 'europe-west1';
+import { REGION } from './config';
 
 // Runs on every sign-in, first-time or returning. Sign-in itself always
 // succeeds; access is controlled by the appAccess custom claim stamped here

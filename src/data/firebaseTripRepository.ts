@@ -36,6 +36,8 @@ import type {
   InviteMemberResult,
 } from '../types';
 
+// Must match REGION in functions/src/config.ts and firebase.json's Firestore
+// `location` (chosen for latency, not arbitrary).
 const FUNCTIONS_REGION = 'europe-west1';
 
 const firebaseConfig = {

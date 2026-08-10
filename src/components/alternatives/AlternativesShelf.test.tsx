@@ -312,6 +312,25 @@ describe('AlternativesShelf', () => {
     expect(screen.getByText('Park Hyatt Tokyo')).toBeInTheDocument();
   });
 
+  it('renders markdown notes as real elements, not literal syntax', () => {
+    useTripStore.setState({
+      alternatives: [{ ...SEED_ALTS[0], notes: 'try the **matcha** set' }],
+    });
+    renderWithProviders(<AlternativesShelf />);
+    const strong = screen.getByText('matcha');
+    expect(strong.tagName).toBe('STRONG');
+  });
+
+  it('shows the location label as plain text alongside markdown-rendered notes when both are set', () => {
+    useTripStore.setState({
+      alternatives: [{ ...SEED_ALTS[1], notes: 'try the **matcha** set' }],
+    });
+    renderWithProviders(<AlternativesShelf />);
+    expect(screen.getByText('Shinjuku, Tokyo')).toBeInTheDocument();
+    const strong = screen.getByText('matcha');
+    expect(strong.tagName).toBe('STRONG');
+  });
+
   it('shows empty-state text when there are no alternatives', () => {
     useTripStore.setState({ alternatives: [] });
     renderWithProviders(<AlternativesShelf />);

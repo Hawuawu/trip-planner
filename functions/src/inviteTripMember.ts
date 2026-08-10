@@ -1,9 +1,9 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getDb, getAdminAuth } from './firebaseAdmin';
+import { REGION } from './config';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const REGION = 'europe-west1';
 
 interface InviteTripMemberRequest {
   tripId: string;
