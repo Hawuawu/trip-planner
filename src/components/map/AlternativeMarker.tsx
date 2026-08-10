@@ -4,9 +4,12 @@ import { Box, Button } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import { CheckpointIcon } from '../timeline/CheckpointIcon';
 import type { Alternative } from '../../types';
+import { SELECTED_MARKER_COLOR } from './mapConstants';
 
 // Wisteria Purple — distinguishes the alternatives layer as a whole from
 // checkpoint markers; not per-category (type is still shown via icon).
+// Only used unselected — selection uses SELECTED_MARKER_COLOR, same as
+// CheckpointMarker, so state reads as a hue change, not a shade of purple.
 const ALTERNATIVE_MARKER_COLOR = '#9B59B6';
 
 interface Props {
@@ -19,6 +22,8 @@ interface Props {
 export function AlternativeMarker({ alternative, isSelected, onSelect, onEdit }: Props) {
   const [showPopup, setShowPopup] = useState(false);
   if (!alternative.location) return null;
+
+  const color = isSelected ? SELECTED_MARKER_COLOR : ALTERNATIVE_MARKER_COLOR;
 
   return (
     <>
@@ -34,15 +39,15 @@ export function AlternativeMarker({ alternative, isSelected, onSelect, onEdit }:
       >
         <div
           style={{
-            background: isSelected ? ALTERNATIVE_MARKER_COLOR : '#fff',
-            border: `2px solid ${ALTERNATIVE_MARKER_COLOR}`,
+            background: isSelected ? SELECTED_MARKER_COLOR : '#fff',
+            border: `2px solid ${color}`,
             borderRadius: '50%',
             width: isSelected ? 32 : 28,
             height: isSelected ? 32 : 28,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: isSelected ? '#fff' : ALTERNATIVE_MARKER_COLOR,
+            color: isSelected ? '#fff' : color,
             cursor: 'pointer',
           }}
         >

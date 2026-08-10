@@ -4,6 +4,7 @@ import { Box, Button } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import { CheckpointIcon } from '../timeline/CheckpointIcon';
 import type { Checkpoint } from '../../types';
+import { SELECTED_MARKER_COLOR } from './mapConstants';
 
 interface Props {
   checkpoint: Checkpoint;
@@ -16,7 +17,7 @@ export function CheckpointMarker({ checkpoint, isSelected, onSelect, onEdit }: P
   const [showPopup, setShowPopup] = useState(false);
   if (!checkpoint.location) return null;
 
-  const color = isSelected ? '#e94560' : '#1a1a2e';
+  const color = isSelected ? SELECTED_MARKER_COLOR : '#1a1a2e';
 
   return (
     <>
@@ -32,7 +33,7 @@ export function CheckpointMarker({ checkpoint, isSelected, onSelect, onEdit }: P
       >
         <div
           style={{
-            background: isSelected ? '#e94560' : '#fff',
+            background: isSelected ? SELECTED_MARKER_COLOR : '#fff',
             border: `2px solid ${color}`,
             borderRadius: '50%',
             width: isSelected ? 32 : 28,

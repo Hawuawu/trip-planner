@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AlternativeMarker } from './AlternativeMarker';
+import { SELECTED_MARKER_COLOR } from './mapConstants';
 import type { Alternative } from '../../types';
 
 vi.mock('react-map-gl/maplibre', () => ({
@@ -131,5 +132,20 @@ describe('AlternativeMarker', () => {
     );
     const selectedPin = screen.getByTestId('marker').firstElementChild as HTMLElement;
     expect(selectedPin.style.width).not.toBe(unselectedWidth);
+  });
+
+  it('uses the shared selected-marker color, not a shade of its own unselected purple', () => {
+    render(
+      <AlternativeMarker
+        alternative={makeAlternative()}
+        isSelected
+        onSelect={() => {}}
+        onEdit={() => {}}
+      />
+    );
+    const pin = screen.getByTestId('marker').firstElementChild as HTMLElement;
+    const probe = document.createElement('div');
+    probe.style.background = SELECTED_MARKER_COLOR;
+    expect(pin.style.background).toBe(probe.style.background);
   });
 });
