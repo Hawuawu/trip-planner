@@ -2,9 +2,9 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { getDb, getAdminAuth } from './firebaseAdmin';
 import { assertIsAdmin } from './adminConfig';
+import { REGION } from './config';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const REGION = 'europe-west1';
 
 type AppActivityType =
   'access_approved' | 'access_denied' | 'access_revoked' | 'admin_granted' | 'admin_revoked';
