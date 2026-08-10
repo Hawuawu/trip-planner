@@ -21,13 +21,21 @@ import { MarkdownNotes } from '../shared/MarkdownNotes';
 
 interface Props {
   alternative: Alternative;
+  isSelected: boolean;
   onSelect(): void;
   onEdit(): void;
   onPromote(): void;
   onDelete(): void;
 }
 
-export function AlternativeItem({ alternative, onSelect, onEdit, onPromote, onDelete }: Props) {
+export function AlternativeItem({
+  alternative,
+  isSelected,
+  onSelect,
+  onEdit,
+  onPromote,
+  onDelete,
+}: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
@@ -39,13 +47,14 @@ export function AlternativeItem({ alternative, onSelect, onEdit, onPromote, onDe
         justifyContent: 'space-between',
         gap: 1,
         bgcolor: 'background.paper',
-        border: '1px solid',
-        borderColor: 'divider',
+        border: isSelected ? '2px solid' : '1px solid',
+        borderColor: isSelected ? 'primary.main' : 'divider',
         borderRadius: 1,
         px: 1.5,
         py: 1,
         mb: 1,
         cursor: 'pointer',
+        transition: 'border-color 0.15s, border-width 0.15s',
       }}
     >
       <Box sx={{ display: 'flex', gap: 1, minWidth: 0 }}>

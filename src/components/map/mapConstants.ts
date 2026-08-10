@@ -16,3 +16,9 @@ export const RESET_DURATION_MS = 300;
 
 export const KEYBOARD_BEARING_STEP = 15; // degrees of bearing per arrow-key press
 export const KEYBOARD_PITCH_STEP = 10; // degrees of pitch per arrow-key press
+
+// Shared "this marker is selected" color for both CheckpointMarker and
+// AlternativeMarker — deliberately distinct from either marker's own
+// unselected/category color so selection reads as a state change, not a
+// shade of the same hue.
+export const SELECTED_MARKER_COLOR = '#e94560';

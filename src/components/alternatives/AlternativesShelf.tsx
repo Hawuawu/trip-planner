@@ -82,6 +82,7 @@ export function AlternativesShelf({ openAddSignal, prefill, onSaved, onError }: 
     setAlternativesSearchFilter,
     toggleAlternativesTagFilter,
     selectAlternative,
+    selectedAlternativeId,
   } = useTripStore();
 
   const [sortBy, setSortBy] = useState<SortBy>('date');
@@ -253,6 +254,7 @@ export function AlternativesShelf({ openAddSignal, prefill, onSaved, onError }: 
                 <AlternativeItem
                   key={alt.id}
                   alternative={alt}
+                  isSelected={alt.id === selectedAlternativeId}
                   onSelect={() => selectAlternative(alt.id)}
                   onEdit={() => {
                     selectAlternative(alt.id);

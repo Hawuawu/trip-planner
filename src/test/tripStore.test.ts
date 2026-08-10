@@ -228,6 +228,39 @@ describe('tripStore — selectCheckpoint', () => {
     useTripStore.getState().selectCheckpoint('cp-2');
     expect(useTripStore.getState().selectedId).toBe('cp-2');
   });
+
+  it('clears any selected alternative — checkpoint and POI selection are mutually exclusive', () => {
+    useTripStore.setState({ selectedAlternativeId: 'alt-1' });
+    useTripStore.getState().selectCheckpoint('cp-1');
+    expect(useTripStore.getState().selectedId).toBe('cp-1');
+    expect(useTripStore.getState().selectedAlternativeId).toBeNull();
+  });
+});
+
+describe('tripStore — selectAlternative', () => {
+  it('sets selectedAlternativeId', () => {
+    useTripStore.getState().selectAlternative('alt-42');
+    expect(useTripStore.getState().selectedAlternativeId).toBe('alt-42');
+  });
+
+  it('deselects (sets to null) when the same id is called again', () => {
+    useTripStore.getState().selectAlternative('alt-42');
+    useTripStore.getState().selectAlternative('alt-42');
+    expect(useTripStore.getState().selectedAlternativeId).toBeNull();
+  });
+
+  it('switches to a different id', () => {
+    useTripStore.getState().selectAlternative('alt-1');
+    useTripStore.getState().selectAlternative('alt-2');
+    expect(useTripStore.getState().selectedAlternativeId).toBe('alt-2');
+  });
+
+  it('clears any selected checkpoint — checkpoint and POI selection are mutually exclusive', () => {
+    useTripStore.setState({ selectedId: 'cp-1' });
+    useTripStore.getState().selectAlternative('alt-1');
+    expect(useTripStore.getState().selectedAlternativeId).toBe('alt-1');
+    expect(useTripStore.getState().selectedId).toBeNull();
+  });
 });
 
 describe('tripStore — selectDay / selectRoute', () => {
