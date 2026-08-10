@@ -129,6 +129,15 @@ add_route(tripId, route), update_route(tripId, routeId, changes)
 
 list_wiki_sections(tripId), get_wiki_section(tripId, sectionId)
 add_wiki_section(tripId, section), update_wiki_section(tripId, sectionId, changes)
+
+list_budgets(tripId), get_budget(tripId, budgetId)
+add_budget(tripId, budget), update_budget(tripId, budgetId, changes)
+
+list_budget_sections(tripId, budgetId), get_budget_section(tripId, sectionId)
+add_budget_section(tripId, section), update_budget_section(tripId, sectionId, changes)
+
+list_budget_items(tripId, budgetSectionId), get_budget_item(tripId, itemId)
+add_budget_item(tripId, item), update_budget_item(tripId, itemId, changes)
 ```
 
 `checkpoint`/`alternative` inputs also accept an optional `tags: string[]`
@@ -157,17 +166,42 @@ needed no MCP tool changes at all — `list_checkpoints` already returns full
 `startTime` timestamps, so the calling model can already reason about which
 checkpoints fall on a given day without a new filter parameter.
 
-`wiki section` (trip-planner's "Trip Wiki", #87) is one entry in a
+`wiki section` (trip-planner's "Wiki", #87) is one entry in a
 trip-level, freeform markdown document — `{ title, content (markdown),
-order }`. Sections can link to a checkpoint/alternative/route from within
-`content` using `[label](trip://checkpoint/<id>)` (or `alternative`/`route`
-in place of `checkpoint`); the app renders these as in-app jumps rather than
-real links. No `delete_wiki_section` tool, matching every other entity's
-no-delete scope. `list_wiki_sections`/`add_wiki_section`/
+order }`. Sections can link to a checkpoint/alternative/route/budget/budget
+item from within `content` using `[label](trip://checkpoint/<id>)` (or
+`alternative`/`route`/`budget`/`budget_item` in place of `checkpoint`); the
+app renders these as in-app jumps rather than real links — clicking a
+`budget`/`budget_item` link opens the Budget dialog straight to that
+budget (scrolling to and highlighting the specific item for a
+`budget_item` link). No `delete_wiki_section` tool, matching every other
+entity's no-delete scope. `list_wiki_sections`/`add_wiki_section`/
 `update_wiki_section`'s descriptions use the same dedup guidance as
 `list_tags`: call `list_wiki_sections` first and update an existing section
 by title instead of creating a near-duplicate (e.g. a new "Day 3" section
 next to an existing "Day 3 - Kyoto").
+
+`budget` (trip-planner's "Budget", #98) is one of several independent,
+named cost plans a trip can hold (e.g. "Backpacker" vs "Comfort"), each with
+its own currency — `{ name, currency (ISO 4217 code) }`. Each budget holds
+categorized `budget section`s (`{ budgetId, category: travel|hotel|meals|
+merchandise|other, name, price?, notes? (markdown), order }`) — a section
+either carries a flat `price`, or holds `budget item`s whose contributions
+sum to its subtotal, not both. Each item (`{ budgetSectionId, name, price?,
+rateType: constant|per_person|per_night, quantity, alternatives?, notes?
+(markdown), order }`) either carries its own flat `price`/`rateType`/
+`quantity`, or offers priced
+`alternatives` (e.g. "Ryokan ¥15,000/night" vs "Business hotel
+¥8,000/night") with exactly one marked `selected: true` — its contribution
+is what counts toward the total, not the item's own fields. No
+`delete_budget`/`delete_budget_section`/`delete_budget_item` tools, matching
+every other entity's no-delete scope. `list_budget_sections`/
+`list_budget_items` take a required `budgetId`/`budgetSectionId` so a
+drill-down flow (`list_budgets` → `list_budget_sections(budgetId)` →
+`list_budget_items(sectionId)`) stays natural; all six `list_budget_*`/
+`add_budget_*` tool descriptions use the same dedup guidance as
+`list_tags`/`list_wiki_sections`: list first, prefer updating a
+similarly-named existing entity over creating a near-duplicate.
 
 Not tool-mapped: `recordAccess` and the various `subscribeToX` methods
 collapse into one-shot `listX` reads (an MCP tool call is a single

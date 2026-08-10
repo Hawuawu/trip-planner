@@ -116,6 +116,18 @@ service cloud.firestore {
         allow read, write: if isMember(tripId);
       }
 
+      match /budgets/{docId} {
+        allow read, write: if isMember(tripId);
+      }
+
+      match /budgetSections/{docId} {
+        allow read, write: if isMember(tripId);
+      }
+
+      match /budgetItems/{docId} {
+        allow read, write: if isMember(tripId);
+      }
+
       // Append-only, owner-readable activity log. Explicit matches (not the
       // generic subcollection wildcard) so this can be locked down separately
       // from checkpoints/alternatives/bookings — Firestore ORs every matching

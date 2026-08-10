@@ -44,6 +44,8 @@ export function WikiView({ open, onClose, onNavigate }: Props) {
   const checkpoints = useTripStore((s) => s.checkpoints);
   const alternatives = useTripStore((s) => s.alternatives);
   const routes = useTripStore((s) => s.routes);
+  const budgets = useTripStore((s) => s.budgets);
+  const budgetItems = useTripStore((s) => s.budgetItems);
   const wikiSections = useTripStore((s) => s.wikiSections);
   const addWikiSection = useTripStore((s) => s.addWikiSection);
   const updateWikiSection = useTripStore((s) => s.updateWikiSection);
@@ -61,6 +63,8 @@ export function WikiView({ open, onClose, onNavigate }: Props) {
     ...checkpoints.map((c) => ({ id: c.id, label: c.name, kind: 'checkpoint' as const })),
     ...alternatives.map((a) => ({ id: a.id, label: a.name, kind: 'alternative' as const })),
     ...routes.map((r) => ({ id: r.id, label: r.name, kind: 'route' as const })),
+    ...budgets.map((b) => ({ id: b.id, label: b.name, kind: 'budget' as const })),
+    ...budgetItems.map((i) => ({ id: i.id, label: i.name, kind: 'budget_item' as const })),
   ];
 
   function startEdit(section: WikiSection) {
@@ -123,11 +127,11 @@ export function WikiView({ open, onClose, onNavigate }: Props) {
   return (
     <>
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-        <DialogTitle>Trip Wiki</DialogTitle>
+        <DialogTitle>Wiki</DialogTitle>
         <DialogContent>
           {sections.length === 0 && editing === null && (
             <Typography color="text.secondary" sx={{ mb: 2 }}>
-              No sections yet — add one, or ask Claude to help plan this trip's summary.
+              No sections yet — add one to get started.
             </Typography>
           )}
 

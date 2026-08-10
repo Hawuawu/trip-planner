@@ -79,6 +79,38 @@ function makeMockRepo(overrides: Partial<TripRepository> = {}): TripRepository {
     }),
     updateWikiSection: vi.fn().mockResolvedValue(undefined),
     deleteWikiSection: vi.fn().mockResolvedValue(undefined),
+    subscribeToBudgets: vi.fn().mockReturnValue(() => {}),
+    addBudget: vi.fn().mockResolvedValue({
+      id: 'budget-saved-1',
+      name: 'New Budget',
+      currency: 'JPY',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }),
+    updateBudget: vi.fn().mockResolvedValue(undefined),
+    deleteBudget: vi.fn().mockResolvedValue(undefined),
+    subscribeToBudgetSections: vi.fn().mockReturnValue(() => {}),
+    addBudgetSection: vi.fn().mockResolvedValue({
+      id: 'budget-section-saved-1',
+      budgetId: 'budget-1',
+      category: 'other',
+      name: 'New Section',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }),
+    updateBudgetSection: vi.fn().mockResolvedValue(undefined),
+    deleteBudgetSection: vi.fn().mockResolvedValue(undefined),
+    subscribeToBudgetItems: vi.fn().mockReturnValue(() => {}),
+    addBudgetItem: vi.fn().mockResolvedValue({
+      id: 'budget-item-saved-1',
+      budgetSectionId: 'budget-section-1',
+      name: 'New Item',
+      rateType: 'constant',
+      quantity: 1,
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }),
+    updateBudgetItem: vi.fn().mockResolvedValue(undefined),
+    deleteBudgetItem: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -288,6 +320,54 @@ describe('tripStore — selectDay / selectRoute', () => {
     useTripStore.setState({ selectedRouteId: 'route-1' });
     useTripStore.getState().selectRoute(null);
     expect(useTripStore.getState().selectedRouteId).toBeNull();
+  });
+});
+
+describe('tripStore — navigateToBudget / navigateToBudgetItem', () => {
+  it('navigateToBudget sets budgetNavigationTarget with a null itemId', () => {
+    useTripStore.getState().navigateToBudget('budget-1');
+    expect(useTripStore.getState().budgetNavigationTarget).toEqual({
+      budgetId: 'budget-1',
+      itemId: null,
+    });
+  });
+
+  it('navigateToBudgetItem resolves the item’s parent budget via its section', () => {
+    useTripStore.setState({
+      budgetSections: [
+        {
+          id: 'section-1',
+          budgetId: 'budget-1',
+          category: 'hotel',
+          name: 'Hotel',
+          order: 0,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      budgetItems: [
+        {
+          id: 'item-1',
+          budgetSectionId: 'section-1',
+          name: 'Ryokan',
+          rateType: 'constant',
+          quantity: 1,
+          order: 0,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+
+    useTripStore.getState().navigateToBudgetItem('item-1');
+
+    expect(useTripStore.getState().budgetNavigationTarget).toEqual({
+      budgetId: 'budget-1',
+      itemId: 'item-1',
+    });
+  });
+
+  it('navigateToBudgetItem is a no-op for an unknown item id', () => {
+    useTripStore.getState().navigateToBudgetItem('missing');
+    expect(useTripStore.getState().budgetNavigationTarget).toBeNull();
   });
 });
 
@@ -886,5 +966,406 @@ describe('tripStore — wikiSections', () => {
 
     expect(useTripStore.getState().wikiSections).toHaveLength(1);
     expect(useTripStore.getState().wikiSections[0].title).toBe('Restored');
+  });
+});
+
+describe('tripStore — budgets', () => {
+  it('addBudget appends optimistically then replaces with saved', async () => {
+    let resolveAdd!: (b: import('../types').Budget) => void;
+    const addBudget = vi.fn(
+      () =>
+        new Promise<import('../types').Budget>((res) => {
+          resolveAdd = res;
+        })
+    );
+    const repo = makeMockRepo({ addBudget });
+    useTripStore.setState({ repo, tripId: 'trip-1', budgets: [] });
+
+    const promise = useTripStore.getState().addBudget({ name: 'Backpacker', currency: 'JPY' });
+
+    const { budgets } = useTripStore.getState();
+    expect(budgets).toHaveLength(1);
+    expect(budgets[0].id).toMatch(/__optimistic/);
+    expect(budgets[0].name).toBe('Backpacker');
+
+    resolveAdd({
+      id: 'budget-real',
+      name: 'Backpacker',
+      currency: 'JPY',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await promise;
+
+    expect(useTripStore.getState().budgets[0].id).toBe('budget-real');
+  });
+
+  it('updateBudget applies changes optimistically', async () => {
+    const repo = makeMockRepo();
+    const budget: import('../types').Budget = {
+      id: 'budget-1',
+      name: 'Before',
+      currency: 'JPY',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgets: [budget] });
+
+    await useTripStore.getState().updateBudget('budget-1', { name: 'After' });
+
+    expect(useTripStore.getState().budgets[0].name).toBe('After');
+    expect(repo.updateBudget).toHaveBeenCalledWith('trip-1', 'budget-1', { name: 'After' });
+  });
+
+  it('updateBudget rolls back and rethrows when repo throws', async () => {
+    const updateBudget = vi.fn().mockRejectedValue(new Error('network'));
+    const repo = makeMockRepo({ updateBudget });
+    const budget: import('../types').Budget = {
+      id: 'budget-1',
+      name: 'Original',
+      currency: 'JPY',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgets: [budget] });
+
+    await expect(
+      useTripStore.getState().updateBudget('budget-1', { name: 'Failed' })
+    ).rejects.toThrow('network');
+
+    expect(useTripStore.getState().budgets[0].name).toBe('Original');
+  });
+
+  it('deleteBudget removes the entry optimistically', async () => {
+    const repo = makeMockRepo();
+    const budget: import('../types').Budget = {
+      id: 'budget-1',
+      name: 'To Remove',
+      currency: 'JPY',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgets: [budget] });
+
+    await useTripStore.getState().deleteBudget('budget-1');
+
+    expect(useTripStore.getState().budgets).toHaveLength(0);
+    expect(repo.deleteBudget).toHaveBeenCalledWith('trip-1', 'budget-1');
+  });
+
+  it('deleteBudget restores the budget and rethrows when the repo throws', async () => {
+    const deleteBudget = vi.fn().mockRejectedValue(new Error('network'));
+    const repo = makeMockRepo({ deleteBudget });
+    const budget: import('../types').Budget = {
+      id: 'budget-1',
+      name: 'Restored',
+      currency: 'JPY',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgets: [budget] });
+
+    await expect(useTripStore.getState().deleteBudget('budget-1')).rejects.toThrow('network');
+
+    expect(useTripStore.getState().budgets).toHaveLength(1);
+    expect(useTripStore.getState().budgets[0].name).toBe('Restored');
+  });
+});
+
+describe('tripStore — budgetSections', () => {
+  it('addBudgetSection appends optimistically then replaces with saved', async () => {
+    let resolveAdd!: (s: import('../types').BudgetSection) => void;
+    const addBudgetSection = vi.fn(
+      () =>
+        new Promise<import('../types').BudgetSection>((res) => {
+          resolveAdd = res;
+        })
+    );
+    const repo = makeMockRepo({ addBudgetSection });
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetSections: [] });
+
+    const promise = useTripStore.getState().addBudgetSection({
+      budgetId: 'budget-1',
+      category: 'hotel',
+      name: 'Hotel',
+      order: 0,
+    });
+
+    const { budgetSections } = useTripStore.getState();
+    expect(budgetSections).toHaveLength(1);
+    expect(budgetSections[0].id).toMatch(/__optimistic/);
+    expect(budgetSections[0].name).toBe('Hotel');
+
+    resolveAdd({
+      id: 'section-real',
+      budgetId: 'budget-1',
+      category: 'hotel',
+      name: 'Hotel',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await promise;
+
+    expect(useTripStore.getState().budgetSections[0].id).toBe('section-real');
+  });
+
+  it('updateBudgetSection applies changes optimistically', async () => {
+    const repo = makeMockRepo();
+    const section: import('../types').BudgetSection = {
+      id: 'section-1',
+      budgetId: 'budget-1',
+      category: 'hotel',
+      name: 'Before',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetSections: [section] });
+
+    await useTripStore.getState().updateBudgetSection('section-1', { name: 'After' });
+
+    expect(useTripStore.getState().budgetSections[0].name).toBe('After');
+    expect(repo.updateBudgetSection).toHaveBeenCalledWith('trip-1', 'section-1', {
+      name: 'After',
+    });
+  });
+
+  it('updateBudgetSection rolls back and rethrows when repo throws', async () => {
+    const updateBudgetSection = vi.fn().mockRejectedValue(new Error('network'));
+    const repo = makeMockRepo({ updateBudgetSection });
+    const section: import('../types').BudgetSection = {
+      id: 'section-1',
+      budgetId: 'budget-1',
+      category: 'hotel',
+      name: 'Original',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetSections: [section] });
+
+    await expect(
+      useTripStore.getState().updateBudgetSection('section-1', { name: 'Failed' })
+    ).rejects.toThrow('network');
+
+    expect(useTripStore.getState().budgetSections[0].name).toBe('Original');
+  });
+
+  it('deleteBudgetSection removes the entry optimistically', async () => {
+    const repo = makeMockRepo();
+    const section: import('../types').BudgetSection = {
+      id: 'section-1',
+      budgetId: 'budget-1',
+      category: 'hotel',
+      name: 'To Remove',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetSections: [section] });
+
+    await useTripStore.getState().deleteBudgetSection('section-1');
+
+    expect(useTripStore.getState().budgetSections).toHaveLength(0);
+    expect(repo.deleteBudgetSection).toHaveBeenCalledWith('trip-1', 'section-1');
+  });
+
+  it('deleteBudgetSection restores the section and rethrows when the repo throws', async () => {
+    const deleteBudgetSection = vi.fn().mockRejectedValue(new Error('network'));
+    const repo = makeMockRepo({ deleteBudgetSection });
+    const section: import('../types').BudgetSection = {
+      id: 'section-1',
+      budgetId: 'budget-1',
+      category: 'hotel',
+      name: 'Restored',
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetSections: [section] });
+
+    await expect(useTripStore.getState().deleteBudgetSection('section-1')).rejects.toThrow(
+      'network'
+    );
+
+    expect(useTripStore.getState().budgetSections).toHaveLength(1);
+    expect(useTripStore.getState().budgetSections[0].name).toBe('Restored');
+  });
+});
+
+describe('tripStore — budgetItems', () => {
+  it('addBudgetItem appends optimistically then replaces with saved', async () => {
+    let resolveAdd!: (i: import('../types').BudgetItem) => void;
+    const addBudgetItem = vi.fn(
+      () =>
+        new Promise<import('../types').BudgetItem>((res) => {
+          resolveAdd = res;
+        })
+    );
+    const repo = makeMockRepo({ addBudgetItem });
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetItems: [] });
+
+    const promise = useTripStore.getState().addBudgetItem({
+      budgetSectionId: 'section-1',
+      name: 'Ryokan',
+      rateType: 'per_night',
+      quantity: 3,
+      price: 15000,
+      order: 0,
+    });
+
+    const { budgetItems } = useTripStore.getState();
+    expect(budgetItems).toHaveLength(1);
+    expect(budgetItems[0].id).toMatch(/__optimistic/);
+    expect(budgetItems[0].name).toBe('Ryokan');
+
+    resolveAdd({
+      id: 'item-real',
+      budgetSectionId: 'section-1',
+      name: 'Ryokan',
+      rateType: 'per_night',
+      quantity: 3,
+      price: 15000,
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await promise;
+
+    expect(useTripStore.getState().budgetItems[0].id).toBe('item-real');
+  });
+
+  it('updateBudgetItem applies changes optimistically', async () => {
+    const repo = makeMockRepo();
+    const item: import('../types').BudgetItem = {
+      id: 'item-1',
+      budgetSectionId: 'section-1',
+      name: 'Before',
+      rateType: 'constant',
+      quantity: 1,
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetItems: [item] });
+
+    await useTripStore.getState().updateBudgetItem('item-1', { name: 'After' });
+
+    expect(useTripStore.getState().budgetItems[0].name).toBe('After');
+    expect(repo.updateBudgetItem).toHaveBeenCalledWith('trip-1', 'item-1', { name: 'After' });
+  });
+
+  it('updateBudgetItem rolls back and rethrows when repo throws', async () => {
+    const updateBudgetItem = vi.fn().mockRejectedValue(new Error('network'));
+    const repo = makeMockRepo({ updateBudgetItem });
+    const item: import('../types').BudgetItem = {
+      id: 'item-1',
+      budgetSectionId: 'section-1',
+      name: 'Original',
+      rateType: 'constant',
+      quantity: 1,
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetItems: [item] });
+
+    await expect(
+      useTripStore.getState().updateBudgetItem('item-1', { name: 'Failed' })
+    ).rejects.toThrow('network');
+
+    expect(useTripStore.getState().budgetItems[0].name).toBe('Original');
+  });
+
+  it('deleteBudgetItem removes the entry optimistically', async () => {
+    const repo = makeMockRepo();
+    const item: import('../types').BudgetItem = {
+      id: 'item-1',
+      budgetSectionId: 'section-1',
+      name: 'To Remove',
+      rateType: 'constant',
+      quantity: 1,
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetItems: [item] });
+
+    await useTripStore.getState().deleteBudgetItem('item-1');
+
+    expect(useTripStore.getState().budgetItems).toHaveLength(0);
+    expect(repo.deleteBudgetItem).toHaveBeenCalledWith('trip-1', 'item-1');
+  });
+
+  it('deleteBudgetItem restores the item and rethrows when the repo throws', async () => {
+    const deleteBudgetItem = vi.fn().mockRejectedValue(new Error('network'));
+    const repo = makeMockRepo({ deleteBudgetItem });
+    const item: import('../types').BudgetItem = {
+      id: 'item-1',
+      budgetSectionId: 'section-1',
+      name: 'Restored',
+      rateType: 'constant',
+      quantity: 1,
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetItems: [item] });
+
+    await expect(useTripStore.getState().deleteBudgetItem('item-1')).rejects.toThrow('network');
+
+    expect(useTripStore.getState().budgetItems).toHaveLength(1);
+    expect(useTripStore.getState().budgetItems[0].name).toBe('Restored');
+  });
+
+  it('selectBudgetItemAlternative flips selected across the item’s alternatives', async () => {
+    const repo = makeMockRepo();
+    const item: import('../types').BudgetItem = {
+      id: 'item-1',
+      budgetSectionId: 'section-1',
+      name: 'Hotel',
+      rateType: 'per_night',
+      quantity: 1,
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      alternatives: [
+        {
+          id: 'alt-1',
+          label: 'Ryokan',
+          price: 15000,
+          rateType: 'per_night',
+          quantity: 1,
+          selected: true,
+        },
+        {
+          id: 'alt-2',
+          label: 'Business hotel',
+          price: 8000,
+          rateType: 'per_night',
+          quantity: 1,
+          selected: false,
+        },
+      ],
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetItems: [item] });
+
+    await useTripStore.getState().selectBudgetItemAlternative('item-1', 'alt-2');
+
+    const updated = useTripStore.getState().budgetItems[0];
+    expect(updated.alternatives?.find((a) => a.id === 'alt-1')?.selected).toBe(false);
+    expect(updated.alternatives?.find((a) => a.id === 'alt-2')?.selected).toBe(true);
+    expect(repo.updateBudgetItem).toHaveBeenCalledWith(
+      'trip-1',
+      'item-1',
+      expect.objectContaining({
+        alternatives: expect.arrayContaining([
+          expect.objectContaining({ id: 'alt-2', selected: true }),
+        ]),
+      })
+    );
+  });
+
+  it('selectBudgetItemAlternative is a no-op when the item has no alternatives', async () => {
+    const repo = makeMockRepo();
+    const item: import('../types').BudgetItem = {
+      id: 'item-1',
+      budgetSectionId: 'section-1',
+      name: 'Hotel',
+      rateType: 'constant',
+      quantity: 1,
+      order: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    useTripStore.setState({ repo, tripId: 'trip-1', budgetItems: [item] });
+
+    await useTripStore.getState().selectBudgetItemAlternative('item-1', 'alt-2');
+
+    expect(repo.updateBudgetItem).not.toHaveBeenCalled();
   });
 });

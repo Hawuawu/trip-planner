@@ -222,11 +222,11 @@ describe('AppShell — phone layout', () => {
     expect(screen.getByText(/no alternatives/i)).toBeInTheDocument();
 
     await user.click(screen.getByLabelText('Menu'));
-    await user.click(withinMenu().getByRole('button', { name: 'Trip Wiki' }));
+    await user.click(withinMenu().getByRole('button', { name: 'Wiki' }));
     await user.click(screen.getByRole('button', { name: 'Fushimi Inari' }));
 
     await waitFor(() => {
-      expect(screen.queryByRole('heading', { name: 'Trip Wiki' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Wiki' })).not.toBeInTheDocument();
     });
     expect(screen.queryByText(/no alternatives/i)).not.toBeInTheDocument();
   });
@@ -278,7 +278,7 @@ describe('AppShell — hamburger menu', () => {
     await user.click(screen.getByLabelText('Menu'));
 
     const menu = withinMenu();
-    expect(menu.getByRole('button', { name: 'Trip Wiki' })).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: 'Wiki' })).toBeInTheDocument();
     expect(menu.getByRole('button', { name: 'Add checkpoint' })).toBeInTheDocument();
     expect(menu.getByRole('button', { name: 'Add alternative' })).toBeInTheDocument();
     expect(menu.getByText('Back to trips')).toBeInTheDocument();
@@ -286,17 +286,34 @@ describe('AppShell — hamburger menu', () => {
     expect(menu.getByText('Import checkpoints…')).toBeInTheDocument();
   });
 
-  it('lists "Trip Wiki" as the first menu item', async () => {
+  it('groups Wiki and Budget in their own list, separated from Add checkpoint/Add alternative', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+
+    const menu = withinMenu();
+    const wikiList = menu.getByRole('button', { name: 'Wiki' }).closest('ul');
+    const budgetList = menu.getByRole('button', { name: 'Budget' }).closest('ul');
+    const addCheckpointList = menu.getByRole('button', { name: 'Add checkpoint' }).closest('ul');
+    const addAlternativeList = menu.getByRole('button', { name: 'Add alternative' }).closest('ul');
+
+    expect(wikiList).toBe(budgetList);
+    expect(addCheckpointList).toBe(addAlternativeList);
+    expect(wikiList).not.toBe(addCheckpointList);
+  });
+
+  it('lists "Wiki" as the first menu item', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AppShell onBack={vi.fn()} />);
 
     await user.click(screen.getByLabelText('Menu'));
 
     const buttons = withinMenu().getAllByRole('button');
-    expect(buttons[0]).toHaveTextContent('Trip Wiki');
+    expect(buttons[0]).toHaveTextContent('Wiki');
   });
 
-  it('opens the Trip Wiki wiki dialog when "Trip Wiki" is clicked from the menu', async () => {
+  it('opens the Wiki dialog when "Wiki" is clicked from the menu', async () => {
     const user = userEvent.setup();
     useTripStore.setState({
       trip: {
@@ -309,9 +326,36 @@ describe('AppShell — hamburger menu', () => {
     renderWithProviders(<AppShell onBack={vi.fn()} />);
 
     await user.click(screen.getByLabelText('Menu'));
-    await user.click(withinMenu().getByRole('button', { name: 'Trip Wiki' }));
+    await user.click(withinMenu().getByRole('button', { name: 'Wiki' }));
 
-    expect(screen.getByRole('heading', { name: 'Trip Wiki' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Wiki' })).toBeInTheDocument();
+  });
+
+  it('lists "Budget" as a menu item', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+
+    expect(withinMenu().getByRole('button', { name: 'Budget' })).toBeInTheDocument();
+  });
+
+  it('opens the Budget dialog when "Budget" is clicked from the menu', async () => {
+    const user = userEvent.setup();
+    useTripStore.setState({
+      trip: {
+        id: 't1',
+        name: 'Japan 2026',
+        dateRange: { start: '2026-09-01', end: '2026-09-10' },
+        memberIds: [],
+      },
+    });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+    await user.click(withinMenu().getByRole('button', { name: 'Budget' }));
+
+    expect(screen.getByRole('heading', { name: 'Budget' })).toBeInTheDocument();
   });
 
   it('opens the add-checkpoint form when "Add checkpoint" is clicked from the menu', async () => {

@@ -34,6 +34,15 @@ const SECTION_2: WikiSection = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+const SECTION_3: WikiSection = {
+  id: 'wiki-4',
+  title: 'Costs',
+  content:
+    'Staying at [Ryokan](trip://budget_item/item-1) — see the [Backpacker](trip://budget/budget-1) budget.',
+  order: 2,
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
 const LONG_SECTION: WikiSection = {
   id: 'wiki-3',
   title: 'Full Itinerary',
@@ -167,6 +176,56 @@ describe('WikiView', () => {
 
     expect(onClose).toHaveBeenCalled();
     expect(onNavigate).toHaveBeenCalledWith('checkpoint', 'cp-1');
+  });
+
+  it('clicking a budget link fires onNavigate with kind "budget"', () => {
+    seedSections([SECTION_3]);
+    const { onNavigate } = setup();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Backpacker' }));
+
+    expect(onNavigate).toHaveBeenCalledWith('budget', 'budget-1');
+  });
+
+  it('clicking a budget item link fires onNavigate with kind "budget_item"', () => {
+    seedSections([SECTION_3]);
+    const { onNavigate } = setup();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ryokan' }));
+
+    expect(onNavigate).toHaveBeenCalledWith('budget_item', 'item-1');
+  });
+
+  it('includes budgets and budget items in the link picker linkables', async () => {
+    useTripStore.setState({
+      budgets: [
+        {
+          id: 'budget-1',
+          name: 'Backpacker',
+          currency: 'JPY',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      budgetItems: [
+        {
+          id: 'item-1',
+          budgetSectionId: 'section-1',
+          name: 'Ryokan',
+          rateType: 'constant',
+          quantity: 1,
+          order: 0,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+    setup();
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add section' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Insert link to trip item' }));
+    const input = await screen.findByRole('combobox', { name: 'Link to...' });
+    fireEvent.change(input, { target: { value: 'Ryokan' } });
+
+    expect(await screen.findByRole('option', { name: 'Ryokan' })).toBeInTheDocument();
   });
 
   it('does not show an expand/collapse toggle for a short section', () => {
