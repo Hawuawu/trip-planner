@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Marker, Popup } from 'react-map-gl/maplibre';
 import { Box, Button } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -14,7 +13,6 @@ interface Props {
 }
 
 export function CheckpointMarker({ checkpoint, isSelected, onSelect, onEdit }: Props) {
-  const [showPopup, setShowPopup] = useState(false);
   if (!checkpoint.location) return null;
 
   const color = isSelected ? SELECTED_MARKER_COLOR : '#1a1a2e';
@@ -28,7 +26,6 @@ export function CheckpointMarker({ checkpoint, isSelected, onSelect, onEdit }: P
         onClick={(e) => {
           e.originalEvent.stopPropagation();
           onSelect();
-          setShowPopup(true);
         }}
       >
         <div
@@ -52,12 +49,12 @@ export function CheckpointMarker({ checkpoint, isSelected, onSelect, onEdit }: P
         </div>
       </Marker>
 
-      {showPopup && (
+      {isSelected && (
         <Popup
           longitude={checkpoint.location.lng}
           latitude={checkpoint.location.lat}
           anchor="bottom"
-          onClose={() => setShowPopup(false)}
+          onClose={onSelect}
           closeOnClick={false}
         >
           <Box sx={{ minWidth: 0 }}>

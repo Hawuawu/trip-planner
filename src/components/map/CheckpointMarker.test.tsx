@@ -44,9 +44,9 @@ describe('CheckpointMarker', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('calls onSelect and opens a popup with the checkpoint name when clicked', () => {
+  it('calls onSelect when clicked; the popup only appears once the parent reflects isSelected', () => {
     const onSelect = vi.fn();
-    render(
+    const { rerender } = render(
       <CheckpointMarker
         checkpoint={makeCheckpoint()}
         isSelected={false}
@@ -57,15 +57,40 @@ describe('CheckpointMarker', () => {
 
     expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('marker'));
-
     expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
+
+    rerender(
+      <CheckpointMarker
+        checkpoint={makeCheckpoint()}
+        isSelected
+        onSelect={onSelect}
+        onEdit={() => {}}
+      />
+    );
     expect(screen.getByTestId('popup')).toBeInTheDocument();
     expect(screen.getByText('Fushimi Inari')).toBeInTheDocument();
     expect(screen.getByText('Kyoto')).toBeInTheDocument();
   });
 
-  it('closes the popup when its close action fires', () => {
+  it('shows the popup whenever isSelected is true, and calls onSelect (to deselect) when its close action fires', () => {
+    const onSelect = vi.fn();
     render(
+      <CheckpointMarker
+        checkpoint={makeCheckpoint()}
+        isSelected
+        onSelect={onSelect}
+        onEdit={() => {}}
+      />
+    );
+    expect(screen.getByTestId('popup')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('popup-close'));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('at most one popup is ever shown: deselecting one marker while selecting another never leaves both open', () => {
+    const { rerender } = render(
       <CheckpointMarker
         checkpoint={makeCheckpoint()}
         isSelected
@@ -73,11 +98,18 @@ describe('CheckpointMarker', () => {
         onEdit={() => {}}
       />
     );
-
-    fireEvent.click(screen.getByTestId('marker'));
     expect(screen.getByTestId('popup')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('popup-close'));
+    // Simulates the store deselecting this checkpoint because a different
+    // item (another checkpoint or a POI) was just selected instead.
+    rerender(
+      <CheckpointMarker
+        checkpoint={makeCheckpoint()}
+        isSelected={false}
+        onSelect={() => {}}
+        onEdit={() => {}}
+      />
+    );
     expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
   });
 
@@ -85,13 +117,11 @@ describe('CheckpointMarker', () => {
     render(
       <CheckpointMarker
         checkpoint={makeCheckpoint({ location: { lat: 34.9, lng: 135.77 } })}
-        isSelected={false}
+        isSelected
         onSelect={() => {}}
         onEdit={() => {}}
       />
     );
-
-    fireEvent.click(screen.getByTestId('marker'));
     expect(screen.queryByText('Kyoto')).not.toBeInTheDocument();
   });
 
@@ -125,17 +155,14 @@ describe('CheckpointMarker', () => {
     render(
       <CheckpointMarker
         checkpoint={makeCheckpoint()}
-        isSelected={false}
+        isSelected
         onSelect={onSelect}
         onEdit={onEdit}
       />
     );
 
-    fireEvent.click(screen.getByTestId('marker'));
-    expect(onSelect).toHaveBeenCalledTimes(1);
-
     fireEvent.click(screen.getByRole('button', { name: 'Edit checkpoint' }));
     expect(onEdit).toHaveBeenCalledTimes(1);
-    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

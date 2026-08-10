@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Marker, Popup } from 'react-map-gl/maplibre';
 import { Box, Button } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -20,7 +19,6 @@ interface Props {
 }
 
 export function AlternativeMarker({ alternative, isSelected, onSelect, onEdit }: Props) {
-  const [showPopup, setShowPopup] = useState(false);
   if (!alternative.location) return null;
 
   const color = isSelected ? SELECTED_MARKER_COLOR : ALTERNATIVE_MARKER_COLOR;
@@ -34,7 +32,6 @@ export function AlternativeMarker({ alternative, isSelected, onSelect, onEdit }:
         onClick={(e) => {
           e.originalEvent.stopPropagation();
           onSelect();
-          setShowPopup(true);
         }}
       >
         <div
@@ -58,12 +55,12 @@ export function AlternativeMarker({ alternative, isSelected, onSelect, onEdit }:
         </div>
       </Marker>
 
-      {showPopup && (
+      {isSelected && (
         <Popup
           longitude={alternative.location.lng}
           latitude={alternative.location.lat}
           anchor="bottom"
-          onClose={() => setShowPopup(false)}
+          onClose={onSelect}
           closeOnClick={false}
         >
           <Box sx={{ minWidth: 0 }}>

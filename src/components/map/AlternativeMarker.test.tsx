@@ -43,9 +43,9 @@ describe('AlternativeMarker', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('calls onSelect and opens a popup with the alternative name when clicked', () => {
+  it('calls onSelect when clicked; the popup only appears once the parent reflects isSelected', () => {
     const onSelect = vi.fn();
-    render(
+    const { rerender } = render(
       <AlternativeMarker
         alternative={makeAlternative()}
         isSelected={false}
@@ -56,15 +56,52 @@ describe('AlternativeMarker', () => {
 
     expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('marker'));
-
     expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
+
+    rerender(
+      <AlternativeMarker
+        alternative={makeAlternative()}
+        isSelected
+        onSelect={onSelect}
+        onEdit={() => {}}
+      />
+    );
     expect(screen.getByTestId('popup')).toBeInTheDocument();
     expect(screen.getByText('Backup Shrine')).toBeInTheDocument();
     expect(screen.getByText('Kyoto')).toBeInTheDocument();
   });
 
-  it('closes the popup when its close action fires', () => {
+  it('shows the popup whenever isSelected is true, and calls onSelect (to deselect) when its close action fires', () => {
+    const onSelect = vi.fn();
     render(
+      <AlternativeMarker
+        alternative={makeAlternative()}
+        isSelected
+        onSelect={onSelect}
+        onEdit={() => {}}
+      />
+    );
+    expect(screen.getByTestId('popup')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('popup-close'));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('at most one popup is ever shown: deselecting one marker while selecting another never leaves both open', () => {
+    const { rerender } = render(
+      <AlternativeMarker
+        alternative={makeAlternative()}
+        isSelected
+        onSelect={() => {}}
+        onEdit={() => {}}
+      />
+    );
+    expect(screen.getByTestId('popup')).toBeInTheDocument();
+
+    // Simulates the store deselecting this alternative because a different
+    // item (another POI or a checkpoint) was just selected instead.
+    rerender(
       <AlternativeMarker
         alternative={makeAlternative()}
         isSelected={false}
@@ -72,11 +109,6 @@ describe('AlternativeMarker', () => {
         onEdit={() => {}}
       />
     );
-
-    fireEvent.click(screen.getByTestId('marker'));
-    expect(screen.getByTestId('popup')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('popup-close'));
     expect(screen.queryByTestId('popup')).not.toBeInTheDocument();
   });
 
@@ -84,13 +116,11 @@ describe('AlternativeMarker', () => {
     render(
       <AlternativeMarker
         alternative={makeAlternative({ location: { lat: 34.9, lng: 135.77 } })}
-        isSelected={false}
+        isSelected
         onSelect={() => {}}
         onEdit={() => {}}
       />
     );
-
-    fireEvent.click(screen.getByTestId('marker'));
     expect(screen.queryByText('Kyoto')).not.toBeInTheDocument();
   });
 
@@ -99,13 +129,12 @@ describe('AlternativeMarker', () => {
     render(
       <AlternativeMarker
         alternative={makeAlternative()}
-        isSelected={false}
+        isSelected
         onSelect={() => {}}
         onEdit={onEdit}
       />
     );
 
-    fireEvent.click(screen.getByTestId('marker'));
     fireEvent.click(screen.getByRole('button', { name: 'Edit alternative' }));
     expect(onEdit).toHaveBeenCalledTimes(1);
   });

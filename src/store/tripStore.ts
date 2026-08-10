@@ -155,12 +155,14 @@ export const useTripStore = create<TripState>((set, get) => ({
 
   selectCheckpoint(id) {
     const { selectedId } = get();
-    set({ selectedId: selectedId === id ? null : id });
+    // Checkpoint and POI selection are mutually exclusive — only one map/
+    // list item is ever highlighted at a time.
+    set({ selectedId: selectedId === id ? null : id, selectedAlternativeId: null });
   },
 
   selectAlternative(id) {
     const { selectedAlternativeId } = get();
-    set({ selectedAlternativeId: selectedAlternativeId === id ? null : id });
+    set({ selectedAlternativeId: selectedAlternativeId === id ? null : id, selectedId: null });
   },
 
   selectDay(day) {
