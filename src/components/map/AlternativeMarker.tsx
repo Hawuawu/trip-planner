@@ -11,10 +11,12 @@ const ALTERNATIVE_MARKER_COLOR = '#9B59B6';
 
 interface Props {
   alternative: Alternative;
+  isSelected: boolean;
+  onSelect(): void;
   onEdit(): void;
 }
 
-export function AlternativeMarker({ alternative, onEdit }: Props) {
+export function AlternativeMarker({ alternative, isSelected, onSelect, onEdit }: Props) {
   const [showPopup, setShowPopup] = useState(false);
   if (!alternative.location) return null;
 
@@ -26,24 +28,28 @@ export function AlternativeMarker({ alternative, onEdit }: Props) {
         anchor="center"
         onClick={(e) => {
           e.originalEvent.stopPropagation();
+          onSelect();
           setShowPopup(true);
         }}
       >
         <div
           style={{
-            background: '#fff',
+            background: isSelected ? ALTERNATIVE_MARKER_COLOR : '#fff',
             border: `2px solid ${ALTERNATIVE_MARKER_COLOR}`,
             borderRadius: '50%',
-            width: 28,
-            height: 28,
+            width: isSelected ? 32 : 28,
+            height: isSelected ? 32 : 28,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: ALTERNATIVE_MARKER_COLOR,
+            color: isSelected ? '#fff' : ALTERNATIVE_MARKER_COLOR,
             cursor: 'pointer',
           }}
         >
-          <CheckpointIcon type={alternative.type} style={{ width: 20, height: 20 }} />
+          <CheckpointIcon
+            type={alternative.type}
+            style={{ width: isSelected ? 22 : 20, height: isSelected ? 22 : 20 }}
+          />
         </div>
       </Marker>
 
