@@ -87,4 +87,50 @@ describe('MarkdownNotesField', () => {
     });
     expect(onChange).toHaveBeenCalled();
   });
+
+  it('does not render the linkable-insert button when linkables is not provided', () => {
+    setup({ value: 'hello' });
+    expect(screen.queryByRole('button', { name: 'Insert link to trip item' })).toBeNull();
+  });
+
+  it('inserts a trip:// link when a linkable is picked from the Autocomplete', async () => {
+    const onChange = vi.fn();
+    const linkables = [{ id: 'cp-1', label: 'Narita Airport', kind: 'checkpoint' as const }];
+    setup({ value: '', onChange, linkables });
+    fireEvent.click(screen.getByRole('button', { name: 'Insert link to trip item' }));
+    const input = await screen.findByRole('combobox', { name: 'Link to...' });
+    fireEvent.change(input, { target: { value: 'Narita' } });
+    const option = await screen.findByRole('option', { name: 'Narita Airport' });
+    fireEvent.click(option);
+    expect(onChange).toHaveBeenCalled();
+    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1][0] as string;
+    expect(lastCall).toContain('trip://checkpoint/cp-1');
+  });
+
+  it('renders a trip:// link from the initial markdown value as a real link (survives round-trip)', () => {
+    setup({ value: 'See [Fushimi Inari](trip://checkpoint/cp-1) for details' });
+    const link = screen.getByRole('link', { name: 'Fushimi Inari' });
+    expect(link).toHaveAttribute('href', 'trip://checkpoint/cp-1');
+  });
+
+  it('does not extend the link mark to text pasted right after an inserted linkable', async () => {
+    const onChange = vi.fn();
+    const linkables = [{ id: 'cp-1', label: 'Narita Airport', kind: 'checkpoint' as const }];
+    setup({ value: '', onChange, linkables });
+    fireEvent.click(screen.getByRole('button', { name: 'Insert link to trip item' }));
+    const input = await screen.findByRole('combobox', { name: 'Link to...' });
+    fireEvent.change(input, { target: { value: 'Narita' } });
+    const option = await screen.findByRole('option', { name: 'Narita Airport' });
+    fireEvent.click(option);
+
+    const editorEl = getEditor();
+    fireEvent.focus(editorEl);
+    fireEvent.paste(editorEl, {
+      clipboardData: { getData: (fmt: string) => (fmt === 'text/plain' ? 'is closed today' : '') },
+    });
+
+    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1][0] as string;
+    expect(lastCall).toContain('[Narita Airport](trip://checkpoint/cp-1)');
+    expect(lastCall).not.toContain('closed today](trip://checkpoint/cp-1)');
+  });
 });

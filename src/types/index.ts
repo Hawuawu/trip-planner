@@ -46,6 +46,14 @@ export interface Route {
   updatedAt: string;
 }
 
+export interface WikiSection {
+  id: string;
+  title: string;
+  content: string; // markdown
+  order: number;
+  updatedAt: string;
+}
+
 export interface MemberProfile {
   email: string | null;
   displayName: string | null;
@@ -81,7 +89,10 @@ export type ActivityLogEntryType =
   | 'booking_deleted'
   | 'route_added'
   | 'route_updated'
-  | 'route_deleted';
+  | 'route_deleted'
+  | 'wiki_section_added'
+  | 'wiki_section_updated'
+  | 'wiki_section_deleted';
 
 export interface ActivityLogEntry {
   id: string;

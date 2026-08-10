@@ -712,6 +712,88 @@ describe('LocalTripRepository — routes', () => {
   });
 });
 
+describe('LocalTripRepository — wikiSections', () => {
+  it('subscribeToWikiSections immediately calls the callback with an empty array (no seed data)', () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToWikiSections('t1', cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb.mock.calls[0][0]).toEqual([]);
+  });
+
+  it('addWikiSection returns saved section with id, prefixed local-wiki-, and updatedAt', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addWikiSection('t1', {
+      title: 'Overview',
+      content: 'Trip notes',
+      order: 0,
+    });
+    expect(saved.id).toMatch(/^local-wiki-/);
+    expect(saved.title).toBe('Overview');
+    expect(saved.content).toBe('Trip notes');
+    expect(saved.order).toBe(0);
+    expect(typeof saved.updatedAt).toBe('string');
+  });
+
+  it('addWikiSection notifies subscribers', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToWikiSections('t1', cb);
+    const callsBefore = cb.mock.calls.length;
+    await repo.addWikiSection('t1', { title: 'Day 3', content: '', order: 1 });
+    expect(cb.mock.calls.length).toBeGreaterThan(callsBefore);
+    const latest = cb.mock.calls[cb.mock.calls.length - 1][0];
+    expect(latest.some((s: { title: string }) => s.title === 'Day 3')).toBe(true);
+  });
+
+  it('updateWikiSection merges changes and bumps updatedAt', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addWikiSection('t1', { title: 'Before', content: '', order: 0 });
+    const originalUpdatedAt = saved.updatedAt;
+    await new Promise((r) => setTimeout(r, 5));
+    await repo.updateWikiSection('t1', saved.id, { title: 'After', content: 'updated' });
+    const cb = vi.fn();
+    repo.subscribeToWikiSections('t1', cb);
+    const updated = cb.mock.calls[0][0].find((s: { id: string }) => s.id === saved.id);
+    expect(updated?.title).toBe('After');
+    expect(updated?.content).toBe('updated');
+    expect(updated?.updatedAt).not.toBe(originalUpdatedAt);
+  });
+
+  it('deleteWikiSection removes entry and notifies subscribers', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addWikiSection('t1', { title: 'To Remove', content: '', order: 0 });
+    const cb = vi.fn();
+    repo.subscribeToWikiSections('t1', cb);
+    await repo.deleteWikiSection('t1', saved.id);
+    const latest = cb.mock.calls[cb.mock.calls.length - 1][0];
+    expect(latest.find((s: { id: string }) => s.id === saved.id)).toBeUndefined();
+  });
+
+  it('persists wiki sections across a new repo instance (via localStorage)', async () => {
+    const repo1 = makeRepo();
+    await repo1.addWikiSection('t1', { title: 'City section', content: '', order: 0 });
+    const repo2 = makeRepo();
+    const cb = vi.fn();
+    repo2.subscribeToWikiSections('t1', cb);
+    const sections = cb.mock.calls[0][0];
+    expect(sections.some((s: { title: string }) => s.title === 'City section')).toBe(true);
+  });
+
+  it('logs a wiki_section_added activity entry when a section is added', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToActivityLog('t1', cb);
+    cb.mockClear();
+    await repo.addWikiSection('t1', { title: 'Overview', content: '', order: 0 });
+    expect(cb).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'wiki_section_added', entityName: 'Overview' }),
+      ])
+    );
+  });
+});
+
 describe('LocalTripRepository — subscribeToTrip', () => {
   it('immediately calls back with the demo trip for an unknown id', () => {
     const repo = makeRepo();

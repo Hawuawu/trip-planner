@@ -49,6 +49,14 @@ export interface Route {
   updatedAt: string;
 }
 
+export interface WikiSection {
+  id: string;
+  title: string;
+  content: string;
+  order: number;
+  updatedAt: string;
+}
+
 export interface MemberProfile {
   email: string | null;
   displayName: string | null;

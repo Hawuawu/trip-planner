@@ -29,6 +29,7 @@ import type {
   Alternative,
   Booking,
   Route,
+  WikiSection,
   MemberProfile,
   ActivityLogEntry,
   ActivityLogEntryType,
@@ -553,6 +554,59 @@ export class FirebaseTripRepository implements TripRepository {
     void this.logActivity(tripId, {
       type: 'route_deleted',
       entityName: snap.exists() ? snap.data().name : undefined,
+    });
+  }
+
+  subscribeToWikiSections(tripId: string, cb: (sections: WikiSection[]) => void): () => void {
+    return onSnapshot(collection(this.db, 'trips', tripId, 'wikiSections'), (snap) => {
+      cb(
+        snap.docs.map((d) => ({
+          id: d.id,
+          title: d.data().title,
+          content: d.data().content ?? '',
+          order: d.data().order ?? 0,
+          updatedAt: toIso(d.data().updatedAt),
+        }))
+      );
+    });
+  }
+
+  async addWikiSection(
+    tripId: string,
+    section: Omit<WikiSection, 'id' | 'updatedAt'>
+  ): Promise<WikiSection> {
+    const now = new Date().toISOString();
+    const ref = await addDoc(collection(this.db, 'trips', tripId, 'wikiSections'), {
+      ...section,
+      updatedAt: serverTimestamp(),
+    });
+    void this.logActivity(tripId, { type: 'wiki_section_added', entityName: section.title });
+    return { ...section, id: ref.id, updatedAt: now };
+  }
+
+  async updateWikiSection(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<WikiSection, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    await updateDoc(doc(this.db, 'trips', tripId, 'wikiSections', id), {
+      ...changes,
+      updatedAt: serverTimestamp(),
+    });
+    void this.logActivity(tripId, {
+      type: 'wiki_section_updated',
+      entityName: changes.title,
+      changedFields: Object.keys(changes),
+    });
+  }
+
+  async deleteWikiSection(tripId: string, id: string): Promise<void> {
+    const ref = doc(this.db, 'trips', tripId, 'wikiSections', id);
+    const snap = await getDoc(ref);
+    await deleteDoc(ref);
+    void this.logActivity(tripId, {
+      type: 'wiki_section_deleted',
+      entityName: snap.exists() ? snap.data().title : undefined,
     });
   }
 }

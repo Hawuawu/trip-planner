@@ -64,6 +64,14 @@ export function TimelineView({ openAddSignal, onSaved, onError }: Props) {
     }
   }, []); // runs once on mount — initialActiveId.current is stable
 
+  // Scrolls to a checkpoint whenever it becomes selected — e.g. navigating
+  // here from a wiki-section internal link, not just clicking it in view.
+  useEffect(() => {
+    if (selectedId) {
+      itemRefs.current.get(selectedId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [selectedId]);
+
   // Opens the "add checkpoint" drawer when the parent (menu drawer) asks for
   // it — checkpointsRef keeps this effect from needing checkpoints as a dep.
   useEffect(() => {

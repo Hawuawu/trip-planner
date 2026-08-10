@@ -23,6 +23,7 @@ const tripInitialState = {
   alternatives: [],
   bookings: [],
   routes: [],
+  wikiSections: [],
   activityLog: [],
   selectedId: null,
   selectedDay: null,

@@ -5,6 +5,7 @@ import type {
   Alternative,
   Booking,
   Route,
+  WikiSection,
   ActivityLogEntry,
   ActivityLogEntryType,
   InviteMemberResult,
@@ -103,6 +104,7 @@ const LS_CP = 'trip-planner:checkpoints';
 const LS_ALT = 'trip-planner:alternatives';
 const LS_BOOKINGS = 'trip-planner:bookings';
 const LS_ROUTES = 'trip-planner:routes';
+const LS_WIKI_SECTIONS = 'trip-planner:wikiSections';
 const LS_TRIPS = 'trip-planner:trips';
 const LS_ACTIVITY = 'trip-planner:activityLog';
 
@@ -171,6 +173,19 @@ function saveRoutes(r: Route[]) {
   localStorage.setItem(LS_ROUTES, JSON.stringify(r));
 }
 
+function loadWikiSections(): WikiSection[] {
+  try {
+    const raw = localStorage.getItem(LS_WIKI_SECTIONS);
+    return raw ? (JSON.parse(raw) as WikiSection[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveWikiSections(s: WikiSection[]) {
+  localStorage.setItem(LS_WIKI_SECTIONS, JSON.stringify(s));
+}
+
 function loadLog(): ActivityLogEntry[] {
   try {
     const raw = localStorage.getItem(LS_ACTIVITY);
@@ -189,6 +204,7 @@ export class LocalTripRepository implements TripRepository {
   private altSubs = new Map<string, Set<(a: Alternative[]) => void>>();
   private bookingSubs = new Map<string, Set<(b: Booking[]) => void>>();
   private routeSubs = new Map<string, Set<(r: Route[]) => void>>();
+  private wikiSectionSubs = new Map<string, Set<(s: WikiSection[]) => void>>();
   private tripSubs = new Map<string, Set<(t: Trip) => void>>();
   private logSubs = new Map<string, Set<(e: ActivityLogEntry[]) => void>>();
 
@@ -537,6 +553,59 @@ export class LocalTripRepository implements TripRepository {
     saveRoutes(loadRoutes().filter((r) => r.id !== id));
     this.notifyRoutes(tripId);
     this.pushActivity(tripId, { type: 'route_deleted', entityName: target?.name });
+  }
+
+  subscribeToWikiSections(tripId: string, cb: (s: WikiSection[]) => void): () => void {
+    if (!this.wikiSectionSubs.has(tripId)) this.wikiSectionSubs.set(tripId, new Set());
+    this.wikiSectionSubs.get(tripId)!.add(cb);
+    cb(loadWikiSections());
+    return () => {
+      this.wikiSectionSubs.get(tripId)?.delete(cb);
+    };
+  }
+
+  private notifyWikiSections(tripId: string) {
+    this.wikiSectionSubs.get(tripId)?.forEach((cb) => cb(loadWikiSections()));
+  }
+
+  async addWikiSection(
+    tripId: string,
+    section: Omit<WikiSection, 'id' | 'updatedAt'>
+  ): Promise<WikiSection> {
+    const saved: WikiSection = {
+      ...section,
+      id: `local-wiki-${Date.now()}`,
+      updatedAt: new Date().toISOString(),
+    };
+    saveWikiSections([...loadWikiSections(), saved]);
+    this.notifyWikiSections(tripId);
+    this.pushActivity(tripId, { type: 'wiki_section_added', entityName: section.title });
+    return saved;
+  }
+
+  async updateWikiSection(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<WikiSection, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    saveWikiSections(
+      loadWikiSections().map((s) =>
+        s.id === id ? { ...s, ...changes, updatedAt: new Date().toISOString() } : s
+      )
+    );
+    this.notifyWikiSections(tripId);
+    this.pushActivity(tripId, {
+      type: 'wiki_section_updated',
+      entityName: changes.title,
+      changedFields: Object.keys(changes),
+    });
+  }
+
+  async deleteWikiSection(tripId: string, id: string): Promise<void> {
+    const target = loadWikiSections().find((s) => s.id === id);
+    saveWikiSections(loadWikiSections().filter((s) => s.id !== id));
+    this.notifyWikiSections(tripId);
+    this.pushActivity(tripId, { type: 'wiki_section_deleted', entityName: target?.title });
   }
 
   async listTrips(): Promise<Trip[]> {

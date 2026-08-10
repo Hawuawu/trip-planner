@@ -6,6 +6,7 @@ import type {
   Alternative,
   Booking,
   Route,
+  WikiSection,
   ActivityLogEntry,
   InviteMemberResult,
 } from '../types';
@@ -16,6 +17,7 @@ interface TripState {
   alternatives: Alternative[];
   bookings: Booking[];
   routes: Route[];
+  wikiSections: WikiSection[];
   activityLog: ActivityLogEntry[];
   selectedId: string | null;
   selectedDay: string | null;
@@ -78,6 +80,13 @@ interface TripState {
   addRoute(route: Omit<Route, 'id' | 'updatedAt'>): Promise<void>;
   updateRoute(id: string, changes: Partial<Omit<Route, 'id' | 'updatedAt'>>): Promise<void>;
   deleteRoute(id: string): Promise<void>;
+
+  addWikiSection(section: Omit<WikiSection, 'id' | 'updatedAt'>): Promise<void>;
+  updateWikiSection(
+    id: string,
+    changes: Partial<Omit<WikiSection, 'id' | 'updatedAt'>>
+  ): Promise<void>;
+  deleteWikiSection(id: string): Promise<void>;
 }
 
 export const useTripStore = create<TripState>((set, get) => ({
@@ -86,6 +95,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   alternatives: [],
   bookings: [],
   routes: [],
+  wikiSections: [],
   activityLog: [],
   selectedId: null,
   selectedDay: null,
@@ -113,6 +123,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     );
     repo.subscribeToBookings(tripId, (bookings) => set({ bookings }));
     repo.subscribeToRoutes(tripId, (routes) => set({ routes }));
+    repo.subscribeToWikiSections(tripId, (wikiSections) => set({ wikiSections }));
     repo.subscribeToActivityLog(tripId, (activityLog) => set({ activityLog }));
     repo.recordAccess(tripId).catch(() => {});
   },
@@ -428,6 +439,51 @@ export const useTripStore = create<TripState>((set, get) => ({
       await repo.deleteRoute(tripId, id);
     } catch (err) {
       set({ routes: prev });
+      throw err;
+    }
+  },
+
+  async addWikiSection(section) {
+    const { repo, tripId, wikiSections } = get();
+    if (!repo || !tripId) return;
+    const optimistic: WikiSection = {
+      ...section,
+      id: `__optimistic-${Date.now()}`,
+      updatedAt: new Date().toISOString(),
+    };
+    set({ wikiSections: [...wikiSections, optimistic] });
+    const saved = await repo.addWikiSection(tripId, section);
+    set((s) => ({
+      wikiSections: s.wikiSections.map((w) => (w.id === optimistic.id ? saved : w)),
+    }));
+  },
+
+  async updateWikiSection(id, changes) {
+    const { repo, tripId, wikiSections } = get();
+    if (!repo || !tripId) return;
+    const prev = wikiSections.find((w) => w.id === id);
+    set({
+      wikiSections: wikiSections.map((w) =>
+        w.id === id ? { ...w, ...changes, updatedAt: new Date().toISOString() } : w
+      ),
+    });
+    try {
+      await repo.updateWikiSection(tripId, id, changes);
+    } catch (err) {
+      if (prev) set((s) => ({ wikiSections: s.wikiSections.map((w) => (w.id === id ? prev : w)) }));
+      throw err;
+    }
+  },
+
+  async deleteWikiSection(id) {
+    const { repo, tripId, wikiSections } = get();
+    if (!repo || !tripId) return;
+    const prev = wikiSections;
+    set({ wikiSections: wikiSections.filter((w) => w.id !== id) });
+    try {
+      await repo.deleteWikiSection(tripId, id);
+    } catch (err) {
+      set({ wikiSections: prev });
       throw err;
     }
   },

@@ -1,15 +1,29 @@
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Box } from '@mui/material';
+import { Box, Link } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
+
+export type InternalLinkKind = 'checkpoint' | 'alternative' | 'route';
+
+const INTERNAL_LINK_PREFIX = 'trip://';
+
+function parseInternalLink(href: string): { kind: InternalLinkKind; id: string } | null {
+  if (!href.startsWith(INTERNAL_LINK_PREFIX)) return null;
+  const [kind, id] = href.slice(INTERNAL_LINK_PREFIX.length).split('/');
+  if ((kind === 'checkpoint' || kind === 'alternative' || kind === 'route') && id) {
+    return { kind, id };
+  }
+  return null;
+}
 
 interface Props {
   notes: string;
   variant?: 'body2' | 'caption';
   sx?: SxProps<Theme>;
+  onInternalLink?(kind: InternalLinkKind, id: string): void;
 }
 
-export function MarkdownNotes({ notes, variant = 'body2', sx }: Props) {
+export function MarkdownNotes({ notes, variant = 'body2', sx, onInternalLink }: Props) {
   return (
     <Box
       sx={[
@@ -26,10 +40,28 @@ export function MarkdownNotes({ notes, variant = 'body2', sx }: Props) {
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={
+          onInternalLink
+            ? (url) => (parseInternalLink(url) ? url : defaultUrlTransform(url))
+            : undefined
+        }
         components={{
-          a: ({ node: _node, ...props }) => (
-            <a {...props} target="_blank" rel="noopener noreferrer" />
-          ),
+          a: ({ node: _node, href, children }) => {
+            const internal = href ? parseInternalLink(href) : null;
+            if (internal && onInternalLink) {
+              const handleClick = () => onInternalLink(internal.kind, internal.id);
+              return (
+                <Link component="button" type="button" onClick={handleClick}>
+                  {children}
+                </Link>
+              );
+            }
+            return (
+              <a href={href} target="_blank" rel="noopener noreferrer">
+                {children}
+              </a>
+            );
+          },
         }}
       >
         {notes}
