@@ -245,6 +245,18 @@ describe('AlternativesShelf', () => {
     expect(useTripStore.getState().selectedAlternativeId).toBe('a1');
   });
 
+  it('opens the edit form when Enter is pressed on the icon wrapper (keyboard support)', () => {
+    useTripStore.setState({ alternatives: SEED_ALTS });
+    renderWithProviders(<AlternativesShelf />);
+
+    const iconWrapper = within(itemContainer('teamLab Borderless')).getAllByRole('button', {
+      name: /edit alternative/i,
+    })[0];
+    fireEvent.keyDown(iconWrapper, { key: 'Enter' });
+
+    expect(screen.getByRole('heading', { name: /edit alternative/i })).toBeInTheDocument();
+  });
+
   it('selects the alternative for map focus when the card is clicked, without opening the edit form', async () => {
     useTripStore.setState({ alternatives: SEED_ALTS });
     renderWithProviders(<AlternativesShelf />);

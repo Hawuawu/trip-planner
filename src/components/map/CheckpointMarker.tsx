@@ -35,8 +35,8 @@ export function CheckpointMarker({ checkpoint, isSelected, onSelect, onEdit }: P
             background: isSelected ? '#e94560' : '#fff',
             border: `2px solid ${color}`,
             borderRadius: '50%',
-            width: 28,
-            height: 28,
+            width: isSelected ? 32 : 28,
+            height: isSelected ? 32 : 28,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -44,7 +44,10 @@ export function CheckpointMarker({ checkpoint, isSelected, onSelect, onEdit }: P
             cursor: 'pointer',
           }}
         >
-          <CheckpointIcon type={checkpoint.type} style={{ width: 20, height: 20 }} />
+          <CheckpointIcon
+            type={checkpoint.type}
+            style={{ width: isSelected ? 22 : 20, height: isSelected ? 22 : 20 }}
+          />
         </div>
       </Marker>
 

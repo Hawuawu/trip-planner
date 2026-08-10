@@ -95,6 +95,30 @@ describe('CheckpointMarker', () => {
     expect(screen.queryByText('Kyoto')).not.toBeInTheDocument();
   });
 
+  it('gives the selected marker a non-color signal (larger size), not color alone', () => {
+    const { rerender } = render(
+      <CheckpointMarker
+        checkpoint={makeCheckpoint()}
+        isSelected={false}
+        onSelect={() => {}}
+        onEdit={() => {}}
+      />
+    );
+    const unselectedPin = screen.getByTestId('marker').firstElementChild as HTMLElement;
+    const unselectedWidth = unselectedPin.style.width;
+
+    rerender(
+      <CheckpointMarker
+        checkpoint={makeCheckpoint()}
+        isSelected
+        onSelect={() => {}}
+        onEdit={() => {}}
+      />
+    );
+    const selectedPin = screen.getByTestId('marker').firstElementChild as HTMLElement;
+    expect(selectedPin.style.width).not.toBe(unselectedWidth);
+  });
+
   it('calls onEdit when the popup edit button is clicked, without re-triggering onSelect', () => {
     const onSelect = vi.fn();
     const onEdit = vi.fn();
