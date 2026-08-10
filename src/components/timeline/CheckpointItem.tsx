@@ -70,6 +70,15 @@ export function CheckpointItem({
     <TimelineItem
       sx={{ cursor: 'pointer', '&:before': { flex: 0, padding: 0 } }}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Select ${checkpoint.name}`}
     >
       <TimelineSeparator>
         <TimelineDot
@@ -77,6 +86,14 @@ export function CheckpointItem({
             e.stopPropagation();
             onEdit();
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onEdit();
+            }
+          }}
+          tabIndex={0}
           aria-label="Edit checkpoint"
           sx={{
             cursor: 'pointer',
@@ -105,12 +122,12 @@ export function CheckpointItem({
             justifyContent: 'space-between',
             gap: 1,
             bgcolor: 'background.paper',
-            border: '1px solid',
+            border: isSelected ? '2px solid' : '1px solid',
             borderColor: isSelected ? 'primary.main' : 'divider',
             borderRadius: 1,
             px: 1.5,
             py: 1,
-            transition: 'border-color 0.15s',
+            transition: 'border-color 0.15s, border-width 0.15s',
           }}
         >
           <Box sx={{ minWidth: 0 }}>

@@ -13,3 +13,6 @@ export const MAX_PITCH = 60;
 export const BEARING_SENSITIVITY = 0.6; // degrees of bearing per px of horizontal drag
 export const PITCH_SENSITIVITY = 0.35; // degrees of pitch per px of vertical drag (drag up tilts)
 export const RESET_DURATION_MS = 300;
+
+export const KEYBOARD_BEARING_STEP = 15; // degrees of bearing per arrow-key press
+export const KEYBOARD_PITCH_STEP = 10; // degrees of pitch per arrow-key press

@@ -5,6 +5,7 @@ module.exports = {
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
     'plugin:react-hooks/recommended',
+    'plugin:jsx-a11y/recommended',
     'plugin:security/recommended-legacy',
     'plugin:no-unsanitized/recommended-legacy',
   ],
@@ -21,6 +22,11 @@ module.exports = {
     // indexing (arr[i]) — extremely high false-positive rate on ordinary
     // TypeScript and not useful signal here.
     'security/detect-object-injection': 'off',
+    // Every autoFocus in this app targets the first field of a
+    // dialog/panel/popover the user just opened via their own action (tap
+    // Edit/Add, open a link picker) — the WAI-ARIA-recommended pattern, not
+    // the "steals focus on page load" case this rule guards against.
+    'jsx-a11y/no-autofocus': 'off',
   },
   overrides: [
     {
@@ -28,6 +34,11 @@ module.exports = {
       rules: {
         // Test fixtures resolve paths via path.resolve/__dirname, not user input.
         'security/detect-non-literal-fs-filename': 'off',
+        // react-map-gl mocks stand in for Marker/the map root with a plain
+        // div + onClick to simulate the real component's onClick prop in
+        // tests — mock scaffolding, not user-facing markup.
+        'jsx-a11y/click-events-have-key-events': 'off',
+        'jsx-a11y/no-static-element-interactions': 'off',
       },
     },
     {

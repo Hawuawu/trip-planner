@@ -3,6 +3,8 @@ import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { useMap } from 'react-map-gl/maplibre';
 import {
   BEARING_SENSITIVITY,
+  KEYBOARD_BEARING_STEP,
+  KEYBOARD_PITCH_STEP,
   MAX_PITCH,
   PITCH_SENSITIVITY,
   RESET_DURATION_MS,
@@ -66,6 +68,35 @@ export function MapOrientationBall() {
     map?.easeTo({ bearing: 0, pitch: 0, duration: RESET_DURATION_MS });
   }
 
+  function handleKeyDown(e: React.KeyboardEvent<SVGSVGElement>) {
+    let nextBearing = bearing;
+    let nextPitch = pitch;
+    switch (e.key) {
+      case 'ArrowLeft':
+        nextBearing = bearing - KEYBOARD_BEARING_STEP;
+        break;
+      case 'ArrowRight':
+        nextBearing = bearing + KEYBOARD_BEARING_STEP;
+        break;
+      case 'ArrowUp':
+        nextPitch = clampPitch(pitch + KEYBOARD_PITCH_STEP);
+        break;
+      case 'ArrowDown':
+        nextPitch = clampPitch(pitch - KEYBOARD_PITCH_STEP);
+        break;
+      case 'Enter':
+      case ' ':
+        handleDoubleClick();
+        return;
+      default:
+        return;
+    }
+    e.preventDefault();
+    setBearing(nextBearing);
+    setPitch(nextPitch);
+    map?.jumpTo({ bearing: nextBearing, pitch: nextPitch });
+  }
+
   const pitchScale = Math.cos((pitch * Math.PI) / 180);
 
   return (
@@ -75,13 +106,15 @@ export function MapOrientationBall() {
         height={size}
         viewBox={`0 0 ${size} ${size}`}
         role="img"
-        aria-label="Map bearing and pitch control — drag to rotate and tilt, double-click to reset"
+        aria-label="Map bearing and pitch control — drag or use arrow keys to rotate and tilt, double-click or Enter to reset"
+        tabIndex={0}
         style={{ cursor: 'grab', touchAction: 'none' }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         onDoubleClick={handleDoubleClick}
+        onKeyDown={handleKeyDown}
       >
         <circle
           cx={radius}

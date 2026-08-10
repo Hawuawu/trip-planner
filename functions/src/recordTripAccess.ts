@@ -1,8 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getDb, getAdminAuth } from './firebaseAdmin';
-
-const REGION = 'europe-west1';
+import { REGION } from './config';
 
 interface RecordTripAccessRequest {
   tripId: string;
