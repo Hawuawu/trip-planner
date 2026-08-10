@@ -5,6 +5,9 @@ import type {
   Booking,
   Route,
   WikiSection,
+  Budget,
+  BudgetSection,
+  BudgetItem,
   ActivityLogEntry,
   InviteMemberResult,
 } from '../types';
@@ -71,4 +74,34 @@ export interface TripRepository {
     changes: Partial<Omit<WikiSection, 'id' | 'updatedAt'>>
   ): Promise<void>;
   deleteWikiSection(tripId: string, id: string): Promise<void>;
+
+  subscribeToBudgets(tripId: string, cb: (budgets: Budget[]) => void): () => void;
+  addBudget(tripId: string, budget: Omit<Budget, 'id' | 'updatedAt'>): Promise<Budget>;
+  updateBudget(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<Budget, 'id' | 'updatedAt'>>
+  ): Promise<void>;
+  deleteBudget(tripId: string, id: string): Promise<void>;
+
+  subscribeToBudgetSections(tripId: string, cb: (sections: BudgetSection[]) => void): () => void;
+  addBudgetSection(
+    tripId: string,
+    section: Omit<BudgetSection, 'id' | 'updatedAt'>
+  ): Promise<BudgetSection>;
+  updateBudgetSection(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<BudgetSection, 'id' | 'updatedAt'>>
+  ): Promise<void>;
+  deleteBudgetSection(tripId: string, id: string): Promise<void>;
+
+  subscribeToBudgetItems(tripId: string, cb: (items: BudgetItem[]) => void): () => void;
+  addBudgetItem(tripId: string, item: Omit<BudgetItem, 'id' | 'updatedAt'>): Promise<BudgetItem>;
+  updateBudgetItem(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<BudgetItem, 'id' | 'updatedAt'>>
+  ): Promise<void>;
+  deleteBudgetItem(tripId: string, id: string): Promise<void>;
 }

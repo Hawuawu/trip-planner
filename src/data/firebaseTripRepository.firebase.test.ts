@@ -590,6 +590,156 @@ describe('Security rules — trips/{tripId}/wikiSections', () => {
   });
 });
 
+describe('Security rules — trips/{tripId}/budgets', () => {
+  const TRIP_ID = 'trip-budget-rules-1';
+  const MEMBER_UID = 'member-budget';
+  const OUTSIDER_UID = 'outsider-budget';
+
+  beforeEach(async () => {
+    await seedTrip(TRIP_ID, [MEMBER_UID]);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .firestore()
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('budgets')
+        .doc('budget-1')
+        .set({
+          name: 'Backpacker',
+          currency: 'JPY',
+        });
+    });
+  });
+
+  it('member CAN read budgets', async () => {
+    const db = approvedDb(MEMBER_UID);
+    await assertSucceeds(
+      db.collection('trips').doc(TRIP_ID).collection('budgets').doc('budget-1').get()
+    );
+  });
+
+  it('member CAN write budgets', async () => {
+    const db = approvedDb(MEMBER_UID);
+    await assertSucceeds(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('budgets')
+        .add({ name: 'Comfort', currency: 'USD' })
+    );
+  });
+
+  it('non-member CANNOT read budgets', async () => {
+    const db = approvedDb(OUTSIDER_UID);
+    await assertFails(
+      db.collection('trips').doc(TRIP_ID).collection('budgets').doc('budget-1').get()
+    );
+  });
+});
+
+describe('Security rules — trips/{tripId}/budgetSections', () => {
+  const TRIP_ID = 'trip-budget-section-rules-1';
+  const MEMBER_UID = 'member-budget-section';
+  const OUTSIDER_UID = 'outsider-budget-section';
+
+  beforeEach(async () => {
+    await seedTrip(TRIP_ID, [MEMBER_UID]);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .firestore()
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('budgetSections')
+        .doc('section-1')
+        .set({
+          budgetId: 'budget-1',
+          category: 'hotel',
+          name: 'Hotel',
+          order: 0,
+        });
+    });
+  });
+
+  it('member CAN read budget sections', async () => {
+    const db = approvedDb(MEMBER_UID);
+    await assertSucceeds(
+      db.collection('trips').doc(TRIP_ID).collection('budgetSections').doc('section-1').get()
+    );
+  });
+
+  it('member CAN write budget sections', async () => {
+    const db = approvedDb(MEMBER_UID);
+    await assertSucceeds(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('budgetSections')
+        .add({ budgetId: 'budget-1', category: 'meals', name: 'Meals', order: 1 })
+    );
+  });
+
+  it('non-member CANNOT read budget sections', async () => {
+    const db = approvedDb(OUTSIDER_UID);
+    await assertFails(
+      db.collection('trips').doc(TRIP_ID).collection('budgetSections').doc('section-1').get()
+    );
+  });
+});
+
+describe('Security rules — trips/{tripId}/budgetItems', () => {
+  const TRIP_ID = 'trip-budget-item-rules-1';
+  const MEMBER_UID = 'member-budget-item';
+  const OUTSIDER_UID = 'outsider-budget-item';
+
+  beforeEach(async () => {
+    await seedTrip(TRIP_ID, [MEMBER_UID]);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .firestore()
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('budgetItems')
+        .doc('item-1')
+        .set({
+          budgetSectionId: 'section-1',
+          name: 'Ryokan',
+          rateType: 'per_night',
+          quantity: 3,
+          price: 15000,
+          order: 0,
+        });
+    });
+  });
+
+  it('member CAN read budget items', async () => {
+    const db = approvedDb(MEMBER_UID);
+    await assertSucceeds(
+      db.collection('trips').doc(TRIP_ID).collection('budgetItems').doc('item-1').get()
+    );
+  });
+
+  it('member CAN write budget items', async () => {
+    const db = approvedDb(MEMBER_UID);
+    await assertSucceeds(
+      db.collection('trips').doc(TRIP_ID).collection('budgetItems').add({
+        budgetSectionId: 'section-1',
+        name: 'Business hotel',
+        rateType: 'per_night',
+        quantity: 3,
+        price: 8000,
+        order: 1,
+      })
+    );
+  });
+
+  it('non-member CANNOT read budget items', async () => {
+    const db = approvedDb(OUTSIDER_UID);
+    await assertFails(
+      db.collection('trips').doc(TRIP_ID).collection('budgetItems').doc('item-1').get()
+    );
+  });
+});
+
 describe('Security rules — trips/{tripId}/bookings', () => {
   const TRIP_ID = 'trip-bk-rules-1';
   const MEMBER_UID = 'member-bk';

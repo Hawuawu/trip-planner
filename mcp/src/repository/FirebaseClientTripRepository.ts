@@ -22,6 +22,9 @@ import type {
   Booking,
   Route,
   WikiSection,
+  Budget,
+  BudgetSection,
+  BudgetItem,
   MemberProfile,
 } from '../types.js';
 
@@ -93,6 +96,43 @@ function toWikiSection(id: string, d: Record<string, unknown>): WikiSection {
     id,
     title: d.title as string,
     content: (d.content as string) ?? '',
+    order: (d.order as number) ?? 0,
+    updatedAt: toIso(d.updatedAt),
+  };
+}
+
+function toBudget(id: string, d: Record<string, unknown>): Budget {
+  return {
+    id,
+    name: d.name as string,
+    currency: d.currency as string,
+    updatedAt: toIso(d.updatedAt),
+  };
+}
+
+function toBudgetSection(id: string, d: Record<string, unknown>): BudgetSection {
+  return {
+    id,
+    budgetId: d.budgetId as string,
+    category: d.category as BudgetSection['category'],
+    name: d.name as string,
+    price: d.price as number | undefined,
+    notes: d.notes as string | undefined,
+    order: (d.order as number) ?? 0,
+    updatedAt: toIso(d.updatedAt),
+  };
+}
+
+function toBudgetItem(id: string, d: Record<string, unknown>): BudgetItem {
+  return {
+    id,
+    budgetSectionId: d.budgetSectionId as string,
+    name: d.name as string,
+    price: d.price as number | undefined,
+    rateType: d.rateType as BudgetItem['rateType'],
+    quantity: (d.quantity as number) ?? 1,
+    alternatives: d.alternatives as BudgetItem['alternatives'],
+    notes: d.notes as string | undefined,
     order: (d.order as number) ?? 0,
     updatedAt: toIso(d.updatedAt),
   };
@@ -361,6 +401,115 @@ export class FirebaseClientTripRepository {
     changes: Partial<Omit<WikiSection, 'id' | 'updatedAt'>>
   ): Promise<void> {
     await updateDoc(doc(this.db, 'trips', tripId, 'wikiSections', id), {
+      ...changes,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async listBudgets(tripId: string): Promise<Budget[]> {
+    const snap = await getDocs(collection(this.db, 'trips', tripId, 'budgets'));
+    return snap.docs.map((d) => toBudget(d.id, d.data()));
+  }
+
+  async getBudget(tripId: string, budgetId: string): Promise<Budget> {
+    const snap = await getDoc(doc(this.db, 'trips', tripId, 'budgets', budgetId));
+    if (!snap.exists()) throw new Error(`Budget ${budgetId} not found`);
+    return toBudget(snap.id, snap.data());
+  }
+
+  async addBudget(tripId: string, budget: Omit<Budget, 'id' | 'updatedAt'>): Promise<Budget> {
+    const now = new Date().toISOString();
+    const ref = await addDoc(collection(this.db, 'trips', tripId, 'budgets'), {
+      ...budget,
+      updatedAt: serverTimestamp(),
+    });
+    return { ...budget, id: ref.id, updatedAt: now };
+  }
+
+  async updateBudget(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<Budget, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    await updateDoc(doc(this.db, 'trips', tripId, 'budgets', id), {
+      ...changes,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async listBudgetSections(tripId: string, budgetId: string): Promise<BudgetSection[]> {
+    const snap = await getDocs(
+      query(
+        collection(this.db, 'trips', tripId, 'budgetSections'),
+        where('budgetId', '==', budgetId)
+      )
+    );
+    return snap.docs.map((d) => toBudgetSection(d.id, d.data()));
+  }
+
+  async getBudgetSection(tripId: string, sectionId: string): Promise<BudgetSection> {
+    const snap = await getDoc(doc(this.db, 'trips', tripId, 'budgetSections', sectionId));
+    if (!snap.exists()) throw new Error(`Budget section ${sectionId} not found`);
+    return toBudgetSection(snap.id, snap.data());
+  }
+
+  async addBudgetSection(
+    tripId: string,
+    section: Omit<BudgetSection, 'id' | 'updatedAt'>
+  ): Promise<BudgetSection> {
+    const now = new Date().toISOString();
+    const ref = await addDoc(collection(this.db, 'trips', tripId, 'budgetSections'), {
+      ...section,
+      updatedAt: serverTimestamp(),
+    });
+    return { ...section, id: ref.id, updatedAt: now };
+  }
+
+  async updateBudgetSection(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<BudgetSection, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    await updateDoc(doc(this.db, 'trips', tripId, 'budgetSections', id), {
+      ...changes,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async listBudgetItems(tripId: string, budgetSectionId: string): Promise<BudgetItem[]> {
+    const snap = await getDocs(
+      query(
+        collection(this.db, 'trips', tripId, 'budgetItems'),
+        where('budgetSectionId', '==', budgetSectionId)
+      )
+    );
+    return snap.docs.map((d) => toBudgetItem(d.id, d.data()));
+  }
+
+  async getBudgetItem(tripId: string, itemId: string): Promise<BudgetItem> {
+    const snap = await getDoc(doc(this.db, 'trips', tripId, 'budgetItems', itemId));
+    if (!snap.exists()) throw new Error(`Budget item ${itemId} not found`);
+    return toBudgetItem(snap.id, snap.data());
+  }
+
+  async addBudgetItem(
+    tripId: string,
+    item: Omit<BudgetItem, 'id' | 'updatedAt'>
+  ): Promise<BudgetItem> {
+    const now = new Date().toISOString();
+    const ref = await addDoc(collection(this.db, 'trips', tripId, 'budgetItems'), {
+      ...item,
+      updatedAt: serverTimestamp(),
+    });
+    return { ...item, id: ref.id, updatedAt: now };
+  }
+
+  async updateBudgetItem(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<BudgetItem, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    await updateDoc(doc(this.db, 'trips', tripId, 'budgetItems', id), {
       ...changes,
       updatedAt: serverTimestamp(),
     });

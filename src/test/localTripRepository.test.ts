@@ -794,6 +794,284 @@ describe('LocalTripRepository — wikiSections', () => {
   });
 });
 
+describe('LocalTripRepository — budgets', () => {
+  it('subscribeToBudgets immediately calls the callback with an empty array (no seed data)', () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToBudgets('t1', cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb.mock.calls[0][0]).toEqual([]);
+  });
+
+  it('addBudget returns saved budget with id, prefixed local-budget-, and updatedAt', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBudget('t1', { name: 'Backpacker', currency: 'JPY' });
+    expect(saved.id).toMatch(/^local-budget-/);
+    expect(saved.name).toBe('Backpacker');
+    expect(saved.currency).toBe('JPY');
+    expect(typeof saved.updatedAt).toBe('string');
+  });
+
+  it('addBudget notifies subscribers', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToBudgets('t1', cb);
+    const callsBefore = cb.mock.calls.length;
+    await repo.addBudget('t1', { name: 'Comfort', currency: 'USD' });
+    expect(cb.mock.calls.length).toBeGreaterThan(callsBefore);
+    const latest = cb.mock.calls[cb.mock.calls.length - 1][0];
+    expect(latest.some((b: { name: string }) => b.name === 'Comfort')).toBe(true);
+  });
+
+  it('updateBudget merges changes and bumps updatedAt', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBudget('t1', { name: 'Before', currency: 'JPY' });
+    const originalUpdatedAt = saved.updatedAt;
+    await new Promise((r) => setTimeout(r, 5));
+    await repo.updateBudget('t1', saved.id, { name: 'After', currency: 'USD' });
+    const cb = vi.fn();
+    repo.subscribeToBudgets('t1', cb);
+    const updated = cb.mock.calls[0][0].find((b: { id: string }) => b.id === saved.id);
+    expect(updated?.name).toBe('After');
+    expect(updated?.currency).toBe('USD');
+    expect(updated?.updatedAt).not.toBe(originalUpdatedAt);
+  });
+
+  it('deleteBudget removes entry and notifies subscribers', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBudget('t1', { name: 'To Remove', currency: 'JPY' });
+    const cb = vi.fn();
+    repo.subscribeToBudgets('t1', cb);
+    await repo.deleteBudget('t1', saved.id);
+    const latest = cb.mock.calls[cb.mock.calls.length - 1][0];
+    expect(latest.find((b: { id: string }) => b.id === saved.id)).toBeUndefined();
+  });
+
+  it('deleteBudget cascades to its sections and their items', async () => {
+    const repo = makeRepo();
+    const budget = await repo.addBudget('t1', { name: 'Backpacker', currency: 'JPY' });
+    const section = await repo.addBudgetSection('t1', {
+      budgetId: budget.id,
+      category: 'hotel',
+      name: 'Hotel',
+      order: 0,
+    });
+    const item = await repo.addBudgetItem('t1', {
+      budgetSectionId: section.id,
+      name: 'Ryokan',
+      rateType: 'per_night',
+      quantity: 3,
+      price: 15000,
+      order: 0,
+    });
+
+    await repo.deleteBudget('t1', budget.id);
+
+    const sectionsCb = vi.fn();
+    repo.subscribeToBudgetSections('t1', sectionsCb);
+    expect(
+      sectionsCb.mock.calls[0][0].find((s: { id: string }) => s.id === section.id)
+    ).toBeUndefined();
+
+    const itemsCb = vi.fn();
+    repo.subscribeToBudgetItems('t1', itemsCb);
+    expect(itemsCb.mock.calls[0][0].find((i: { id: string }) => i.id === item.id)).toBeUndefined();
+  });
+
+  it('persists budgets across a new repo instance (via localStorage)', async () => {
+    const repo1 = makeRepo();
+    await repo1.addBudget('t1', { name: 'Backpacker', currency: 'JPY' });
+    const repo2 = makeRepo();
+    const cb = vi.fn();
+    repo2.subscribeToBudgets('t1', cb);
+    const budgets = cb.mock.calls[0][0];
+    expect(budgets.some((b: { name: string }) => b.name === 'Backpacker')).toBe(true);
+  });
+
+  it('logs a budget_added activity entry when a budget is added', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToActivityLog('t1', cb);
+    cb.mockClear();
+    await repo.addBudget('t1', { name: 'Backpacker', currency: 'JPY' });
+    expect(cb).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'budget_added', entityName: 'Backpacker' }),
+      ])
+    );
+  });
+});
+
+describe('LocalTripRepository — budgetSections', () => {
+  it('subscribeToBudgetSections immediately calls the callback with an empty array', () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToBudgetSections('t1', cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb.mock.calls[0][0]).toEqual([]);
+  });
+
+  it('addBudgetSection returns saved section with id, prefixed local-budget-section-, and updatedAt', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBudgetSection('t1', {
+      budgetId: 'budget-1',
+      category: 'meals',
+      name: 'Meals',
+      order: 0,
+    });
+    expect(saved.id).toMatch(/^local-budget-section-/);
+    expect(saved.category).toBe('meals');
+    expect(saved.name).toBe('Meals');
+    expect(typeof saved.updatedAt).toBe('string');
+  });
+
+  it('updateBudgetSection merges changes and bumps updatedAt', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBudgetSection('t1', {
+      budgetId: 'budget-1',
+      category: 'other',
+      name: 'Before',
+      order: 0,
+    });
+    const originalUpdatedAt = saved.updatedAt;
+    await new Promise((r) => setTimeout(r, 5));
+    await repo.updateBudgetSection('t1', saved.id, { name: 'After' });
+    const cb = vi.fn();
+    repo.subscribeToBudgetSections('t1', cb);
+    const updated = cb.mock.calls[0][0].find((s: { id: string }) => s.id === saved.id);
+    expect(updated?.name).toBe('After');
+    expect(updated?.updatedAt).not.toBe(originalUpdatedAt);
+  });
+
+  it('deleteBudgetSection cascades to its items', async () => {
+    const repo = makeRepo();
+    const section = await repo.addBudgetSection('t1', {
+      budgetId: 'budget-1',
+      category: 'hotel',
+      name: 'Hotel',
+      order: 0,
+    });
+    const item = await repo.addBudgetItem('t1', {
+      budgetSectionId: section.id,
+      name: 'Ryokan',
+      rateType: 'constant',
+      quantity: 1,
+      price: 8000,
+      order: 0,
+    });
+
+    await repo.deleteBudgetSection('t1', section.id);
+
+    const sectionsCb = vi.fn();
+    repo.subscribeToBudgetSections('t1', sectionsCb);
+    expect(
+      sectionsCb.mock.calls[0][0].find((s: { id: string }) => s.id === section.id)
+    ).toBeUndefined();
+
+    const itemsCb = vi.fn();
+    repo.subscribeToBudgetItems('t1', itemsCb);
+    expect(itemsCb.mock.calls[0][0].find((i: { id: string }) => i.id === item.id)).toBeUndefined();
+  });
+
+  it('logs a budget_section_added activity entry when a section is added', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToActivityLog('t1', cb);
+    cb.mockClear();
+    await repo.addBudgetSection('t1', {
+      budgetId: 'budget-1',
+      category: 'hotel',
+      name: 'Hotel',
+      order: 0,
+    });
+    expect(cb).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'budget_section_added', entityName: 'Hotel' }),
+      ])
+    );
+  });
+});
+
+describe('LocalTripRepository — budgetItems', () => {
+  it('subscribeToBudgetItems immediately calls the callback with an empty array', () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToBudgetItems('t1', cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb.mock.calls[0][0]).toEqual([]);
+  });
+
+  it('addBudgetItem returns saved item with id, prefixed local-budget-item-, and updatedAt', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBudgetItem('t1', {
+      budgetSectionId: 'section-1',
+      name: 'Ryokan',
+      rateType: 'per_night',
+      quantity: 3,
+      price: 15000,
+      order: 0,
+    });
+    expect(saved.id).toMatch(/^local-budget-item-/);
+    expect(saved.name).toBe('Ryokan');
+    expect(saved.rateType).toBe('per_night');
+    expect(typeof saved.updatedAt).toBe('string');
+  });
+
+  it('updateBudgetItem merges changes and bumps updatedAt', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBudgetItem('t1', {
+      budgetSectionId: 'section-1',
+      name: 'Before',
+      rateType: 'constant',
+      quantity: 1,
+      order: 0,
+    });
+    const originalUpdatedAt = saved.updatedAt;
+    await new Promise((r) => setTimeout(r, 5));
+    await repo.updateBudgetItem('t1', saved.id, { name: 'After' });
+    const cb = vi.fn();
+    repo.subscribeToBudgetItems('t1', cb);
+    const updated = cb.mock.calls[0][0].find((i: { id: string }) => i.id === saved.id);
+    expect(updated?.name).toBe('After');
+    expect(updated?.updatedAt).not.toBe(originalUpdatedAt);
+  });
+
+  it('deleteBudgetItem removes entry and notifies subscribers', async () => {
+    const repo = makeRepo();
+    const saved = await repo.addBudgetItem('t1', {
+      budgetSectionId: 'section-1',
+      name: 'To Remove',
+      rateType: 'constant',
+      quantity: 1,
+      order: 0,
+    });
+    const cb = vi.fn();
+    repo.subscribeToBudgetItems('t1', cb);
+    await repo.deleteBudgetItem('t1', saved.id);
+    const latest = cb.mock.calls[cb.mock.calls.length - 1][0];
+    expect(latest.find((i: { id: string }) => i.id === saved.id)).toBeUndefined();
+  });
+
+  it('logs a budget_item_added activity entry when an item is added', async () => {
+    const repo = makeRepo();
+    const cb = vi.fn();
+    repo.subscribeToActivityLog('t1', cb);
+    cb.mockClear();
+    await repo.addBudgetItem('t1', {
+      budgetSectionId: 'section-1',
+      name: 'Ryokan',
+      rateType: 'constant',
+      quantity: 1,
+      order: 0,
+    });
+    expect(cb).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'budget_item_added', entityName: 'Ryokan' }),
+      ])
+    );
+  });
+});
+
 describe('LocalTripRepository — subscribeToTrip', () => {
   it('immediately calls back with the demo trip for an unknown id', () => {
     const repo = makeRepo();

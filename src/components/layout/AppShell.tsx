@@ -34,6 +34,7 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import PeopleIcon from '@mui/icons-material/People';
 import HistoryIcon from '@mui/icons-material/History';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { TimelineView } from '../timeline/TimelineView';
 import { MapView } from '../map/MapView';
 import { AlternativesShelf } from '../alternatives/AlternativesShelf';
@@ -46,6 +47,7 @@ import { ActivityLogView } from '../trips/ActivityLogView';
 import { RouteSelectorDialog } from '../routes/RouteSelectorDialog';
 import { DaySelectorMenu } from '../routes/DaySelectorMenu';
 import { WikiView } from '../wiki/WikiView';
+import { BudgetsView } from '../budget/BudgetsView';
 import type { InternalLinkKind } from '../shared/MarkdownNotes';
 import appIcon from '../../assets/app-icon.svg';
 import sakuraPattern from '../../assets/sakura-pattern.svg';
@@ -202,6 +204,7 @@ export function AppShell({ onBack }: Props) {
   const [activityLogOpen, setActivityLogOpen] = useState(false);
   const [routeDialogOpen, setRouteDialogOpen] = useState(false);
   const [wikiOpen, setWikiOpen] = useState(false);
+  const [budgetOpen, setBudgetOpen] = useState(false);
   const [dayMenuAnchor, setDayMenuAnchor] = useState<HTMLElement | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [errorSnackbar, setErrorSnackbar] = useState<string | null>(null);
@@ -246,15 +249,27 @@ export function AppShell({ onBack }: Props) {
   }
 
   function handleWikiNavigate(kind: InternalLinkKind, id: string) {
-    const { selectCheckpoint, selectAlternative, selectRoute } = useTripStore.getState();
+    const {
+      selectCheckpoint,
+      selectAlternative,
+      selectRoute,
+      navigateToBudget,
+      navigateToBudgetItem,
+    } = useTripStore.getState();
     if (kind === 'checkpoint') {
       if (isPhone) setTab(0);
       selectCheckpoint(id);
     } else if (kind === 'alternative') {
       if (isPhone) setTab(2);
       selectAlternative(id);
-    } else {
+    } else if (kind === 'route') {
       selectRoute(id);
+    } else if (kind === 'budget') {
+      navigateToBudget(id);
+      setBudgetOpen(true);
+    } else {
+      navigateToBudgetItem(id);
+      setBudgetOpen(true);
     }
   }
 
@@ -328,8 +343,22 @@ export function AppShell({ onBack }: Props) {
                   <ListItemIcon>
                     <MenuBookIcon fontSize="small" />
                   </ListItemIcon>
-                  <ListItemText>Trip Wiki</ListItemText>
+                  <ListItemText>Wiki</ListItemText>
                 </ListItemButton>
+                <ListItemButton
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setBudgetOpen(true);
+                  }}
+                >
+                  <ListItemIcon>
+                    <AccountBalanceWalletIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Budget</ListItemText>
+                </ListItemButton>
+              </List>
+              <Divider />
+              <List>
                 <ListItemButton onClick={handleAddCheckpoint}>
                   <ListItemIcon>
                     <AddIcon fontSize="small" />
@@ -614,6 +643,8 @@ export function AppShell({ onBack }: Props) {
           onNavigate={handleWikiNavigate}
         />
       )}
+
+      {trip && <BudgetsView open={budgetOpen} onClose={() => setBudgetOpen(false)} />}
 
       <DaySelectorMenu anchorEl={dayMenuAnchor} onClose={() => setDayMenuAnchor(null)} />
 

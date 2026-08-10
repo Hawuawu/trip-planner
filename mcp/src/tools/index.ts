@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { FirebaseClientTripRepository } from '../repository/FirebaseClientTripRepository.js';
+import { COMMON_CURRENCY_CODES } from '../types.js';
 
 const locationSchema = z.object({
   lat: z.number(),
@@ -60,11 +61,55 @@ const wikiSectionInputSchema = z.object({
   content: z
     .string()
     .describe(
-      'Markdown. Link to a checkpoint/alternative/route from within the text using an ' +
-        'internal link of the form [label](trip://checkpoint/<id>), ' +
-        '[label](trip://alternative/<id>), or [label](trip://route/<id>).'
+      'Markdown. Link to a checkpoint/alternative/route/budget/budget item from within the ' +
+        'text using an internal link of the form [label](trip://checkpoint/<id>), ' +
+        '[label](trip://alternative/<id>), [label](trip://route/<id>), ' +
+        '[label](trip://budget/<id>), or [label](trip://budget_item/<id>).'
     ),
   order: z.number().describe("Sort position among the trip's wiki sections, ascending."),
+});
+
+const budgetInputSchema = z.object({
+  name: z.string(),
+  currency: z.enum(COMMON_CURRENCY_CODES).describe('ISO 4217 currency code'),
+});
+
+const budgetCategorySchema = z.enum(['travel', 'hotel', 'meals', 'merchandise', 'other']);
+const budgetRateTypeSchema = z.enum(['constant', 'per_person', 'per_night']);
+
+const budgetSectionInputSchema = z.object({
+  budgetId: z.string(),
+  category: budgetCategorySchema,
+  name: z.string(),
+  price: z.number().optional().describe('Flat subtotal — omit if this section has items instead.'),
+  notes: z.string().optional().describe('Markdown notes for this category.'),
+  order: z.number(),
+});
+
+const budgetAlternativeSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  price: z.number(),
+  rateType: budgetRateTypeSchema,
+  quantity: z.number(),
+  selected: z.boolean(),
+});
+
+const budgetItemInputSchema = z.object({
+  budgetSectionId: z.string(),
+  name: z.string(),
+  price: z.number().optional().describe('Flat contribution — omit if alternatives is set instead.'),
+  rateType: budgetRateTypeSchema,
+  quantity: z.number(),
+  alternatives: z
+    .array(budgetAlternativeSchema)
+    .optional()
+    .describe(
+      'Priced options for this item; exactly one must have selected: true — its contribution ' +
+        'counts toward the total.'
+    ),
+  notes: z.string().optional().describe('Markdown notes for this item.'),
+  order: z.number(),
 });
 
 function json(data: unknown) {
@@ -265,7 +310,7 @@ export function registerTools(server: McpServer, repo: FirebaseClientTripReposit
 
   server.tool(
     'list_wiki_sections',
-    'List a trip\'s "Trip Wiki" sections, sorted by order. Call this before ' +
+    'List a trip\'s "Wiki" sections, sorted by order. Call this before ' +
       'add_wiki_section — if a similarly-titled section already exists (e.g. "Day 3" vs a new ' +
       '"Day 3 - Kyoto"), update the existing one with update_wiki_section instead of creating ' +
       'a near-duplicate.',
@@ -282,7 +327,7 @@ export function registerTools(server: McpServer, repo: FirebaseClientTripReposit
 
   server.tool(
     'add_wiki_section',
-    'Add a new section to a trip\'s "Trip Wiki". Call list_wiki_sections first and ' +
+    'Add a new section to a trip\'s "Wiki". Call list_wiki_sections first and ' +
       'prefer update_wiki_section on an existing section (matched by title) over creating a ' +
       'near-duplicate.',
     { tripId: z.string(), section: wikiSectionInputSchema },
@@ -296,6 +341,114 @@ export function registerTools(server: McpServer, repo: FirebaseClientTripReposit
     { tripId: z.string(), sectionId: z.string(), changes: wikiSectionInputSchema.partial() },
     async ({ tripId, sectionId, changes }) => {
       await repo.updateWikiSection(tripId, sectionId, changes);
+      return json({ ok: true });
+    }
+  );
+
+  server.tool(
+    'list_budgets',
+    'List a trip\'s budgets — each an independent, named cost plan (e.g. "Backpacker" vs ' +
+      '"Comfort") with its own currency. Call this before add_budget — prefer updating a ' +
+      'similarly-named existing budget over creating a near-duplicate.',
+    { tripId: z.string() },
+    async ({ tripId }) => json(await repo.listBudgets(tripId))
+  );
+
+  server.tool(
+    'get_budget',
+    'Get a single budget by id.',
+    { tripId: z.string(), budgetId: z.string() },
+    async ({ tripId, budgetId }) => json(await repo.getBudget(tripId, budgetId))
+  );
+
+  server.tool(
+    'add_budget',
+    'Add a new budget to a trip — a name and its currency. Call list_budgets first and ' +
+      'prefer update_budget on an existing budget over creating a near-duplicate.',
+    { tripId: z.string(), budget: budgetInputSchema },
+    async ({ tripId, budget }) => json(await repo.addBudget(tripId, budget))
+  );
+
+  server.tool(
+    'update_budget',
+    'Edit fields on an existing budget.',
+    { tripId: z.string(), budgetId: z.string(), changes: budgetInputSchema.partial() },
+    async ({ tripId, budgetId, changes }) => {
+      await repo.updateBudget(tripId, budgetId, changes);
+      return json({ ok: true });
+    }
+  );
+
+  server.tool(
+    'list_budget_sections',
+    "List a budget's categorized sections (Travel/Hotel/Meals/Merchandise/Other), sorted by " +
+      'order. Call this before add_budget_section — prefer updating a similarly-named existing ' +
+      'section over creating a near-duplicate.',
+    { tripId: z.string(), budgetId: z.string() },
+    async ({ tripId, budgetId }) => json(await repo.listBudgetSections(tripId, budgetId))
+  );
+
+  server.tool(
+    'get_budget_section',
+    'Get a single budget section by id.',
+    { tripId: z.string(), sectionId: z.string() },
+    async ({ tripId, sectionId }) => json(await repo.getBudgetSection(tripId, sectionId))
+  );
+
+  server.tool(
+    'add_budget_section',
+    'Add a new section to a budget. A section either holds a flat price, or holds items whose ' +
+      'contributions sum to its subtotal — not both. Call list_budget_sections first and ' +
+      'prefer update_budget_section on an existing section over creating a near-duplicate.',
+    { tripId: z.string(), section: budgetSectionInputSchema },
+    async ({ tripId, section }) => json(await repo.addBudgetSection(tripId, section))
+  );
+
+  server.tool(
+    'update_budget_section',
+    'Edit fields on an existing budget section. Call list_budget_sections first and prefer ' +
+      'this over add_budget_section when a section covering the same category already exists.',
+    { tripId: z.string(), sectionId: z.string(), changes: budgetSectionInputSchema.partial() },
+    async ({ tripId, sectionId, changes }) => {
+      await repo.updateBudgetSection(tripId, sectionId, changes);
+      return json({ ok: true });
+    }
+  );
+
+  server.tool(
+    'list_budget_items',
+    "List a budget section's priced items, sorted by order. Call this before " +
+      'add_budget_item — prefer updating a similarly-named existing item over creating a ' +
+      'near-duplicate.',
+    { tripId: z.string(), budgetSectionId: z.string() },
+    async ({ tripId, budgetSectionId }) => json(await repo.listBudgetItems(tripId, budgetSectionId))
+  );
+
+  server.tool(
+    'get_budget_item',
+    'Get a single budget item by id.',
+    { tripId: z.string(), itemId: z.string() },
+    async ({ tripId, itemId }) => json(await repo.getBudgetItem(tripId, itemId))
+  );
+
+  server.tool(
+    'add_budget_item',
+    'Add a new item to a budget section. An item either holds a flat price, or holds priced ' +
+      'alternatives (e.g. "Ryokan ¥15,000/night" vs "Business hotel ¥8,000/night") with exactly ' +
+      'one marked selected — not both. Call list_budget_items first and prefer ' +
+      'update_budget_item on an existing item over creating a near-duplicate.',
+    { tripId: z.string(), item: budgetItemInputSchema },
+    async ({ tripId, item }) => json(await repo.addBudgetItem(tripId, item))
+  );
+
+  server.tool(
+    'update_budget_item',
+    'Edit fields on an existing budget item, including its alternatives array. Call ' +
+      'list_budget_items first and prefer this over add_budget_item when an item covering the ' +
+      'same cost already exists.',
+    { tripId: z.string(), itemId: z.string(), changes: budgetItemInputSchema.partial() },
+    async ({ tripId, itemId, changes }) => {
+      await repo.updateBudgetItem(tripId, itemId, changes);
       return json({ ok: true });
     }
   );

@@ -30,6 +30,9 @@ import type {
   Booking,
   Route,
   WikiSection,
+  Budget,
+  BudgetSection,
+  BudgetItem,
   MemberProfile,
   ActivityLogEntry,
   ActivityLogEntryType,
@@ -609,6 +612,199 @@ export class FirebaseTripRepository implements TripRepository {
     void this.logActivity(tripId, {
       type: 'wiki_section_deleted',
       entityName: snap.exists() ? snap.data().title : undefined,
+    });
+  }
+
+  subscribeToBudgets(tripId: string, cb: (budgets: Budget[]) => void): () => void {
+    return onSnapshot(collection(this.db, 'trips', tripId, 'budgets'), (snap) => {
+      cb(
+        snap.docs.map((d) => ({
+          id: d.id,
+          name: d.data().name,
+          currency: d.data().currency,
+          updatedAt: toIso(d.data().updatedAt),
+        }))
+      );
+    });
+  }
+
+  async addBudget(tripId: string, budget: Omit<Budget, 'id' | 'updatedAt'>): Promise<Budget> {
+    const now = new Date().toISOString();
+    const ref = await addDoc(collection(this.db, 'trips', tripId, 'budgets'), {
+      ...budget,
+      updatedAt: serverTimestamp(),
+    });
+    void this.logActivity(tripId, { type: 'budget_added', entityName: budget.name });
+    return { ...budget, id: ref.id, updatedAt: now };
+  }
+
+  async updateBudget(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<Budget, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    await updateDoc(doc(this.db, 'trips', tripId, 'budgets', id), {
+      ...changes,
+      updatedAt: serverTimestamp(),
+    });
+    void this.logActivity(tripId, {
+      type: 'budget_updated',
+      entityName: changes.name,
+      changedFields: Object.keys(changes),
+    });
+  }
+
+  async deleteBudget(tripId: string, id: string): Promise<void> {
+    const ref = doc(this.db, 'trips', tripId, 'budgets', id);
+    const snap = await getDoc(ref);
+
+    const sectionsSnap = await getDocs(
+      query(collection(this.db, 'trips', tripId, 'budgetSections'), where('budgetId', '==', id))
+    );
+    const sectionIds = sectionsSnap.docs.map((d) => d.id);
+    const itemsSnaps = await Promise.all(
+      sectionIds.map((sectionId) =>
+        getDocs(
+          query(
+            collection(this.db, 'trips', tripId, 'budgetItems'),
+            where('budgetSectionId', '==', sectionId)
+          )
+        )
+      )
+    );
+
+    const batch = writeBatch(this.db);
+    itemsSnaps.forEach((itemsSnap) => itemsSnap.docs.forEach((d) => batch.delete(d.ref)));
+    sectionsSnap.docs.forEach((d) => batch.delete(d.ref));
+    batch.delete(ref);
+    await batch.commit();
+
+    void this.logActivity(tripId, {
+      type: 'budget_deleted',
+      entityName: snap.exists() ? snap.data().name : undefined,
+    });
+  }
+
+  subscribeToBudgetSections(tripId: string, cb: (sections: BudgetSection[]) => void): () => void {
+    return onSnapshot(collection(this.db, 'trips', tripId, 'budgetSections'), (snap) => {
+      cb(
+        snap.docs.map((d) => ({
+          id: d.id,
+          budgetId: d.data().budgetId,
+          category: d.data().category,
+          name: d.data().name,
+          price: d.data().price ?? undefined,
+          notes: d.data().notes ?? undefined,
+          order: d.data().order ?? 0,
+          updatedAt: toIso(d.data().updatedAt),
+        }))
+      );
+    });
+  }
+
+  async addBudgetSection(
+    tripId: string,
+    section: Omit<BudgetSection, 'id' | 'updatedAt'>
+  ): Promise<BudgetSection> {
+    const now = new Date().toISOString();
+    const ref = await addDoc(collection(this.db, 'trips', tripId, 'budgetSections'), {
+      ...section,
+      updatedAt: serverTimestamp(),
+    });
+    void this.logActivity(tripId, { type: 'budget_section_added', entityName: section.name });
+    return { ...section, id: ref.id, updatedAt: now };
+  }
+
+  async updateBudgetSection(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<BudgetSection, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    await updateDoc(doc(this.db, 'trips', tripId, 'budgetSections', id), {
+      ...changes,
+      updatedAt: serverTimestamp(),
+    });
+    void this.logActivity(tripId, {
+      type: 'budget_section_updated',
+      entityName: changes.name,
+      changedFields: Object.keys(changes),
+    });
+  }
+
+  async deleteBudgetSection(tripId: string, id: string): Promise<void> {
+    const ref = doc(this.db, 'trips', tripId, 'budgetSections', id);
+    const snap = await getDoc(ref);
+
+    const itemsSnap = await getDocs(
+      query(collection(this.db, 'trips', tripId, 'budgetItems'), where('budgetSectionId', '==', id))
+    );
+
+    const batch = writeBatch(this.db);
+    itemsSnap.docs.forEach((d) => batch.delete(d.ref));
+    batch.delete(ref);
+    await batch.commit();
+
+    void this.logActivity(tripId, {
+      type: 'budget_section_deleted',
+      entityName: snap.exists() ? snap.data().name : undefined,
+    });
+  }
+
+  subscribeToBudgetItems(tripId: string, cb: (items: BudgetItem[]) => void): () => void {
+    return onSnapshot(collection(this.db, 'trips', tripId, 'budgetItems'), (snap) => {
+      cb(
+        snap.docs.map((d) => ({
+          id: d.id,
+          budgetSectionId: d.data().budgetSectionId,
+          name: d.data().name,
+          price: d.data().price ?? undefined,
+          rateType: d.data().rateType,
+          quantity: d.data().quantity ?? 1,
+          alternatives: d.data().alternatives ?? undefined,
+          notes: d.data().notes ?? undefined,
+          order: d.data().order ?? 0,
+          updatedAt: toIso(d.data().updatedAt),
+        }))
+      );
+    });
+  }
+
+  async addBudgetItem(
+    tripId: string,
+    item: Omit<BudgetItem, 'id' | 'updatedAt'>
+  ): Promise<BudgetItem> {
+    const now = new Date().toISOString();
+    const ref = await addDoc(collection(this.db, 'trips', tripId, 'budgetItems'), {
+      ...item,
+      updatedAt: serverTimestamp(),
+    });
+    void this.logActivity(tripId, { type: 'budget_item_added', entityName: item.name });
+    return { ...item, id: ref.id, updatedAt: now };
+  }
+
+  async updateBudgetItem(
+    tripId: string,
+    id: string,
+    changes: Partial<Omit<BudgetItem, 'id' | 'updatedAt'>>
+  ): Promise<void> {
+    await updateDoc(doc(this.db, 'trips', tripId, 'budgetItems', id), {
+      ...changes,
+      updatedAt: serverTimestamp(),
+    });
+    void this.logActivity(tripId, {
+      type: 'budget_item_updated',
+      entityName: changes.name,
+      changedFields: Object.keys(changes),
+    });
+  }
+
+  async deleteBudgetItem(tripId: string, id: string): Promise<void> {
+    const ref = doc(this.db, 'trips', tripId, 'budgetItems', id);
+    const snap = await getDoc(ref);
+    await deleteDoc(ref);
+    void this.logActivity(tripId, {
+      type: 'budget_item_deleted',
+      entityName: snap.exists() ? snap.data().name : undefined,
     });
   }
 }

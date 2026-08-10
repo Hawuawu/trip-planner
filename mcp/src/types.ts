@@ -57,6 +57,61 @@ export interface WikiSection {
   updatedAt: string;
 }
 
+export const COMMON_CURRENCY_CODES = [
+  'JPY',
+  'USD',
+  'EUR',
+  'GBP',
+  'KRW',
+  'CNY',
+  'AUD',
+  'CAD',
+  'CZK',
+] as const;
+
+export type BudgetCategory = 'travel' | 'hotel' | 'meals' | 'merchandise' | 'other';
+export type BudgetRateType = 'constant' | 'per_person' | 'per_night';
+
+export interface BudgetAlternative {
+  id: string;
+  label: string;
+  price: number;
+  rateType: BudgetRateType;
+  quantity: number;
+  selected: boolean;
+}
+
+export interface Budget {
+  id: string;
+  name: string;
+  currency: string;
+  updatedAt: string;
+}
+
+export interface BudgetSection {
+  id: string;
+  budgetId: string;
+  category: BudgetCategory;
+  name: string;
+  price?: number;
+  notes?: string;
+  order: number;
+  updatedAt: string;
+}
+
+export interface BudgetItem {
+  id: string;
+  budgetSectionId: string;
+  name: string;
+  price?: number;
+  rateType: BudgetRateType;
+  quantity: number;
+  alternatives?: BudgetAlternative[];
+  notes?: string;
+  order: number;
+  updatedAt: string;
+}
+
 export interface MemberProfile {
   email: string | null;
   displayName: string | null;

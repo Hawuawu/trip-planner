@@ -23,7 +23,7 @@ import AddLinkIcon from '@mui/icons-material/AddLink';
 export interface Linkable {
   id: string;
   label: string;
-  kind: 'checkpoint' | 'alternative' | 'route';
+  kind: 'checkpoint' | 'alternative' | 'route' | 'budget' | 'budget_item';
 }
 
 interface Props {
