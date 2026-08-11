@@ -24,6 +24,14 @@ export interface TripRepository {
   leaveTrip(tripId: string): Promise<void>;
   recordAccess(tripId: string): Promise<void>;
   subscribeToActivityLog(tripId: string, cb: (entries: ActivityLogEntry[]) => void): () => void;
+  // One-time read of the page immediately after cursor (exclusive), ordered
+  // newest-first — extends access beyond subscribeToActivityLog's live
+  // 100-entry window. Entries are immutable once written, so this never
+  // needs to be a live listener.
+  getActivityLogBefore(
+    tripId: string,
+    cursor: { createdAt: string; id: string }
+  ): Promise<{ entries: ActivityLogEntry[]; hasMore: boolean }>;
   subscribeToCheckpoints(tripId: string, cb: (checkpoints: Checkpoint[]) => void): () => void;
   addCheckpoint(tripId: string, cp: Omit<Checkpoint, 'id' | 'updatedAt'>): Promise<Checkpoint>;
   addCheckpoints(

@@ -68,7 +68,8 @@ service cloud.firestore {
       allow read: if hasAppAccess()
         && request.auth.uid in resource.data.memberIds;
       allow create: if hasAppAccess()
-        && request.auth.uid in request.resource.data.memberIds;
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.lastModifiedBy.uid == request.auth.uid;
 
       allow update: if hasAppAccess()
         && request.auth.uid in resource.data.memberIds
@@ -87,45 +88,70 @@ service cloud.firestore {
             && request.resource.data.memberProfiles.diff(resource.data.get('memberProfiles', {}))
                 .affectedKeys().hasOnly([request.auth.uid]))
           ||
-          // trip metadata change (rename/date range) — owner only, or unowned legacy trip
-          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'dateRange'])
-            && (!('ownerId' in resource.data) || resource.data.ownerId == request.auth.uid))
+          // trip metadata change (rename/date range) — owner only, or unowned
+          // legacy trip. lastModifiedBy is required here (not on the two
+          // branches above) so the logTripActivity trigger (#102) can
+          // attribute trip_renamed/trip_dates_updated entries to a real actor.
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'dateRange', 'lastModifiedBy'])
+            && (!('ownerId' in resource.data) || resource.data.ownerId == request.auth.uid)
+            && request.resource.data.lastModifiedBy.uid == request.auth.uid)
         );
 
       allow delete: if hasAppAccess()
         && request.auth.uid in resource.data.memberIds
         && (!('ownerId' in resource.data) || resource.data.ownerId == request.auth.uid);
 
+      // Each of these 8 subcollections requires lastModifiedBy.uid to match
+      // the caller on create/update (not delete — a deleted doc has nothing
+      // to stamp) so logTripEntityActivity (#102) can attribute the
+      // resulting activity log entry to a real actor instead of trusting an
+      // unverified client-supplied uid.
       match /checkpoints/{docId} {
-        allow read, write: if isMember(tripId);
+        allow read: if isMember(tripId);
+        allow create, update: if isMember(tripId) && request.resource.data.lastModifiedBy.uid == request.auth.uid;
+        allow delete: if isMember(tripId);
       }
 
       match /alternatives/{docId} {
-        allow read, write: if isMember(tripId);
+        allow read: if isMember(tripId);
+        allow create, update: if isMember(tripId) && request.resource.data.lastModifiedBy.uid == request.auth.uid;
+        allow delete: if isMember(tripId);
       }
 
       match /bookings/{docId} {
-        allow read, write: if isMember(tripId);
+        allow read: if isMember(tripId);
+        allow create, update: if isMember(tripId) && request.resource.data.lastModifiedBy.uid == request.auth.uid;
+        allow delete: if isMember(tripId);
       }
 
       match /routes/{docId} {
-        allow read, write: if isMember(tripId);
+        allow read: if isMember(tripId);
+        allow create, update: if isMember(tripId) && request.resource.data.lastModifiedBy.uid == request.auth.uid;
+        allow delete: if isMember(tripId);
       }
 
       match /wikiSections/{docId} {
-        allow read, write: if isMember(tripId);
+        allow read: if isMember(tripId);
+        allow create, update: if isMember(tripId) && request.resource.data.lastModifiedBy.uid == request.auth.uid;
+        allow delete: if isMember(tripId);
       }
 
       match /budgets/{docId} {
-        allow read, write: if isMember(tripId);
+        allow read: if isMember(tripId);
+        allow create, update: if isMember(tripId) && request.resource.data.lastModifiedBy.uid == request.auth.uid;
+        allow delete: if isMember(tripId);
       }
 
       match /budgetSections/{docId} {
-        allow read, write: if isMember(tripId);
+        allow read: if isMember(tripId);
+        allow create, update: if isMember(tripId) && request.resource.data.lastModifiedBy.uid == request.auth.uid;
+        allow delete: if isMember(tripId);
       }
 
       match /budgetItems/{docId} {
-        allow read, write: if isMember(tripId);
+        allow read: if isMember(tripId);
+        allow create, update: if isMember(tripId) && request.resource.data.lastModifiedBy.uid == request.auth.uid;
+        allow delete: if isMember(tripId);
       }
 
       // Append-only, owner-readable activity log. Explicit matches (not the

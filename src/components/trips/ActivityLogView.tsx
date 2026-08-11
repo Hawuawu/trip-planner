@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  CircularProgress,
   List,
   ListItem,
   ListItemText,
@@ -17,9 +18,20 @@ interface Props {
   onClose: () => void;
   entries: ActivityLogEntry[];
   isOwner: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }
 
-export function ActivityLogView({ open, onClose, entries, isOwner }: Props) {
+export function ActivityLogView({
+  open,
+  onClose,
+  entries,
+  isOwner,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+}: Props) {
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>Activity log</DialogTitle>
@@ -31,16 +43,28 @@ export function ActivityLogView({ open, onClose, entries, isOwner }: Props) {
         ) : entries.length === 0 ? (
           <Typography color="text.secondary">No activity yet.</Typography>
         ) : (
-          <List dense data-testid="activity-log-list">
-            {entries.map((entry) => (
-              <ListItem key={entry.id} disableGutters>
-                <ListItemText
-                  primary={formatActivityLogEntry(entry)}
-                  secondary={new Date(entry.createdAt).toLocaleString()}
-                />
-              </ListItem>
-            ))}
-          </List>
+          <>
+            <List dense data-testid="activity-log-list">
+              {entries.map((entry) => (
+                <ListItem key={entry.id} disableGutters>
+                  <ListItemText
+                    primary={formatActivityLogEntry(entry)}
+                    secondary={new Date(entry.createdAt).toLocaleString()}
+                  />
+                </ListItem>
+              ))}
+            </List>
+            {hasMore && (
+              <Button
+                onClick={onLoadMore}
+                disabled={loadingMore}
+                startIcon={loadingMore ? <CircularProgress size={16} /> : undefined}
+                fullWidth
+              >
+                Load more
+              </Button>
+            )}
+          </>
         )}
       </DialogContent>
       <DialogActions>

@@ -1158,7 +1158,7 @@ describe('LocalTripRepository — activity log', () => {
     );
   });
 
-  it('logs a single checkpoints_imported entry (not one per item) for a batch add', async () => {
+  it('logs one checkpoint_added entry per item for a batch add', async () => {
     const repo = makeRepo();
     const cb = vi.fn();
     repo.subscribeToActivityLog('t1', cb);
@@ -1168,11 +1168,14 @@ describe('LocalTripRepository — activity log', () => {
       { type: 'poi', name: 'B', startTime: '2026-01-02T00:00:00.000Z' },
     ]);
     const lastCallEntries = cb.mock.calls[cb.mock.calls.length - 1][0];
-    const importEntries = lastCallEntries.filter(
-      (e: { type: string }) => e.type === 'checkpoints_imported'
+    const addedEntries = lastCallEntries.filter(
+      (e: { type: string }) => e.type === 'checkpoint_added'
     );
-    expect(importEntries).toHaveLength(1);
-    expect(importEntries[0].count).toBe(2);
+    expect(addedEntries).toHaveLength(2);
+    expect(addedEntries.map((e: { entityName?: string }) => e.entityName).sort()).toEqual([
+      'A',
+      'B',
+    ]);
   });
 
   it('unsubscribe stops future notifications', async () => {
@@ -1187,5 +1190,66 @@ describe('LocalTripRepository — activity log', () => {
       startTime: '2026-01-01T00:00:00.000Z',
     });
     expect(cb.mock.calls.length).toBe(callsBefore);
+  });
+
+  // Seeds the raw localStorage key directly (bypassing addCheckpoint/
+  // pushActivity) so entry ids are deterministic — pushActivity's
+  // `local-log-${Date.now()}` ids can collide when generated in a tight loop.
+  function seedLog(entries: { id: string; createdAt: string }[]) {
+    localStorage.setItem(
+      'trip-planner:activityLog',
+      JSON.stringify(
+        entries.map((e) => ({
+          ...e,
+          type: 'checkpoint_added',
+          actorUid: 'u1',
+          actorLabel: 'You',
+          entityName: e.id,
+        }))
+      )
+    );
+  }
+
+  it('getActivityLogBefore returns entries after the cursor, newest-first', async () => {
+    const repo = makeRepo();
+    seedLog([
+      { id: 'log-0', createdAt: '2026-01-05T00:00:00.000Z' },
+      { id: 'log-1', createdAt: '2026-01-04T00:00:00.000Z' },
+      { id: 'log-2', createdAt: '2026-01-03T00:00:00.000Z' },
+      { id: 'log-3', createdAt: '2026-01-02T00:00:00.000Z' },
+    ]);
+
+    const page = await repo.getActivityLogBefore('t1', {
+      createdAt: '2026-01-04T00:00:00.000Z',
+      id: 'log-1',
+    });
+
+    expect(page.entries.map((e) => e.id)).toEqual(['log-2', 'log-3']);
+    expect(page.hasMore).toBe(false);
+  });
+
+  it('getActivityLogBefore paginates in pages and reports hasMore accurately', async () => {
+    const repo = makeRepo();
+    const entries = Array.from({ length: 60 }, (_, i) => ({
+      id: `log-${i}`,
+      createdAt: new Date(2026, 0, 1, 0, 0, 60 - i).toISOString(),
+    }));
+    seedLog(entries);
+
+    const firstPage = await repo.getActivityLogBefore('t1', {
+      createdAt: entries[0].createdAt,
+      id: entries[0].id,
+    });
+    expect(firstPage.entries).toHaveLength(50);
+    expect(firstPage.entries[0].id).toBe('log-1');
+    expect(firstPage.hasMore).toBe(true);
+
+    const lastOfFirstPage = firstPage.entries[firstPage.entries.length - 1];
+    const secondPage = await repo.getActivityLogBefore('t1', {
+      createdAt: lastOfFirstPage.createdAt,
+      id: lastOfFirstPage.id,
+    });
+    expect(secondPage.entries).toHaveLength(9);
+    expect(secondPage.hasMore).toBe(false);
   });
 });

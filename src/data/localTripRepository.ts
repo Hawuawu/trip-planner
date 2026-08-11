@@ -114,6 +114,9 @@ const LS_BUDGET_ITEMS = 'trip-planner:budgetItems';
 const LS_TRIPS = 'trip-planner:trips';
 const LS_ACTIVITY = 'trip-planner:activityLog';
 
+// Matches FirebaseTripRepository's page size for consistent UX.
+const ACTIVITY_LOG_PAGE_SIZE = 50;
+
 function loadTrips(): Trip[] {
   try {
     const raw = localStorage.getItem(LS_TRIPS);
@@ -349,6 +352,21 @@ export class LocalTripRepository implements TripRepository {
     };
   }
 
+  // Local mode has no live-window cap to page beyond — the whole log is
+  // already in loadLog(), newest-first (each push prepends) — but the
+  // interface is still implemented so pagination works the same way in
+  // both local/offline and Firebase-backed modes.
+  async getActivityLogBefore(
+    _tripId: string,
+    cursor: { createdAt: string; id: string }
+  ): Promise<{ entries: ActivityLogEntry[]; hasMore: boolean }> {
+    const log = loadLog();
+    const cursorIndex = log.findIndex((e) => e.id === cursor.id);
+    const startIndex = cursorIndex === -1 ? log.length : cursorIndex + 1;
+    const entries = log.slice(startIndex, startIndex + ACTIVITY_LOG_PAGE_SIZE);
+    return { entries, hasMore: startIndex + ACTIVITY_LOG_PAGE_SIZE < log.length };
+  }
+
   subscribeToCheckpoints(tripId: string, cb: (c: Checkpoint[]) => void): () => void {
     if (!this.cpSubs.has(tripId)) this.cpSubs.set(tripId, new Set());
     this.cpSubs.get(tripId)!.add(cb);
@@ -393,9 +411,9 @@ export class LocalTripRepository implements TripRepository {
     }));
     saveCp([...loadCp(), ...saved]);
     this.notifyCp(tripId);
-    if (checkpoints.length > 0) {
-      this.pushActivity(tripId, { type: 'checkpoints_imported', count: checkpoints.length });
-    }
+    saved.forEach((cp) =>
+      this.pushActivity(tripId, { type: 'checkpoint_added', entityName: cp.name })
+    );
     return saved;
   }
 
@@ -464,9 +482,9 @@ export class LocalTripRepository implements TripRepository {
     }));
     saveAlt([...loadAlt(), ...saved]);
     this.notifyAlt(tripId);
-    if (alternatives.length > 0) {
-      this.pushActivity(tripId, { type: 'alternatives_imported', count: alternatives.length });
-    }
+    saved.forEach((alt) =>
+      this.pushActivity(tripId, { type: 'alternative_added', entityName: alt.name })
+    );
     return saved;
   }
 
@@ -508,7 +526,6 @@ export class LocalTripRepository implements TripRepository {
       tags: alt.tags,
     });
     await this.deleteAlternative(tripId, alternativeId);
-    this.pushActivity(tripId, { type: 'alternative_promoted', entityName: alt.name });
   }
 
   subscribeToBookings(tripId: string, cb: (b: Booking[]) => void): () => void {
@@ -547,10 +564,8 @@ export class LocalTripRepository implements TripRepository {
   }
 
   async deleteBooking(tripId: string, id: string): Promise<void> {
-    const target = loadBookings().find((b) => b.id === id);
     saveBookings(loadBookings().filter((b) => b.id !== id));
     this.notifyBookings(tripId);
-    this.pushActivity(tripId, { type: 'booking_deleted', entityName: target?.provider });
   }
 
   subscribeToRoutes(tripId: string, cb: (r: Route[]) => void): () => void {
@@ -836,6 +851,7 @@ export class LocalTripRepository implements TripRepository {
     };
     const existing = trips.find((t) => t.id === DEMO_TRIP.id);
     saveTrips([...(existing ? trips : [DEMO_TRIP, ...trips]), trip]);
+    this.pushActivity(trip.id, { type: 'trip_created', entityName: trip.name });
     return trip;
   }
 
@@ -847,6 +863,8 @@ export class LocalTripRepository implements TripRepository {
     this.notifyTrip(tripId);
     if (changes.name) {
       this.pushActivity(tripId, { type: 'trip_renamed', entityName: changes.name });
+    } else if (changes.dateRange) {
+      this.pushActivity(tripId, { type: 'trip_dates_updated' });
     }
   }
 

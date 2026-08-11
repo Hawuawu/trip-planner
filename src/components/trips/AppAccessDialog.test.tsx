@@ -190,4 +190,25 @@ describe('AppAccessDialog — Activity', () => {
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Activity' }));
     expect(screen.getByText(/Made admin — friend@example.com/)).toBeInTheDocument();
   });
+
+  it('shows the trip name for a trip_deleted event (no email, entityName instead)', async () => {
+    const service = makeService({
+      subscribeToAppActivity: vi.fn((cb) => {
+        cb([
+          {
+            id: 'a3',
+            type: 'trip_deleted',
+            email: null,
+            actor: 'system',
+            entityName: 'Japan 2026',
+            createdAt: '2026-07-05T09:00:00.000Z',
+          },
+        ]);
+        return () => {};
+      }),
+    });
+    renderDialog(service);
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Activity' }));
+    expect(screen.getByText(/Trip deleted — Japan 2026/)).toBeInTheDocument();
+  });
 });

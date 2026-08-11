@@ -17,32 +17,22 @@ function updated(noun: string, article: 'a' | 'an'): Formatter {
   };
 }
 
-// "who imported N <noun>(s)" — shared by the two bulk-import entry types.
-function imported(noun: string): Formatter {
-  return (entry) => {
-    const count = entry.count ?? 0;
-    return `${entry.actorLabel} imported ${count} ${noun}${count === 1 ? '' : 's'}`;
-  };
-}
-
 const FORMATTERS: Record<ActivityLogEntryType, Formatter> = {
   member_invited: (e) => `${e.actorLabel} invited ${e.entityName ?? 'a new member'}`,
   member_joined: (e) => `${e.actorLabel} joined the trip`,
   member_removed: (e) => `${e.actorLabel} removed ${e.entityName ?? 'a member'}`,
   member_left: (e) => `${e.actorLabel} left the trip`,
+  trip_created: (e) => `${e.actorLabel} created the trip "${e.entityName ?? ''}"`,
   trip_renamed: (e) => `${e.actorLabel} renamed the trip to "${e.entityName ?? ''}"`,
+  trip_dates_updated: (e) => `${e.actorLabel} updated the trip dates`,
   checkpoint_added: quoted('added', 'checkpoint'),
   checkpoint_updated: updated('checkpoint', 'a'),
   checkpoint_deleted: quoted('deleted', 'checkpoint'),
-  checkpoints_imported: imported('checkpoint'),
   alternative_added: quoted('added', 'alternative'),
   alternative_updated: updated('alternative', 'an'),
   alternative_deleted: quoted('deleted', 'alternative'),
-  alternatives_imported: imported('alternative'),
-  alternative_promoted: (e) => `${e.actorLabel} promoted "${e.entityName ?? ''}" to the timeline`,
   booking_added: quoted('added', 'booking'),
   booking_updated: updated('booking', 'a'),
-  booking_deleted: quoted('deleted', 'booking'),
   route_added: quoted('added', 'route'),
   route_updated: updated('route', 'a'),
   route_deleted: quoted('deleted', 'route'),

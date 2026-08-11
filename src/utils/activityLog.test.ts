@@ -36,10 +36,22 @@ describe('formatActivityLogEntry', () => {
     expect(formatActivityLogEntry(makeEntry({ type: 'member_left' }))).toBe('Alice left the trip');
   });
 
+  it('formats trip_created', () => {
+    expect(
+      formatActivityLogEntry(makeEntry({ type: 'trip_created', entityName: 'Japan 2026' }))
+    ).toBe('Alice created the trip "Japan 2026"');
+  });
+
   it('formats trip_renamed', () => {
     expect(
       formatActivityLogEntry(makeEntry({ type: 'trip_renamed', entityName: 'Japan Redux' }))
     ).toBe('Alice renamed the trip to "Japan Redux"');
+  });
+
+  it('formats trip_dates_updated', () => {
+    expect(formatActivityLogEntry(makeEntry({ type: 'trip_dates_updated' }))).toBe(
+      'Alice updated the trip dates'
+    );
   });
 
   it('formats checkpoint_added', () => {
@@ -62,32 +74,6 @@ describe('formatActivityLogEntry', () => {
         makeEntry({ type: 'checkpoint_updated', changedFields: ['startTime', 'notes'] })
       )
     ).toBe('Alice updated a checkpoint (startTime, notes)');
-  });
-
-  it('formats checkpoints_imported with singular count', () => {
-    expect(formatActivityLogEntry(makeEntry({ type: 'checkpoints_imported', count: 1 }))).toBe(
-      'Alice imported 1 checkpoint'
-    );
-  });
-
-  it('formats checkpoints_imported with plural count', () => {
-    expect(formatActivityLogEntry(makeEntry({ type: 'checkpoints_imported', count: 5 }))).toBe(
-      'Alice imported 5 checkpoints'
-    );
-  });
-
-  it('formats alternative_promoted', () => {
-    expect(
-      formatActivityLogEntry(
-        makeEntry({ type: 'alternative_promoted', entityName: 'Nishiki Market' })
-      )
-    ).toBe('Alice promoted "Nishiki Market" to the timeline');
-  });
-
-  it('formats booking_deleted', () => {
-    expect(formatActivityLogEntry(makeEntry({ type: 'booking_deleted', entityName: 'ANA' }))).toBe(
-      'Alice deleted booking "ANA"'
-    );
   });
 
   it('formats route_added', () => {
@@ -148,12 +134,6 @@ describe('formatActivityLogEntry', () => {
         makeEntry({ type: 'alternative_deleted', entityName: 'Nishiki Market' })
       )
     ).toBe('Alice deleted alternative "Nishiki Market"');
-  });
-
-  it('formats alternatives_imported with plural count', () => {
-    expect(formatActivityLogEntry(makeEntry({ type: 'alternatives_imported', count: 3 }))).toBe(
-      'Alice imported 3 alternatives'
-    );
   });
 
   it('formats booking_added', () => {
