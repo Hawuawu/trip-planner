@@ -117,19 +117,17 @@ export type ActivityLogEntryType =
   | 'member_joined'
   | 'member_removed'
   | 'member_left'
+  | 'trip_created'
   | 'trip_renamed'
+  | 'trip_dates_updated'
   | 'checkpoint_added'
   | 'checkpoint_updated'
   | 'checkpoint_deleted'
-  | 'checkpoints_imported'
   | 'alternative_added'
   | 'alternative_updated'
   | 'alternative_deleted'
-  | 'alternatives_imported'
-  | 'alternative_promoted'
   | 'booking_added'
   | 'booking_updated'
-  | 'booking_deleted'
   | 'route_added'
   | 'route_updated'
   | 'route_deleted'
@@ -153,7 +151,6 @@ export interface ActivityLogEntry {
   actorLabel: string;
   entityName?: string;
   changedFields?: string[];
-  count?: number;
   createdAt: string;
 }
 
@@ -197,12 +194,14 @@ export type AppActivityType =
   | 'access_denied'
   | 'access_revoked'
   | 'admin_granted'
-  | 'admin_revoked';
+  | 'admin_revoked'
+  | 'trip_deleted';
 
 export interface AppActivityEntry {
   id: string;
   type: AppActivityType;
   email: string | null;
   actor: 'admin' | 'system';
+  entityName?: string;
   createdAt: string;
 }

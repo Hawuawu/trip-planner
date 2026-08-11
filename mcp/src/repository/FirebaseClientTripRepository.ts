@@ -138,6 +138,17 @@ function toBudgetItem(id: string, d: Record<string, unknown>): BudgetItem {
   };
 }
 
+// Mirrors trip-planner's LastModifiedBy (src/data/firebaseTripRepository.ts)
+// — stamped into every add/update write so the logTripEntityActivity/
+// logTripActivity Cloud Function triggers can attribute the resulting
+// activity log entry to the signed-in MCP user. This repository never wrote
+// activity log entries itself (see #102), so this is a pure addition, not a
+// behavior change to anything that previously worked.
+interface LastModifiedBy {
+  uid: string;
+  label: string;
+}
+
 // One-shot Firestore reads/writes (getDoc/getDocs, not onSnapshot) — an MCP
 // tool call is a single request/response, not a long-lived UI subscription,
 // so there's nothing to push realtime updates to. This mirrors trip-planner's
@@ -155,6 +166,12 @@ export class FirebaseClientTripRepository {
     const uid = this.auth.currentUser?.uid;
     if (!uid) throw new Error('Not signed in');
     return uid;
+  }
+
+  private stampWriter(): LastModifiedBy {
+    const user = this.auth.currentUser;
+    if (!user) throw new Error('Not signed in');
+    return { uid: user.uid, label: user.displayName ?? user.email ?? user.uid };
   }
 
   async listTrips(): Promise<Trip[]> {
@@ -184,6 +201,7 @@ export class FirebaseClientTripRepository {
       memberIds,
       ownerId: user.uid,
       memberProfiles,
+      lastModifiedBy: { uid: user.uid, label: user.displayName ?? user.email ?? user.uid },
     });
     return { id: ref.id, name, dateRange, memberIds, ownerId: user.uid, memberProfiles };
   }
@@ -192,7 +210,10 @@ export class FirebaseClientTripRepository {
     tripId: string,
     changes: Partial<Pick<Trip, 'name' | 'dateRange'>>
   ): Promise<void> {
-    await updateDoc(doc(this.db, 'trips', tripId), { ...changes });
+    await updateDoc(doc(this.db, 'trips', tripId), {
+      ...changes,
+      lastModifiedBy: this.stampWriter(),
+    });
   }
 
   async listCheckpoints(tripId: string): Promise<Checkpoint[]> {
@@ -216,6 +237,7 @@ export class FirebaseClientTripRepository {
     const ref = await addDoc(collection(this.db, 'trips', tripId, 'checkpoints'), {
       ...cp,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
     return { ...cp, id: ref.id, updatedAt: now };
   }
@@ -225,10 +247,13 @@ export class FirebaseClientTripRepository {
     checkpoints: Omit<Checkpoint, 'id' | 'updatedAt'>[]
   ): Promise<Checkpoint[]> {
     const now = new Date().toISOString();
+    const lastModifiedBy = this.stampWriter();
     const batch = writeBatch(this.db);
     const collectionRef = collection(this.db, 'trips', tripId, 'checkpoints');
     const refs = checkpoints.map(() => doc(collectionRef));
-    checkpoints.forEach((cp, i) => batch.set(refs[i], { ...cp, updatedAt: serverTimestamp() }));
+    checkpoints.forEach((cp, i) =>
+      batch.set(refs[i], { ...cp, updatedAt: serverTimestamp(), lastModifiedBy })
+    );
     await batch.commit();
     return checkpoints.map((cp, i) => ({ ...cp, id: refs[i].id, updatedAt: now }));
   }
@@ -241,6 +266,7 @@ export class FirebaseClientTripRepository {
     await updateDoc(doc(this.db, 'trips', tripId, 'checkpoints', id), {
       ...changes,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
   }
 
@@ -272,6 +298,7 @@ export class FirebaseClientTripRepository {
     const ref = await addDoc(collection(this.db, 'trips', tripId, 'alternatives'), {
       ...alt,
       createdAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
     return { ...alt, id: ref.id, createdAt: now };
   }
@@ -281,10 +308,13 @@ export class FirebaseClientTripRepository {
     alternatives: Omit<Alternative, 'id' | 'createdAt'>[]
   ): Promise<Alternative[]> {
     const now = new Date().toISOString();
+    const lastModifiedBy = this.stampWriter();
     const batch = writeBatch(this.db);
     const collectionRef = collection(this.db, 'trips', tripId, 'alternatives');
     const refs = alternatives.map(() => doc(collectionRef));
-    alternatives.forEach((alt, i) => batch.set(refs[i], { ...alt, createdAt: serverTimestamp() }));
+    alternatives.forEach((alt, i) =>
+      batch.set(refs[i], { ...alt, createdAt: serverTimestamp(), lastModifiedBy })
+    );
     await batch.commit();
     return alternatives.map((alt, i) => ({ ...alt, id: refs[i].id, createdAt: now }));
   }
@@ -294,7 +324,10 @@ export class FirebaseClientTripRepository {
     id: string,
     changes: Partial<Omit<Alternative, 'id' | 'createdAt'>>
   ): Promise<void> {
-    await updateDoc(doc(this.db, 'trips', tripId, 'alternatives', id), { ...changes });
+    await updateDoc(doc(this.db, 'trips', tripId, 'alternatives', id), {
+      ...changes,
+      lastModifiedBy: this.stampWriter(),
+    });
   }
 
   async promoteAlternative(
@@ -314,6 +347,7 @@ export class FirebaseClientTripRepository {
       ...(alt.notes && { notes: alt.notes }),
       ...(Array.isArray(alt.tags) && alt.tags.length > 0 && { tags: alt.tags }),
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
     // Matches trip-planner's own promoteAlternative (src/data/
     // firebaseTripRepository.ts): deletion here is an atomic part of an
@@ -329,7 +363,10 @@ export class FirebaseClientTripRepository {
   }
 
   async addBooking(tripId: string, booking: Omit<Booking, 'id'>): Promise<Booking> {
-    const ref = await addDoc(collection(this.db, 'trips', tripId, 'bookings'), booking);
+    const ref = await addDoc(collection(this.db, 'trips', tripId, 'bookings'), {
+      ...booking,
+      lastModifiedBy: this.stampWriter(),
+    });
     return { ...booking, id: ref.id };
   }
 
@@ -338,7 +375,10 @@ export class FirebaseClientTripRepository {
     id: string,
     changes: Partial<Omit<Booking, 'id'>>
   ): Promise<void> {
-    await updateDoc(doc(this.db, 'trips', tripId, 'bookings', id), { ...changes });
+    await updateDoc(doc(this.db, 'trips', tripId, 'bookings', id), {
+      ...changes,
+      lastModifiedBy: this.stampWriter(),
+    });
   }
 
   async listRoutes(tripId: string): Promise<Route[]> {
@@ -357,6 +397,7 @@ export class FirebaseClientTripRepository {
     const ref = await addDoc(collection(this.db, 'trips', tripId, 'routes'), {
       ...route,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
     return { ...route, id: ref.id, updatedAt: now };
   }
@@ -369,6 +410,7 @@ export class FirebaseClientTripRepository {
     await updateDoc(doc(this.db, 'trips', tripId, 'routes', id), {
       ...changes,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
   }
 
@@ -391,6 +433,7 @@ export class FirebaseClientTripRepository {
     const ref = await addDoc(collection(this.db, 'trips', tripId, 'wikiSections'), {
       ...section,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
     return { ...section, id: ref.id, updatedAt: now };
   }
@@ -403,6 +446,7 @@ export class FirebaseClientTripRepository {
     await updateDoc(doc(this.db, 'trips', tripId, 'wikiSections', id), {
       ...changes,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
   }
 
@@ -422,6 +466,7 @@ export class FirebaseClientTripRepository {
     const ref = await addDoc(collection(this.db, 'trips', tripId, 'budgets'), {
       ...budget,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
     return { ...budget, id: ref.id, updatedAt: now };
   }
@@ -434,6 +479,7 @@ export class FirebaseClientTripRepository {
     await updateDoc(doc(this.db, 'trips', tripId, 'budgets', id), {
       ...changes,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
   }
 
@@ -461,6 +507,7 @@ export class FirebaseClientTripRepository {
     const ref = await addDoc(collection(this.db, 'trips', tripId, 'budgetSections'), {
       ...section,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
     return { ...section, id: ref.id, updatedAt: now };
   }
@@ -473,6 +520,7 @@ export class FirebaseClientTripRepository {
     await updateDoc(doc(this.db, 'trips', tripId, 'budgetSections', id), {
       ...changes,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
   }
 
@@ -500,6 +548,7 @@ export class FirebaseClientTripRepository {
     const ref = await addDoc(collection(this.db, 'trips', tripId, 'budgetItems'), {
       ...item,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
     return { ...item, id: ref.id, updatedAt: now };
   }
@@ -512,6 +561,7 @@ export class FirebaseClientTripRepository {
     await updateDoc(doc(this.db, 'trips', tripId, 'budgetItems', id), {
       ...changes,
       updatedAt: serverTimestamp(),
+      lastModifiedBy: this.stampWriter(),
     });
   }
 }

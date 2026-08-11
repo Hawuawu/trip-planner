@@ -1158,7 +1158,7 @@ describe('LocalTripRepository — activity log', () => {
     );
   });
 
-  it('logs a single checkpoints_imported entry (not one per item) for a batch add', async () => {
+  it('logs one checkpoint_added entry per item for a batch add', async () => {
     const repo = makeRepo();
     const cb = vi.fn();
     repo.subscribeToActivityLog('t1', cb);
@@ -1168,11 +1168,14 @@ describe('LocalTripRepository — activity log', () => {
       { type: 'poi', name: 'B', startTime: '2026-01-02T00:00:00.000Z' },
     ]);
     const lastCallEntries = cb.mock.calls[cb.mock.calls.length - 1][0];
-    const importEntries = lastCallEntries.filter(
-      (e: { type: string }) => e.type === 'checkpoints_imported'
+    const addedEntries = lastCallEntries.filter(
+      (e: { type: string }) => e.type === 'checkpoint_added'
     );
-    expect(importEntries).toHaveLength(1);
-    expect(importEntries[0].count).toBe(2);
+    expect(addedEntries).toHaveLength(2);
+    expect(addedEntries.map((e: { entityName?: string }) => e.entityName).sort()).toEqual([
+      'A',
+      'B',
+    ]);
   });
 
   it('unsubscribe stops future notifications', async () => {
