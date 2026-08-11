@@ -46,6 +46,7 @@ const ACTIVITY_LABELS: Record<AppActivityType, string> = {
   access_revoked: 'Access revoked',
   admin_granted: 'Made admin',
   admin_revoked: 'Admin removed',
+  trip_deleted: 'Trip deleted',
 };
 
 const STATUS_COLORS: Record<AccessRequestStatus, 'default' | 'success' | 'warning' | 'error'> = {
@@ -251,7 +252,7 @@ export function AppAccessDialog({ open, onClose }: Props) {
               {activity.map((entry) => (
                 <ListItem key={entry.id} disableGutters>
                   <ListItemText
-                    primary={`${ACTIVITY_LABELS[entry.type]}${entry.email ? ` — ${entry.email}` : ''}`}
+                    primary={`${ACTIVITY_LABELS[entry.type]}${entry.email ? ` — ${entry.email}` : ''}${entry.entityName ? ` — ${entry.entityName}` : ''}`}
                     secondary={formatDate(entry.createdAt)}
                   />
                 </ListItem>

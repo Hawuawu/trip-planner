@@ -99,6 +99,7 @@ describe('Firestore CRUD (rules disabled — data layer shape)', () => {
         name: 'Tokyo Narita',
         startTime: Timestamp.fromDate(new Date('2026-10-01T14:00:00Z')),
         updatedAt: Timestamp.now(),
+        lastModifiedBy: { uid: 'user-a', label: 'User A' },
       });
 
     const snap = await db
@@ -129,6 +130,7 @@ describe('Firestore CRUD (rules disabled — data layer shape)', () => {
         name: 'Shinjuku Hotel',
         startTime: Timestamp.fromDate(date),
         updatedAt: Timestamp.now(),
+        lastModifiedBy: { uid: 'user-b', label: 'User B' },
       });
 
     const snap = await db
@@ -180,21 +182,60 @@ describe('Security rules — trips/{tripId} update/delete (owner-gated + members
     const TRIP_ID = 'trip-owner-rename';
     await seedTrip(TRIP_ID, ['owner-uid'], 'owner-uid');
     const db = approvedDb('owner-uid');
-    await assertSucceeds(db.collection('trips').doc(TRIP_ID).update({ name: 'Renamed Trip' }));
+    await assertSucceeds(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({
+          name: 'Renamed Trip',
+          lastModifiedBy: { uid: 'owner-uid', label: 'Owner' },
+        })
+    );
   });
 
   it('non-owner member CANNOT rename a trip they do not own', async () => {
     const TRIP_ID = 'trip-non-owner-rename';
     await seedTrip(TRIP_ID, ['owner-uid', 'member-uid'], 'owner-uid');
     const db = approvedDb('member-uid');
-    await assertFails(db.collection('trips').doc(TRIP_ID).update({ name: 'Hijacked' }));
+    await assertFails(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({
+          name: 'Hijacked',
+          lastModifiedBy: { uid: 'member-uid', label: 'Member' },
+        })
+    );
   });
 
   it('any member CAN rename a legacy trip with no ownerId', async () => {
     const TRIP_ID = 'trip-legacy-rename';
     await seedTrip(TRIP_ID, ['member-uid']);
     const db = approvedDb('member-uid');
-    await assertSucceeds(db.collection('trips').doc(TRIP_ID).update({ name: 'Legacy Renamed' }));
+    await assertSucceeds(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({
+          name: 'Legacy Renamed',
+          lastModifiedBy: { uid: 'member-uid', label: 'Member' },
+        })
+    );
+  });
+
+  it('owner CANNOT rename their trip with a spoofed lastModifiedBy.uid', async () => {
+    const TRIP_ID = 'trip-owner-rename-spoofed';
+    await seedTrip(TRIP_ID, ['owner-uid'], 'owner-uid');
+    const db = approvedDb('owner-uid');
+    await assertFails(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .update({
+          name: 'Renamed Trip',
+          lastModifiedBy: { uid: 'someone-else', label: 'Someone Else' },
+        })
+    );
   });
 
   it('owner CAN delete their own trip', async () => {
@@ -405,12 +446,34 @@ describe('Security rules — trips/{tripId}/checkpoints', () => {
   it('member CAN write a checkpoint', async () => {
     const db = approvedDb(MEMBER_UID);
     await assertSucceeds(
-      db.collection('trips').doc(TRIP_ID).collection('checkpoints').add({
-        type: 'poi',
-        name: 'Senso-ji',
-        startTime: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      })
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('checkpoints')
+        .add({
+          type: 'poi',
+          name: 'Senso-ji',
+          startTime: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
+        })
+    );
+  });
+
+  it('member CANNOT write a checkpoint with a spoofed lastModifiedBy.uid', async () => {
+    const db = approvedDb(MEMBER_UID);
+    await assertFails(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('checkpoints')
+        .add({
+          type: 'poi',
+          name: 'Senso-ji',
+          startTime: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          lastModifiedBy: { uid: OUTSIDER_UID, label: 'Outsider' },
+        })
     );
   });
 
@@ -482,7 +545,11 @@ describe('Security rules — trips/{tripId}/alternatives', () => {
         .collection('trips')
         .doc(TRIP_ID)
         .collection('alternatives')
-        .add({ type: 'poi', name: 'Teamlab Borderless' })
+        .add({
+          type: 'poi',
+          name: 'Teamlab Borderless',
+          lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
+        })
     );
   });
 
@@ -530,7 +597,12 @@ describe('Security rules — trips/{tripId}/routes', () => {
         .collection('trips')
         .doc(TRIP_ID)
         .collection('routes')
-        .add({ name: 'Anime route', days: ['2026-10-06'], checkpointIds: [] })
+        .add({
+          name: 'Anime route',
+          days: ['2026-10-06'],
+          checkpointIds: [],
+          lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
+        })
     );
   });
 
@@ -578,7 +650,12 @@ describe('Security rules — trips/{tripId}/wikiSections', () => {
         .collection('trips')
         .doc(TRIP_ID)
         .collection('wikiSections')
-        .add({ title: 'Day 3', content: '', order: 1 })
+        .add({
+          title: 'Day 3',
+          content: '',
+          order: 1,
+          lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
+        })
     );
   });
 
@@ -625,7 +702,11 @@ describe('Security rules — trips/{tripId}/budgets', () => {
         .collection('trips')
         .doc(TRIP_ID)
         .collection('budgets')
-        .add({ name: 'Comfort', currency: 'USD' })
+        .add({
+          name: 'Comfort',
+          currency: 'USD',
+          lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
+        })
     );
   });
 
@@ -674,7 +755,13 @@ describe('Security rules — trips/{tripId}/budgetSections', () => {
         .collection('trips')
         .doc(TRIP_ID)
         .collection('budgetSections')
-        .add({ budgetId: 'budget-1', category: 'meals', name: 'Meals', order: 1 })
+        .add({
+          budgetId: 'budget-1',
+          category: 'meals',
+          name: 'Meals',
+          order: 1,
+          lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
+        })
     );
   });
 
@@ -721,14 +808,19 @@ describe('Security rules — trips/{tripId}/budgetItems', () => {
   it('member CAN write budget items', async () => {
     const db = approvedDb(MEMBER_UID);
     await assertSucceeds(
-      db.collection('trips').doc(TRIP_ID).collection('budgetItems').add({
-        budgetSectionId: 'section-1',
-        name: 'Business hotel',
-        rateType: 'per_night',
-        quantity: 3,
-        price: 8000,
-        order: 1,
-      })
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('budgetItems')
+        .add({
+          budgetSectionId: 'section-1',
+          name: 'Business hotel',
+          rateType: 'per_night',
+          quantity: 3,
+          price: 8000,
+          order: 1,
+          lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
+        })
     );
   });
 
@@ -772,10 +864,30 @@ describe('Security rules — trips/{tripId}/bookings', () => {
   it('member CAN write bookings', async () => {
     const db = approvedDb(MEMBER_UID);
     await assertSucceeds(
-      db.collection('trips').doc(TRIP_ID).collection('bookings').add({
-        provider: 'JR Pass',
-        confirmationNumber: 'JR-XYZ',
-      })
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('bookings')
+        .add({
+          provider: 'JR Pass',
+          confirmationNumber: 'JR-XYZ',
+          lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
+        })
+    );
+  });
+
+  it('member CANNOT write a booking with a spoofed lastModifiedBy.uid', async () => {
+    const db = approvedDb(MEMBER_UID);
+    await assertFails(
+      db
+        .collection('trips')
+        .doc(TRIP_ID)
+        .collection('bookings')
+        .add({
+          provider: 'JR Pass',
+          confirmationNumber: 'JR-XYZ',
+          lastModifiedBy: { uid: OUTSIDER_UID, label: 'Outsider' },
+        })
     );
   });
 
@@ -893,12 +1005,14 @@ describe('Batch writes — trips/{tripId}/checkpoints and alternatives', () => {
       name: 'Batch A',
       startTime: Timestamp.now(),
       updatedAt: Timestamp.now(),
+      lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
     });
     batch.set(ref2, {
       type: 'poi',
       name: 'Batch B',
       startTime: Timestamp.now(),
       updatedAt: Timestamp.now(),
+      lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
     });
     await assertSucceeds(batch.commit());
 
@@ -917,8 +1031,16 @@ describe('Batch writes — trips/{tripId}/checkpoints and alternatives', () => {
     const ref2 = altCollection.doc();
 
     const batch = db.batch();
-    batch.set(ref1, { type: 'poi', name: 'Alt Batch A' });
-    batch.set(ref2, { type: 'poi', name: 'Alt Batch B' });
+    batch.set(ref1, {
+      type: 'poi',
+      name: 'Alt Batch A',
+      lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
+    });
+    batch.set(ref2, {
+      type: 'poi',
+      name: 'Alt Batch B',
+      lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
+    });
     await assertSucceeds(batch.commit());
 
     const snap = await altCollection.get();
@@ -944,6 +1066,7 @@ describe('Batch writes — trips/{tripId}/checkpoints and alternatives', () => {
       name: 'Should not persist',
       startTime: Timestamp.now(),
       updatedAt: Timestamp.now(),
+      lastModifiedBy: { uid: MEMBER_UID, label: 'Member' },
     });
     batch.set(otherRef, {
       type: 'poi',

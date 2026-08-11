@@ -26,7 +26,8 @@ each their own independent Node package — own `package.json`, own
 dependency tree, not part of the root `npm install`/build:
 
 - `functions/` — Cloud Functions: the app-access blocking function, trip
-  invite/activity-log callables.
+  invite/access-record callables, and the activity-log Firestore triggers
+  (`logTripEntityActivity`, `logTripActivity`).
 - `mcp/` — MCP server: lets Claude read/edit trip data directly, signed in
   as a real user via the Firebase client SDK. See `MCP.md` and
   `mcp/README.md`.
@@ -46,6 +47,12 @@ this file should ever see a Firestore-specific type. Auth is wrapped the
 same way behind an `AuthService` interface. This exists so the backend can
 be swapped later without touching UI code — don't erode it by reaching for
 `firebase/firestore` from a component "just this once."
+
+Every trip mutation must be auditable via the activity log — enforced by
+Cloud Function Firestore triggers reacting to a `lastModifiedBy` field
+stamped on every write, not by each mutating method remembering to call a
+logging helper. See "Security practices" in `STANDARDS.md` for the full
+mechanism (#102).
 
 ## Development standards
 

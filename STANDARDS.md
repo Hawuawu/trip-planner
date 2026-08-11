@@ -368,3 +368,19 @@ summary`, no trailing period. Types in use: `feat`, `fix`, `docs`,
   `vite.config.ts`'s `preview.headers` and in `nginx.conf` (the Docker/
   nginx deploy target) but aren't configured in `firebase.json`'s
   `hosting` block, so a direct `firebase deploy` would skip them.
+- Every trip mutation must be auditable via the activity log — enforced
+  structurally, not by convention. `functions/src/logTripEntityActivity.ts`
+  and `logTripActivity.ts` are Firestore triggers on
+  `trips/{tripId}/{collectionId}/{docId}` and `trips/{tripId}` that write
+  the activity log entry themselves, reacting to a `lastModifiedBy: {
+uid, label }` field stamped on every write (client-side, by every
+  `TripRepository` implementation that touches Firestore — see #102). A
+  new mutation doesn't need to add its own logging call; it only needs to
+  stamp `lastModifiedBy`, and `firestore.rules` rejects writes that omit
+  it or spoof someone else's uid. This is why activity logging survived
+  the MCP server (`mcp/`) existing as a fully separate client with no
+  shared code path to the main app's old client-side logging helper — the
+  trigger fires regardless of which client wrote the document. Known
+  accepted limitation: on delete, there's no request payload to read an
+  actor from, so the entry is attributed to whoever last created/updated
+  the doc (`before.lastModifiedBy`), not necessarily whoever deleted it.
