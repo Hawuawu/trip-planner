@@ -58,6 +58,7 @@ function makeMockRepo(overrides: Partial<TripRepository> = {}): TripRepository {
     leaveTrip: vi.fn().mockResolvedValue(undefined),
     recordAccess: vi.fn().mockResolvedValue(undefined),
     subscribeToActivityLog: vi.fn().mockReturnValue(() => {}),
+    getActivityLogBefore: vi.fn().mockResolvedValue({ entries: [], hasMore: false }),
     subscribeToCheckpoints: vi.fn().mockReturnValue(() => {}),
     addCheckpoint: vi.fn(),
     addCheckpoints: vi.fn().mockResolvedValue([]),
