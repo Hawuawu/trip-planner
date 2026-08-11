@@ -192,6 +192,9 @@ export function AppShell({ onBack }: Props) {
   const checkpoints = useTripStore((s) => s.checkpoints);
   const alternatives = useTripStore((s) => s.alternatives);
   const activityLog = useTripStore((s) => s.activityLog);
+  const activityLogHasMore = useTripStore((s) => s.activityLogHasMore);
+  const activityLogLoadingMore = useTripStore((s) => s.activityLogLoadingMore);
+  const loadMoreActivityLog = useTripStore((s) => s.loadMoreActivityLog);
   const routes = useTripStore((s) => s.routes);
   const selectedDay = useTripStore((s) => s.selectedDay);
   const selectedRouteId = useTripStore((s) => s.selectedRouteId);
@@ -625,6 +628,9 @@ export function AppShell({ onBack }: Props) {
           onClose={() => setActivityLogOpen(false)}
           entries={activityLog}
           isOwner={isOwner}
+          hasMore={activityLogHasMore}
+          loadingMore={activityLogLoadingMore}
+          onLoadMore={() => void loadMoreActivityLog()}
         />
       )}
 

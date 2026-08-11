@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useTripStore } from '../store/tripStore';
 import { resetStores } from './helpers';
 import type { TripRepository } from '../data/TripRepository';
-import type { Trip, Checkpoint, Alternative } from '../types';
+import type { Trip, Checkpoint, Alternative, ActivityLogEntry } from '../types';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -39,6 +39,7 @@ function makeMockRepo(overrides: Partial<TripRepository> = {}): TripRepository {
     leaveTrip: vi.fn().mockResolvedValue(undefined),
     recordAccess: vi.fn().mockResolvedValue(undefined),
     subscribeToActivityLog: vi.fn().mockReturnValue(() => {}),
+    getActivityLogBefore: vi.fn().mockResolvedValue({ entries: [], hasMore: false }),
     subscribeToCheckpoints: vi.fn().mockReturnValue(() => {}),
     addCheckpoint: vi.fn().mockResolvedValue(makeCheckpoint({ id: 'saved-1' })),
     addCheckpoints: vi.fn().mockResolvedValue([makeCheckpoint({ id: 'saved-1' })]),
@@ -198,6 +199,100 @@ describe('tripStore — init', () => {
     expect(useTripStore.getState().tripLoading).toBe(true);
     expect(useTripStore.getState().checkpointsLoading).toBe(true);
     expect(useTripStore.getState().alternativesLoading).toBe(true);
+  });
+});
+
+// ── Helpers for loadMoreActivityLog ─────────────────────────────────────────
+
+function makeLogEntry(overrides: Partial<ActivityLogEntry> = {}): ActivityLogEntry {
+  return {
+    id: 'e1',
+    type: 'checkpoint_added',
+    actorUid: 'u1',
+    actorLabel: 'Alice',
+    entityName: 'Senso-ji',
+    createdAt: '2026-01-05T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function initWithLiveLog(repo: TripRepository, entries: ActivityLogEntry[]) {
+  let cb: (e: ActivityLogEntry[]) => void = () => {};
+  (repo.subscribeToActivityLog as ReturnType<typeof vi.fn>).mockImplementation((_tripId, fn) => {
+    cb = fn;
+    return () => {};
+  });
+  useTripStore.getState().init('trip-1', repo);
+  cb(entries);
+}
+
+describe('tripStore — loadMoreActivityLog', () => {
+  it('appends the returned page and updates hasMore on the happy path', async () => {
+    const liveEntries = Array.from({ length: 100 }, (_, i) =>
+      makeLogEntry({
+        id: `live-${i}`,
+        createdAt: `2026-01-05T00:00:${String(i).padStart(2, '0')}.000Z`,
+      })
+    );
+    const olderEntries = [makeLogEntry({ id: 'older-1', createdAt: '2026-01-04T00:00:00.000Z' })];
+    const getActivityLogBefore = vi
+      .fn()
+      .mockResolvedValue({ entries: olderEntries, hasMore: false });
+    const repo = makeMockRepo({ getActivityLogBefore });
+    initWithLiveLog(repo, liveEntries);
+
+    expect(useTripStore.getState().activityLogHasMore).toBe(true);
+
+    await useTripStore.getState().loadMoreActivityLog();
+
+    expect(getActivityLogBefore).toHaveBeenCalledWith('trip-1', {
+      createdAt: liveEntries[liveEntries.length - 1].createdAt,
+      id: liveEntries[liveEntries.length - 1].id,
+    });
+    const finalLog = useTripStore.getState().activityLog;
+    expect(finalLog).toHaveLength(101);
+    expect(finalLog[finalLog.length - 1]).toEqual(olderEntries[0]);
+    expect(useTripStore.getState().activityLogHasMore).toBe(false);
+    expect(useTripStore.getState().activityLogLoadingMore).toBe(false);
+  });
+
+  it('dedupes entries that overlap with what is already loaded', async () => {
+    const liveEntries = [makeLogEntry({ id: 'e1' }), makeLogEntry({ id: 'e2' })];
+    const getActivityLogBefore = vi.fn().mockResolvedValue({
+      entries: [makeLogEntry({ id: 'e2' }), makeLogEntry({ id: 'e3' })],
+      hasMore: false,
+    });
+    const repo = makeMockRepo({ getActivityLogBefore });
+    useTripStore.setState({ activityLogHasMore: true });
+    initWithLiveLog(repo, liveEntries);
+    useTripStore.setState({ activityLogHasMore: true });
+
+    await useTripStore.getState().loadMoreActivityLog();
+
+    const ids = useTripStore.getState().activityLog.map((e) => e.id);
+    expect(ids).toEqual(['e1', 'e2', 'e3']);
+  });
+
+  it('is a no-op when activityLogHasMore is false', async () => {
+    const getActivityLogBefore = vi.fn();
+    const repo = makeMockRepo({ getActivityLogBefore });
+    initWithLiveLog(repo, [makeLogEntry()]);
+
+    expect(useTripStore.getState().activityLogHasMore).toBe(false);
+    await useTripStore.getState().loadMoreActivityLog();
+
+    expect(getActivityLogBefore).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op when a load is already in flight', async () => {
+    const getActivityLogBefore = vi.fn().mockResolvedValue({ entries: [], hasMore: false });
+    const repo = makeMockRepo({ getActivityLogBefore });
+    initWithLiveLog(repo, [makeLogEntry()]);
+    useTripStore.setState({ activityLogHasMore: true, activityLogLoadingMore: true });
+
+    await useTripStore.getState().loadMoreActivityLog();
+
+    expect(getActivityLogBefore).not.toHaveBeenCalled();
   });
 });
 

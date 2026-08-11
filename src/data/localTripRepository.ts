@@ -114,6 +114,9 @@ const LS_BUDGET_ITEMS = 'trip-planner:budgetItems';
 const LS_TRIPS = 'trip-planner:trips';
 const LS_ACTIVITY = 'trip-planner:activityLog';
 
+// Matches FirebaseTripRepository's page size for consistent UX.
+const ACTIVITY_LOG_PAGE_SIZE = 50;
+
 function loadTrips(): Trip[] {
   try {
     const raw = localStorage.getItem(LS_TRIPS);
@@ -347,6 +350,21 @@ export class LocalTripRepository implements TripRepository {
     return () => {
       this.logSubs.get(tripId)?.delete(cb);
     };
+  }
+
+  // Local mode has no live-window cap to page beyond — the whole log is
+  // already in loadLog(), newest-first (each push prepends) — but the
+  // interface is still implemented so pagination works the same way in
+  // both local/offline and Firebase-backed modes.
+  async getActivityLogBefore(
+    _tripId: string,
+    cursor: { createdAt: string; id: string }
+  ): Promise<{ entries: ActivityLogEntry[]; hasMore: boolean }> {
+    const log = loadLog();
+    const cursorIndex = log.findIndex((e) => e.id === cursor.id);
+    const startIndex = cursorIndex === -1 ? log.length : cursorIndex + 1;
+    const entries = log.slice(startIndex, startIndex + ACTIVITY_LOG_PAGE_SIZE);
+    return { entries, hasMore: startIndex + ACTIVITY_LOG_PAGE_SIZE < log.length };
   }
 
   subscribeToCheckpoints(tripId: string, cb: (c: Checkpoint[]) => void): () => void {

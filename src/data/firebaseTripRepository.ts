@@ -11,6 +11,8 @@ import {
   where,
   orderBy,
   limit,
+  startAfter,
+  documentId,
   getDocs,
   addDoc,
   updateDoc,
@@ -22,6 +24,10 @@ import {
   writeBatch,
   type Firestore,
 } from 'firebase/firestore';
+
+// Page size for getActivityLogBefore — distinct from subscribeToActivityLog's
+// live 100-entry window; this paginates the (larger) history beyond it.
+const ACTIVITY_LOG_PAGE_SIZE = 50;
 import type { TripRepository } from './TripRepository';
 import type {
   Trip,
@@ -295,6 +301,35 @@ export class FirebaseTripRepository implements TripRepository {
         })
       );
     });
+  }
+
+  async getActivityLogBefore(
+    tripId: string,
+    cursor: { createdAt: string; id: string }
+  ): Promise<{ entries: ActivityLogEntry[]; hasMore: boolean }> {
+    const q = query(
+      collection(this.db, 'trips', tripId, 'activityLog'),
+      orderBy('createdAt', 'desc'),
+      orderBy(documentId(), 'desc'),
+      startAfter(Timestamp.fromDate(new Date(cursor.createdAt)), cursor.id),
+      limit(ACTIVITY_LOG_PAGE_SIZE + 1)
+    );
+    const snap = await getDocs(q);
+    const docs = snap.docs.slice(0, ACTIVITY_LOG_PAGE_SIZE);
+    const entries = docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        type: data.type,
+        actorUid: data.actorUid,
+        actorLabel: data.actorLabel,
+        entityName: data.entityName ?? undefined,
+        changedFields: data.changedFields ?? undefined,
+        count: data.count ?? undefined,
+        createdAt: toIso(data.createdAt),
+      };
+    });
+    return { entries, hasMore: snap.docs.length > ACTIVITY_LOG_PAGE_SIZE };
   }
 
   subscribeToCheckpoints(tripId: string, cb: (checkpoints: Checkpoint[]) => void): () => void {

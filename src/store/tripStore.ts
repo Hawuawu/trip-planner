@@ -25,6 +25,8 @@ interface TripState {
   budgetSections: BudgetSection[];
   budgetItems: BudgetItem[];
   activityLog: ActivityLogEntry[];
+  activityLogHasMore: boolean;
+  activityLogLoadingMore: boolean;
   selectedId: string | null;
   selectedDay: string | null;
   selectedRouteId: string | null;
@@ -42,6 +44,7 @@ interface TripState {
   alternativesLoading: boolean;
 
   init(tripId: string, repo: TripRepository): void;
+  loadMoreActivityLog(): Promise<void>;
   selectCheckpoint(id: string | null): void;
   selectDay(day: string | null): void;
   selectRoute(routeId: string | null): void;
@@ -128,6 +131,8 @@ export const useTripStore = create<TripState>((set, get) => ({
   budgetSections: [],
   budgetItems: [],
   activityLog: [],
+  activityLogHasMore: false,
+  activityLogLoadingMore: false,
   selectedId: null,
   selectedDay: null,
   selectedRouteId: null,
@@ -159,8 +164,38 @@ export const useTripStore = create<TripState>((set, get) => ({
     repo.subscribeToBudgets(tripId, (budgets) => set({ budgets }));
     repo.subscribeToBudgetSections(tripId, (budgetSections) => set({ budgetSections }));
     repo.subscribeToBudgetItems(tripId, (budgetItems) => set({ budgetItems }));
-    repo.subscribeToActivityLog(tripId, (activityLog) => set({ activityLog }));
+    repo.subscribeToActivityLog(tripId, (activityLog) =>
+      // The live listener caps at 100 entries (see subscribeToActivityLog);
+      // hitting that cap is the only signal that older entries might exist
+      // to page into via loadMoreActivityLog.
+      set({ activityLog, activityLogHasMore: activityLog.length >= 100 })
+    );
     repo.recordAccess(tripId).catch(() => {});
+  },
+
+  async loadMoreActivityLog() {
+    const { repo, tripId, activityLog, activityLogHasMore, activityLogLoadingMore } = get();
+    if (!repo || !tripId || !activityLogHasMore || activityLogLoadingMore) return;
+    const cursor = activityLog[activityLog.length - 1];
+    if (!cursor) return;
+    set({ activityLogLoadingMore: true });
+    try {
+      const { entries, hasMore } = await repo.getActivityLogBefore(tripId, {
+        createdAt: cursor.createdAt,
+        id: cursor.id,
+      });
+      set((s) => {
+        const existingIds = new Set(s.activityLog.map((e) => e.id));
+        return {
+          activityLog: [...s.activityLog, ...entries.filter((e) => !existingIds.has(e.id))],
+          activityLogHasMore: hasMore,
+          activityLogLoadingMore: false,
+        };
+      });
+    } catch (err) {
+      set({ activityLogLoadingMore: false });
+      throw err;
+    }
   },
 
   async inviteMember(email) {
