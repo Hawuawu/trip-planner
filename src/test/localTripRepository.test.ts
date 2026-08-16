@@ -1230,9 +1230,13 @@ describe('LocalTripRepository — activity log', () => {
 
   it('getActivityLogBefore paginates in pages and reports hasMore accurately', async () => {
     const repo = makeRepo();
-    const entries = Array.from({ length: 60 }, (_, i) => ({
+    // ACTIVITY_LOG_PAGE_SIZE (src/data/activityLogConfig.ts) is 20. 26 entries,
+    // cursor at index 0, leaves 25 after it: page 1 takes indices 1-20 (20
+    // entries, 21 < 26 so hasMore); page 2 takes indices 21-25 (5 entries,
+    // 41 < 26 is false so no more).
+    const entries = Array.from({ length: 26 }, (_, i) => ({
       id: `log-${i}`,
-      createdAt: new Date(2026, 0, 1, 0, 0, 60 - i).toISOString(),
+      createdAt: new Date(2026, 0, 1, 0, 0, 26 - i).toISOString(),
     }));
     seedLog(entries);
 
@@ -1240,7 +1244,7 @@ describe('LocalTripRepository — activity log', () => {
       createdAt: entries[0].createdAt,
       id: entries[0].id,
     });
-    expect(firstPage.entries).toHaveLength(50);
+    expect(firstPage.entries).toHaveLength(20);
     expect(firstPage.entries[0].id).toBe('log-1');
     expect(firstPage.hasMore).toBe(true);
 
@@ -1249,7 +1253,7 @@ describe('LocalTripRepository — activity log', () => {
       createdAt: lastOfFirstPage.createdAt,
       id: lastOfFirstPage.id,
     });
-    expect(secondPage.entries).toHaveLength(9);
+    expect(secondPage.entries).toHaveLength(5);
     expect(secondPage.hasMore).toBe(false);
   });
 });

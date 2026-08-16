@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ActivityLogView } from './ActivityLogView';
 import { renderWithProviders } from '../../test/helpers';
 import type { ActivityLogEntry } from '../../types';
@@ -23,7 +24,20 @@ const ENTRIES: ActivityLogEntry[] = [
 ];
 
 function baseProps() {
-  return { hasMore: false, loadingMore: false, onLoadMore: vi.fn() };
+  return {
+    hasMore: false,
+    loadingMore: false,
+    onLoadMore: vi.fn(),
+    search: '',
+    onSearchChange: vi.fn(),
+    actors: [] as string[],
+    selectedActors: [] as string[],
+    onToggleActor: vi.fn(),
+  };
+}
+
+async function expandControls() {
+  await userEvent.click(screen.getByRole('button', { name: /show search and filters/i }));
 }
 
 describe('ActivityLogView', () => {
@@ -43,11 +57,40 @@ describe('ActivityLogView', () => {
     expect(screen.getByText('Bob joined the trip')).toBeInTheDocument();
   });
 
-  it('shows an empty state when there are no entries', () => {
+  it('shows an empty state when there are no entries and no filter is active', () => {
     renderWithProviders(
       <ActivityLogView open onClose={vi.fn()} entries={[]} isOwner {...baseProps()} />
     );
     expect(screen.getByText('No activity yet.')).toBeInTheDocument();
+  });
+
+  it('shows a distinct empty state when a search filter matches nothing', () => {
+    renderWithProviders(
+      <ActivityLogView
+        open
+        onClose={vi.fn()}
+        entries={[]}
+        isOwner
+        {...baseProps()}
+        search="nonexistent"
+      />
+    );
+    expect(screen.getByText('No matching activity.')).toBeInTheDocument();
+  });
+
+  it('shows a distinct empty state when an actor filter matches nothing', () => {
+    renderWithProviders(
+      <ActivityLogView
+        open
+        onClose={vi.fn()}
+        entries={[]}
+        isOwner
+        {...baseProps()}
+        actors={['Alice']}
+        selectedActors={['Alice']}
+      />
+    );
+    expect(screen.getByText('No matching activity.')).toBeInTheDocument();
   });
 
   it('calls onClose when Close is clicked', async () => {
@@ -74,6 +117,7 @@ describe('ActivityLogView', () => {
         onClose={vi.fn()}
         entries={ENTRIES}
         isOwner
+        {...baseProps()}
         hasMore
         loadingMore={false}
         onLoadMore={onLoadMore}
@@ -91,6 +135,7 @@ describe('ActivityLogView', () => {
         onClose={vi.fn()}
         entries={ENTRIES}
         isOwner
+        {...baseProps()}
         hasMore
         loadingMore
         onLoadMore={vi.fn()}
@@ -106,11 +151,80 @@ describe('ActivityLogView', () => {
         onClose={vi.fn()}
         entries={ENTRIES}
         isOwner={false}
+        {...baseProps()}
         hasMore
         loadingMore={false}
         onLoadMore={vi.fn()}
       />
     );
     expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument();
+  });
+
+  it('renders the search box and actor chips for owners once expanded', async () => {
+    renderWithProviders(
+      <ActivityLogView
+        open
+        onClose={vi.fn()}
+        entries={ENTRIES}
+        isOwner
+        {...baseProps()}
+        actors={['Alice', 'Bob']}
+      />
+    );
+    await expandControls();
+    expect(screen.getByPlaceholderText('Search activity log')).toBeInTheDocument();
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.getByText('Bob')).toBeInTheDocument();
+  });
+
+  it('fires onSearchChange when typing in the search box', async () => {
+    const onSearchChange = vi.fn();
+    renderWithProviders(
+      <ActivityLogView
+        open
+        onClose={vi.fn()}
+        entries={ENTRIES}
+        isOwner
+        {...baseProps()}
+        onSearchChange={onSearchChange}
+      />
+    );
+    await expandControls();
+    await userEvent.type(screen.getByPlaceholderText('Search activity log'), 'a');
+    expect(onSearchChange).toHaveBeenCalled();
+  });
+
+  it('fires onToggleActor when an actor chip is clicked', async () => {
+    const onToggleActor = vi.fn();
+    renderWithProviders(
+      <ActivityLogView
+        open
+        onClose={vi.fn()}
+        entries={ENTRIES}
+        isOwner
+        {...baseProps()}
+        actors={['Alice']}
+        onToggleActor={onToggleActor}
+      />
+    );
+    await expandControls();
+    await userEvent.click(screen.getByText('Alice'));
+    expect(onToggleActor).toHaveBeenCalledWith('Alice');
+  });
+
+  it('hides search and filter controls entirely for non-owners', () => {
+    renderWithProviders(
+      <ActivityLogView
+        open
+        onClose={vi.fn()}
+        entries={ENTRIES}
+        isOwner={false}
+        {...baseProps()}
+        actors={['Alice']}
+      />
+    );
+    expect(
+      screen.queryByRole('button', { name: /show search and filters/i })
+    ).not.toBeInTheDocument();
   });
 });

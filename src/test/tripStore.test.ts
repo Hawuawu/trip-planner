@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useTripStore } from '../store/tripStore';
 import { resetStores } from './helpers';
+import { ACTIVITY_LOG_LIVE_WINDOW } from '../data/activityLogConfig';
 import type { TripRepository } from '../data/TripRepository';
 import type { Trip, Checkpoint, Alternative, ActivityLogEntry } from '../types';
 
@@ -228,7 +229,7 @@ function initWithLiveLog(repo: TripRepository, entries: ActivityLogEntry[]) {
 
 describe('tripStore — loadMoreActivityLog', () => {
   it('appends the returned page and updates hasMore on the happy path', async () => {
-    const liveEntries = Array.from({ length: 100 }, (_, i) =>
+    const liveEntries = Array.from({ length: ACTIVITY_LOG_LIVE_WINDOW }, (_, i) =>
       makeLogEntry({
         id: `live-${i}`,
         createdAt: `2026-01-05T00:00:${String(i).padStart(2, '0')}.000Z`,
@@ -250,7 +251,7 @@ describe('tripStore — loadMoreActivityLog', () => {
       id: liveEntries[liveEntries.length - 1].id,
     });
     const finalLog = useTripStore.getState().activityLog;
-    expect(finalLog).toHaveLength(101);
+    expect(finalLog).toHaveLength(ACTIVITY_LOG_LIVE_WINDOW + 1);
     expect(finalLog[finalLog.length - 1]).toEqual(olderEntries[0]);
     expect(useTripStore.getState().activityLogHasMore).toBe(false);
     expect(useTripStore.getState().activityLogLoadingMore).toBe(false);
@@ -293,6 +294,138 @@ describe('tripStore — loadMoreActivityLog', () => {
     await useTripStore.getState().loadMoreActivityLog();
 
     expect(getActivityLogBefore).not.toHaveBeenCalled();
+  });
+});
+
+describe('tripStore — activity log filters', () => {
+  it('setActivityLogSearchFilter sets the search string', () => {
+    useTripStore.getState().setActivityLogSearchFilter('Alice');
+    expect(useTripStore.getState().activityLogSearchFilter).toBe('Alice');
+  });
+
+  it('toggleActivityLogActorFilter adds an actor not yet selected', () => {
+    useTripStore.getState().toggleActivityLogActorFilter('Alice');
+    expect(useTripStore.getState().activityLogActorFilter).toEqual(['Alice']);
+  });
+
+  it('toggleActivityLogActorFilter removes an actor already selected', () => {
+    useTripStore.setState({ activityLogActorFilter: ['Alice', 'Bob'] });
+    useTripStore.getState().toggleActivityLogActorFilter('Alice');
+    expect(useTripStore.getState().activityLogActorFilter).toEqual(['Bob']);
+  });
+});
+
+describe('tripStore — loadMoreActivityLogUntilMatch', () => {
+  it('stops once the filtered view reaches ACTIVITY_LOG_PAGE_SIZE matches', async () => {
+    const getActivityLogBefore = vi
+      .fn()
+      .mockResolvedValueOnce({
+        entries: Array.from({ length: 10 }, (_, i) =>
+          makeLogEntry({
+            id: `p1-${i}`,
+            actorLabel: 'Match',
+            createdAt: `2026-01-04T00:00:${String(i).padStart(2, '0')}.000Z`,
+          })
+        ),
+        hasMore: true,
+      })
+      .mockResolvedValueOnce({
+        entries: Array.from({ length: 15 }, (_, i) =>
+          makeLogEntry({
+            id: `p2-${i}`,
+            actorLabel: 'Match',
+            createdAt: `2026-01-03T00:00:${String(i).padStart(2, '0')}.000Z`,
+          })
+        ),
+        hasMore: true,
+      });
+    const repo = makeMockRepo({ getActivityLogBefore });
+    initWithLiveLog(repo, [makeLogEntry({ id: 'live-1', actorLabel: 'Other' })]);
+    useTripStore.setState({ activityLogHasMore: true, activityLogActorFilter: ['Match'] });
+
+    await useTripStore.getState().loadMoreActivityLogUntilMatch();
+
+    // 10 matches after page 1 (< ACTIVITY_LOG_PAGE_SIZE) keeps the loop
+    // going; 25 after page 2 (>= ACTIVITY_LOG_PAGE_SIZE) stops it.
+    expect(getActivityLogBefore).toHaveBeenCalledTimes(2);
+    expect(useTripStore.getState().activityLogAutoPaginating).toBe(false);
+  });
+
+  it('stops once hasMore is exhausted even if the target match count is not reached', async () => {
+    const getActivityLogBefore = vi.fn().mockResolvedValueOnce({
+      entries: [makeLogEntry({ id: 'p1', actorLabel: 'Match' })],
+      hasMore: false,
+    });
+    const repo = makeMockRepo({ getActivityLogBefore });
+    initWithLiveLog(repo, [makeLogEntry({ id: 'live-1', actorLabel: 'Other' })]);
+    useTripStore.setState({ activityLogHasMore: true, activityLogActorFilter: ['Match'] });
+
+    await useTripStore.getState().loadMoreActivityLogUntilMatch();
+
+    expect(getActivityLogBefore).toHaveBeenCalledTimes(1);
+    expect(useTripStore.getState().activityLogHasMore).toBe(false);
+  });
+
+  it('stops after a 10-page safety cap when hasMore stays true and the target is never reached', async () => {
+    let call = 0;
+    const getActivityLogBefore = vi.fn().mockImplementation(() => {
+      call += 1;
+      return Promise.resolve({
+        entries: [makeLogEntry({ id: `more-${call}`, actorLabel: 'Other' })],
+        hasMore: true,
+      });
+    });
+    const repo = makeMockRepo({ getActivityLogBefore });
+    initWithLiveLog(repo, [makeLogEntry({ id: 'live-1', actorLabel: 'Other' })]);
+    useTripStore.setState({ activityLogHasMore: true, activityLogActorFilter: ['Match'] });
+
+    await useTripStore.getState().loadMoreActivityLogUntilMatch();
+
+    expect(getActivityLogBefore).toHaveBeenCalledTimes(10);
+  });
+
+  it('is a no-op when there is no repo or tripId', async () => {
+    await useTripStore.getState().loadMoreActivityLogUntilMatch();
+
+    expect(useTripStore.getState().activityLogAutoPaginating).toBe(false);
+  });
+
+  it('is a no-op and leaves the flag untouched when a call is already in flight', async () => {
+    const getActivityLogBefore = vi.fn();
+    const repo = makeMockRepo({ getActivityLogBefore });
+    initWithLiveLog(repo, [makeLogEntry()]);
+    useTripStore.setState({ activityLogAutoPaginating: true });
+
+    await useTripStore.getState().loadMoreActivityLogUntilMatch();
+
+    expect(getActivityLogBefore).not.toHaveBeenCalled();
+    expect(useTripStore.getState().activityLogAutoPaginating).toBe(true);
+
+    // Not reset by resetStores() (merge-mode, same as activityLogLoadingMore/
+    // activityLogHasMore) — clear it explicitly so it doesn't leak into the
+    // next test.
+    useTripStore.setState({ activityLogAutoPaginating: false });
+  });
+
+  it('sets activityLogAutoPaginating while fetching and clears it when done', async () => {
+    let resolvePage!: (v: { entries: ActivityLogEntry[]; hasMore: boolean }) => void;
+    const getActivityLogBefore = vi.fn().mockImplementation(
+      () =>
+        new Promise((res) => {
+          resolvePage = res;
+        })
+    );
+    const repo = makeMockRepo({ getActivityLogBefore });
+    initWithLiveLog(repo, [makeLogEntry({ id: 'live-1', actorLabel: 'Other' })]);
+    useTripStore.setState({ activityLogHasMore: true, activityLogActorFilter: ['Match'] });
+
+    const promise = useTripStore.getState().loadMoreActivityLogUntilMatch();
+    expect(useTripStore.getState().activityLogAutoPaginating).toBe(true);
+
+    resolvePage({ entries: [], hasMore: false });
+    await promise;
+
+    expect(useTripStore.getState().activityLogAutoPaginating).toBe(false);
   });
 });
 

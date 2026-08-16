@@ -25,9 +25,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 
-// Page size for getActivityLogBefore — distinct from subscribeToActivityLog's
-// live 100-entry window; this paginates the (larger) history beyond it.
-const ACTIVITY_LOG_PAGE_SIZE = 50;
+import { ACTIVITY_LOG_PAGE_SIZE, ACTIVITY_LOG_LIVE_WINDOW } from './activityLogConfig';
 import type { TripRepository } from './TripRepository';
 import type {
   Trip,
@@ -293,7 +291,7 @@ export class FirebaseTripRepository implements TripRepository {
     const q = query(
       collection(this.db, 'trips', tripId, 'activityLog'),
       orderBy('createdAt', 'desc'),
-      limit(100)
+      limit(ACTIVITY_LOG_LIVE_WINDOW)
     );
     return onSnapshot(q, (snap) => {
       cb(

@@ -1,3 +1,4 @@
+import { ACTIVITY_LOG_PAGE_SIZE } from './activityLogConfig';
 import type { TripRepository } from './TripRepository';
 import type {
   Trip,
@@ -113,9 +114,6 @@ const LS_BUDGET_SECTIONS = 'trip-planner:budgetSections';
 const LS_BUDGET_ITEMS = 'trip-planner:budgetItems';
 const LS_TRIPS = 'trip-planner:trips';
 const LS_ACTIVITY = 'trip-planner:activityLog';
-
-// Matches FirebaseTripRepository's page size for consistent UX.
-const ACTIVITY_LOG_PAGE_SIZE = 50;
 
 function loadTrips(): Trip[] {
   try {
