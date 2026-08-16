@@ -35,6 +35,8 @@ const tripInitialState = {
   budgetNavigationTarget: null,
   alternativesSearchFilter: '',
   alternativesTagFilter: [],
+  activityLogSearchFilter: '',
+  activityLogActorFilter: [],
   showAlternativesOnMap: true,
   undoCheckpoint: null,
   repo: null,
