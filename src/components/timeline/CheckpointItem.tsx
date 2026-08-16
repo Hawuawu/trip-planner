@@ -29,6 +29,7 @@ import { hasKanji } from '../../utils/kanjiReading';
 import { useKanjiReading } from '../../hooks/useKanjiReading';
 import { InlineReading } from '../InlineReading';
 import { MarkdownNotes } from '../shared/MarkdownNotes';
+import { formatCheckpointTime, formatCheckpointDate } from '../../utils/date';
 
 interface Props {
   checkpoint: Checkpoint;
@@ -38,14 +39,6 @@ interface Props {
   onSelect(): void;
   onEdit(): void;
   onDelete(): void;
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 export function CheckpointItem({
@@ -146,8 +139,9 @@ export function CheckpointItem({
               {revealed && nameHasKanji && <InlineReading state={nameReading} />}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {formatDate(checkpoint.startTime)} · {formatTime(checkpoint.startTime)}
-              {checkpoint.endTime && ` – ${formatTime(checkpoint.endTime)}`}
+              {formatCheckpointDate(checkpoint.startTime)} ·{' '}
+              {formatCheckpointTime(checkpoint.startTime)}
+              {checkpoint.endTime && ` – ${formatCheckpointTime(checkpoint.endTime)}`}
             </Typography>
             {checkpoint.notes && (
               <Box sx={{ mt: 0.25 }}>

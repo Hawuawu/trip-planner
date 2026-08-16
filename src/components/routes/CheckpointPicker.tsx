@@ -7,6 +7,7 @@ import {
   Checkbox,
 } from '@mui/material';
 import type { Checkpoint } from '../../types';
+import { formatCheckpointTime } from '../../utils/date';
 
 interface Props {
   checkpoints: Checkpoint[];
@@ -22,10 +23,7 @@ export function CheckpointPicker({ checkpoints, selectedIds, onChange }: Props) 
   return (
     <List dense sx={{ maxHeight: 280, overflowY: 'auto' }}>
       {checkpoints.map((cp) => {
-        const time = new Date(cp.startTime).toLocaleTimeString(undefined, {
-          hour: 'numeric',
-          minute: '2-digit',
-        });
+        const time = formatCheckpointTime(cp.startTime);
         return (
           <ListItem key={cp.id} disablePadding>
             <ListItemButton onClick={() => toggle(cp.id)} dense>
