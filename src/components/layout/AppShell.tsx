@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   BottomNavigation,
@@ -42,6 +42,8 @@ import { OfflineBanner } from './OfflineBanner';
 import { useTripStore } from '../../store/tripStore';
 import { useAuthStore } from '../../store/authStore';
 import { canManage } from '../../utils/tripPermissions';
+import { filterActivityLog, collectActorLabels } from '../../utils/activityLogFilter';
+import { ACTIVITY_LOG_PAGE_SIZE } from '../../data/activityLogConfig';
 import { TripMembersDialog } from '../trips/TripMembersDialog';
 import { ActivityLogView } from '../trips/ActivityLogView';
 import { RouteSelectorDialog } from '../routes/RouteSelectorDialog';
@@ -195,11 +197,50 @@ export function AppShell({ onBack }: Props) {
   const activityLogHasMore = useTripStore((s) => s.activityLogHasMore);
   const activityLogLoadingMore = useTripStore((s) => s.activityLogLoadingMore);
   const loadMoreActivityLog = useTripStore((s) => s.loadMoreActivityLog);
+  const activityLogSearchFilter = useTripStore((s) => s.activityLogSearchFilter);
+  const activityLogActorFilter = useTripStore((s) => s.activityLogActorFilter);
+  const activityLogAutoPaginating = useTripStore((s) => s.activityLogAutoPaginating);
+  const setActivityLogSearchFilter = useTripStore((s) => s.setActivityLogSearchFilter);
+  const toggleActivityLogActorFilter = useTripStore((s) => s.toggleActivityLogActorFilter);
+  const loadMoreActivityLogUntilMatch = useTripStore((s) => s.loadMoreActivityLogUntilMatch);
   const routes = useTripStore((s) => s.routes);
   const selectedDay = useTripStore((s) => s.selectedDay);
   const selectedRouteId = useTripStore((s) => s.selectedRouteId);
   const currentUid = useAuthStore((s) => s.user?.uid);
   const isOwner = trip ? canManage(trip, currentUid) : false;
+
+  const activityLogActors = useMemo(() => collectActorLabels(activityLog), [activityLog]);
+
+  const filteredActivityLog = useMemo(
+    () =>
+      filterActivityLog(activityLog, {
+        search: activityLogSearchFilter,
+        actors: activityLogActorFilter,
+      }),
+    [activityLog, activityLogSearchFilter, activityLogActorFilter]
+  );
+
+  // While a search/actor filter is active and thin on results, keep fetching
+  // further activity-log pages in the background so "no matches" isn't shown
+  // just because a match hasn't been paged in yet. Self-terminates once the
+  // filtered view reaches ACTIVITY_LOG_PAGE_SIZE matches or history runs out
+  // (activityLogHasMore/filteredActivityLog.length settle into values that
+  // make this effect's own guards no-op); loadMoreActivityLogUntilMatch's
+  // own activityLogAutoPaginating flag additionally guards re-entrancy.
+  useEffect(() => {
+    if (!isOwner) return;
+    if (!activityLogSearchFilter && activityLogActorFilter.length === 0) return;
+    if (filteredActivityLog.length >= ACTIVITY_LOG_PAGE_SIZE) return;
+    if (!activityLogHasMore) return;
+    void loadMoreActivityLogUntilMatch();
+  }, [
+    isOwner,
+    activityLogSearchFilter,
+    activityLogActorFilter,
+    filteredActivityLog.length,
+    activityLogHasMore,
+    loadMoreActivityLogUntilMatch,
+  ]);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -626,11 +667,16 @@ export function AppShell({ onBack }: Props) {
         <ActivityLogView
           open={activityLogOpen}
           onClose={() => setActivityLogOpen(false)}
-          entries={activityLog}
+          entries={filteredActivityLog}
           isOwner={isOwner}
           hasMore={activityLogHasMore}
-          loadingMore={activityLogLoadingMore}
+          loadingMore={activityLogLoadingMore || activityLogAutoPaginating}
           onLoadMore={() => void loadMoreActivityLog()}
+          search={activityLogSearchFilter}
+          onSearchChange={setActivityLogSearchFilter}
+          actors={activityLogActors}
+          selectedActors={activityLogActorFilter}
+          onToggleActor={toggleActivityLogActorFilter}
         />
       )}
 

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { TripRepository } from '../data/TripRepository';
+import { ACTIVITY_LOG_LIVE_WINDOW, ACTIVITY_LOG_PAGE_SIZE } from '../data/activityLogConfig';
+import { filterActivityLog } from '../utils/activityLogFilter';
 import type {
   Trip,
   Checkpoint,
@@ -27,6 +29,9 @@ interface TripState {
   activityLog: ActivityLogEntry[];
   activityLogHasMore: boolean;
   activityLogLoadingMore: boolean;
+  activityLogSearchFilter: string;
+  activityLogActorFilter: string[];
+  activityLogAutoPaginating: boolean;
   selectedId: string | null;
   selectedDay: string | null;
   selectedRouteId: string | null;
@@ -45,6 +50,9 @@ interface TripState {
 
   init(tripId: string, repo: TripRepository): void;
   loadMoreActivityLog(): Promise<void>;
+  loadMoreActivityLogUntilMatch(): Promise<void>;
+  setActivityLogSearchFilter(search: string): void;
+  toggleActivityLogActorFilter(actor: string): void;
   selectCheckpoint(id: string | null): void;
   selectDay(day: string | null): void;
   selectRoute(routeId: string | null): void;
@@ -133,6 +141,9 @@ export const useTripStore = create<TripState>((set, get) => ({
   activityLog: [],
   activityLogHasMore: false,
   activityLogLoadingMore: false,
+  activityLogSearchFilter: '',
+  activityLogActorFilter: [],
+  activityLogAutoPaginating: false,
   selectedId: null,
   selectedDay: null,
   selectedRouteId: null,
@@ -165,10 +176,10 @@ export const useTripStore = create<TripState>((set, get) => ({
     repo.subscribeToBudgetSections(tripId, (budgetSections) => set({ budgetSections }));
     repo.subscribeToBudgetItems(tripId, (budgetItems) => set({ budgetItems }));
     repo.subscribeToActivityLog(tripId, (activityLog) =>
-      // The live listener caps at 100 entries (see subscribeToActivityLog);
-      // hitting that cap is the only signal that older entries might exist
-      // to page into via loadMoreActivityLog.
-      set({ activityLog, activityLogHasMore: activityLog.length >= 100 })
+      // The live listener caps at ACTIVITY_LOG_LIVE_WINDOW entries (see
+      // subscribeToActivityLog); hitting that cap is the only signal that
+      // older entries might exist to page into via loadMoreActivityLog.
+      set({ activityLog, activityLogHasMore: activityLog.length >= ACTIVITY_LOG_LIVE_WINDOW })
     );
     repo.recordAccess(tripId).catch(() => {});
   },
@@ -196,6 +207,61 @@ export const useTripStore = create<TripState>((set, get) => ({
       set({ activityLogLoadingMore: false });
       throw err;
     }
+  },
+
+  // Auto-fetches further pages while a search/actor filter is narrowing the
+  // view, so "no results" isn't shown just because a match hasn't been
+  // paged in yet. Deliberately independent of loadMoreActivityLog/
+  // activityLogLoadingMore (its own activityLogAutoPaginating flag guards
+  // re-entrancy) so the manual "Load more" button and this background loop
+  // can't block each other — id-based dedupe makes any overlap harmless.
+  // Errors are swallowed: this runs from a passive effect with no caller to
+  // handle a rejection, and the manual button remains available as a
+  // fallback.
+  async loadMoreActivityLogUntilMatch() {
+    const { repo, tripId, activityLogAutoPaginating } = get();
+    if (!repo || !tripId || activityLogAutoPaginating) return;
+    set({ activityLogAutoPaginating: true });
+    for (let page = 0; page < 10; page++) {
+      const { activityLog, activityLogHasMore, activityLogSearchFilter, activityLogActorFilter } =
+        get();
+      const matches = filterActivityLog(activityLog, {
+        search: activityLogSearchFilter,
+        actors: activityLogActorFilter,
+      }).length;
+      if (matches >= ACTIVITY_LOG_PAGE_SIZE || !activityLogHasMore) break;
+      const cursor = activityLog[activityLog.length - 1];
+      if (!cursor) break;
+      try {
+        const { entries, hasMore } = await repo.getActivityLogBefore(tripId, {
+          createdAt: cursor.createdAt,
+          id: cursor.id,
+        });
+        set((s) => {
+          const existingIds = new Set(s.activityLog.map((e) => e.id));
+          return {
+            activityLog: [...s.activityLog, ...entries.filter((e) => !existingIds.has(e.id))],
+            activityLogHasMore: hasMore,
+          };
+        });
+      } catch {
+        break;
+      }
+    }
+    set({ activityLogAutoPaginating: false });
+  },
+
+  setActivityLogSearchFilter(search) {
+    set({ activityLogSearchFilter: search });
+  },
+
+  toggleActivityLogActorFilter(actor) {
+    const { activityLogActorFilter } = get();
+    set({
+      activityLogActorFilter: activityLogActorFilter.includes(actor)
+        ? activityLogActorFilter.filter((a) => a !== actor)
+        : [...activityLogActorFilter, actor],
+    });
   },
 
   async inviteMember(email) {
