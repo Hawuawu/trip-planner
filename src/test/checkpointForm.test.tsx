@@ -273,6 +273,102 @@ describe('CheckpointForm', () => {
     expect(onSave.mock.calls[0][0].type).toBe('flight');
   });
 
+  describe('timezone offset handling (#101)', () => {
+    function getStartTimeInput() {
+      return document.querySelector('input[type="datetime-local"][required]') as HTMLInputElement;
+    }
+
+    function getEndTimeInput() {
+      return document.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]')[1];
+    }
+
+    it('preserves startTime byte-identical when editing an unrelated field only', () => {
+      const onSave = vi.fn();
+      renderWithProviders(
+        <CheckpointForm
+          initial={{
+            type: 'hotel',
+            name: 'Tokyo Hotel',
+            startTime: '2026-09-13T14:00:00+09:00',
+          }}
+          onSave={onSave}
+          onCancel={vi.fn()}
+        />
+      );
+      fireEvent.change(getNameInput(), { target: { value: 'Tokyo Hotel (updated)' } });
+      fireEvent.submit(document.querySelector('form')!);
+      expect(onSave.mock.calls[0][0].startTime).toBe('2026-09-13T14:00:00+09:00');
+    });
+
+    it('preserves the original offset when the start time value is changed', () => {
+      const onSave = vi.fn();
+      renderWithProviders(
+        <CheckpointForm
+          initial={{
+            type: 'hotel',
+            name: 'Tokyo Hotel',
+            startTime: '2026-09-13T14:00:00+09:00',
+          }}
+          onSave={onSave}
+          onCancel={vi.fn()}
+        />
+      );
+      fireEvent.change(getStartTimeInput(), { target: { value: '2026-09-13T16:00' } });
+      fireEvent.submit(document.querySelector('form')!);
+      expect(onSave.mock.calls[0][0].startTime).toBe('2026-09-13T16:00:00+09:00');
+    });
+
+    it('round-trips independent start/end offsets through an unrelated-field edit', () => {
+      const onSave = vi.fn();
+      renderWithProviders(
+        <CheckpointForm
+          initial={{
+            type: 'flight',
+            name: 'TK1768',
+            startTime: '2026-09-13T08:00:00+02:00',
+            endTime: '2026-09-13T13:30:00+03:00',
+          }}
+          onSave={onSave}
+          onCancel={vi.fn()}
+        />
+      );
+      fireEvent.change(getNameInput(), { target: { value: 'TK1768 (confirmed)' } });
+      fireEvent.submit(document.querySelector('form')!);
+      const arg = onSave.mock.calls[0][0];
+      expect(arg.startTime).toBe('2026-09-13T08:00:00+02:00');
+      expect(arg.endTime).toBe('2026-09-13T13:30:00+03:00');
+    });
+
+    it('inherits the offset from defaultStartTime for a brand-new checkpoint', () => {
+      const onSave = vi.fn();
+      renderWithProviders(
+        <CheckpointForm
+          onSave={onSave}
+          onCancel={vi.fn()}
+          defaultStartTime="2026-09-13T14:00:00+09:00"
+        />
+      );
+      fireEvent.change(getNameInput(), { target: { value: 'New Stop' } });
+      fireEvent.submit(document.querySelector('form')!);
+      expect(onSave.mock.calls[0][0].startTime).toBe('2026-09-13T14:00:00+09:00');
+    });
+
+    it('a brand-new checkpoint with an explicit end time defaults its end offset to the start offset', () => {
+      const onSave = vi.fn();
+      renderWithProviders(
+        <CheckpointForm
+          onSave={onSave}
+          onCancel={vi.fn()}
+          defaultStartTime="2026-09-13T14:00:00+09:00"
+        />
+      );
+      fireEvent.change(getNameInput(), { target: { value: 'New Stop' } });
+      fireEvent.change(getEndTimeInput(), { target: { value: '2026-09-13T16:00' } });
+      fireEvent.submit(document.querySelector('form')!);
+      expect(onSave.mock.calls[0][0].endTime).toBe('2026-09-13T16:00:00+09:00');
+    });
+  });
+
   describe('Google Maps / Search links and website field', () => {
     it('hides the Maps and Search links when name and location are both empty', () => {
       renderWithProviders(<CheckpointForm onSave={vi.fn()} onCancel={vi.fn()} />);
