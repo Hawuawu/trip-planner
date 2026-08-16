@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { CheckpointItem } from '../components/timeline/CheckpointItem';
 import { renderWithProviders, resetStores } from './helpers';
+import { formatCheckpointTime } from '../utils/date';
 import type { Checkpoint } from '../types';
 
 const { convertMock } = vi.hoisted(() => ({ convertMock: vi.fn() }));
@@ -89,6 +90,15 @@ describe('CheckpointItem', () => {
     // The date/time text is rendered in a Typography element — check body text
     const content = document.body.textContent ?? '';
     expect(content).toMatch(/Oct\s*1|10\/1|2026/);
+  });
+
+  it('renders the destination-local wall-clock time from the ISO string, not the viewer-local one', () => {
+    // 14:00+09:00 must render as 14:00 (Tokyo wall clock), regardless of the
+    // test runner's own timezone — this is the regression test for #101.
+    const tokyoStart = '2026-09-13T14:00:00+09:00';
+    renderItem({ checkpoint: { ...BASE, startTime: tokyoStart, endTime: undefined } });
+    const content = document.body.textContent ?? '';
+    expect(content).toContain(formatCheckpointTime(tokyoStart));
   });
 
   it('renders the end time when provided', () => {
