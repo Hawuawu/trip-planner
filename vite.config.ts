@@ -47,12 +47,19 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
+        id: '/',
         name: "Maiyun's Trip Planner",
         short_name: 'Trips',
         description: 'Personal travel itinerary companion',
         theme_color: '#1976d2',
         background_color: '#ffffff',
         display: 'standalone',
+        // 'portrait' would fight the synced mobile/tablet/desktop split-view layout (CLAUDE.md UI conventions)
+        orientation: 'any',
+        icons: [
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        ],
       },
       workbox: {
         runtimeCaching: [
