@@ -7,9 +7,16 @@
 // is often a bare fragment that isn't valid syntax on its own — so for Edit
 // we reconstruct the whole post-edit file by replacing old_string with
 // new_string in the current on-disk content, then lint that reconstruction.
+//
+// Linted via `eslint --stdin --stdin-filename <relative path>` rather than
+// writing to a temp file: ESLint resolves filename-scoped overrides (e.g.
+// the `**/*.test.ts` and `vite.config.ts` blocks in .eslintrc.cjs) against
+// the filename it's given, so a synthesized temp name would silently skip
+// those overrides and produce false-positive denials.
 
-import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { relative } from 'node:path';
 
 const PROJECT_ROOT = '/Users/maya/Repositories/trip-planner';
 
@@ -47,17 +54,7 @@ if (toolName === 'Write') {
   newContent = current.replace(oldString, newString);
 }
 
-const ext = filePath.split('.').pop();
-// No leading dot — ESLint ignores dotfiles by default.
-// Preserve a `.test.<ext>` suffix so the `**/*.test.ts(x)` overrides in
-// .eslintrc.cjs (e.g. the non-literal-fs-filename exemption for test
-// fixtures) still match — otherwise every test file would be linted as if
-// it were production code.
-const isTestFile = /\.test\.(ts|tsx)$/.test(filePath);
-const tmpFile = isTestFile
-  ? `${PROJECT_ROOT}/sast-gate-tmp-${process.pid}.test.${ext}`
-  : `${PROJECT_ROOT}/sast-gate-tmp-${process.pid}.${ext}`;
-writeFileSync(tmpFile, newContent, 'utf8');
+const stdinFilename = relative(PROJECT_ROOT, filePath);
 
 let result = '';
 let failed = false;
@@ -69,19 +66,14 @@ try {
       '--config', `${PROJECT_ROOT}/.eslintrc.cjs`,
       '--resolve-plugins-relative-to', PROJECT_ROOT,
       '--max-warnings', '0',
-      tmpFile,
+      '--stdin',
+      '--stdin-filename', stdinFilename,
     ],
-    { cwd: PROJECT_ROOT, encoding: 'utf8' },
+    { cwd: PROJECT_ROOT, encoding: 'utf8', input: newContent },
   );
 } catch (err) {
   failed = true;
   result = `${err.stdout ?? ''}${err.stderr ?? ''}`;
-} finally {
-  try {
-    unlinkSync(tmpFile);
-  } catch {
-    // already gone, nothing to clean up
-  }
 }
 
 if (failed) {
