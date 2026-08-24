@@ -41,8 +41,9 @@ function toAuthUser(u: {
   uid: string;
   email: string | null;
   displayName: string | null;
+  photoURL: string | null;
 }): AuthUser {
-  return { uid: u.uid, email: u.email, displayName: u.displayName };
+  return { uid: u.uid, email: u.email, displayName: u.displayName, photoURL: u.photoURL };
 }
 
 // Reads the appAccess custom claim (stamped by the stampAppAccess blocking

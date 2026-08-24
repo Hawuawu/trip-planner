@@ -93,6 +93,24 @@ function withinMenu() {
   return within(screen.getByTestId('app-menu'));
 }
 
+const fakeAuthService: AuthService = {
+  getCurrentUser: () => null,
+  onAuthStateChanged: () => () => {},
+  signInWithGoogle: async () => {},
+  signOut: async () => {},
+  sendSignInLinkToEmail: async () => {},
+  isSignInLink: () => false,
+  completeEmailLinkSignIn: async () => {},
+  refreshAccess: async () => null,
+  approveAccess: async () => {},
+  denyAccess: async () => {},
+  revokeAccess: async () => {},
+  setAdminRole: async () => {},
+  subscribeToAllowedUsers: () => () => {},
+  subscribeToAccessRequests: () => () => {},
+  subscribeToAppActivity: () => () => {},
+};
+
 beforeEach(() => {
   resetStores();
   installMatchMedia({});
@@ -269,6 +287,21 @@ describe('AppShell — app bar', () => {
     expect(screen.getByLabelText('Menu')).toBeInTheDocument();
     expect(screen.queryByTitle('Back to trips')).not.toBeInTheDocument();
   });
+
+  it('does not render the account menu trigger when there is no auth service', () => {
+    useAuthStore.setState({ user: { uid: 'u1', email: 'me@example.com', displayName: 'Me' } });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    expect(screen.queryByLabelText(/account menu for/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the account menu trigger in the toolbar when a service and user are present', () => {
+    useAuthStore.setState({
+      service: fakeAuthService,
+      user: { uid: 'u1', email: 'me@example.com', displayName: 'Me' },
+    });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    expect(screen.getByLabelText('Account menu for Me')).toBeInTheDocument();
+  });
 });
 
 describe('AppShell — hamburger menu', () => {
@@ -285,6 +318,17 @@ describe('AppShell — hamburger menu', () => {
     expect(menu.getByText('Back to trips')).toBeInTheDocument();
     expect(menu.getByText('Export trip (.yaml)')).toBeInTheDocument();
     expect(menu.getByText('Import checkpoints…')).toBeInTheDocument();
+  });
+
+  it('shows the build version at the bottom of the menu', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+
+    expect(screen.getByTestId('app-version')).toHaveTextContent(
+      `v${__APP_VERSION__} · ${__APP_COMMIT__}`
+    );
   });
 
   it('groups Wiki and Budget in their own list, separated from Add checkpoint/Add alternative', async () => {
