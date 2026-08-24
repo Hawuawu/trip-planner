@@ -9,8 +9,14 @@ function uniqueEmail(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
 
-function signInEvent(email?: string, displayName?: string): AuthBlockingEvent {
-  return { data: { email, displayName } } as unknown as AuthBlockingEvent;
+// emailVerified defaults to true so every existing call site keeps
+// representing a verified (e.g. Google) sign-in without needing to change.
+function signInEvent(
+  email?: string,
+  displayName?: string,
+  emailVerified = true
+): AuthBlockingEvent {
+  return { data: { email, displayName, emailVerified } } as unknown as AuthBlockingEvent;
 }
 
 // The BlockingFunction type doesn't declare run(), but the v2 identity
@@ -103,5 +109,23 @@ describe('stampAppAccess', () => {
   it('denies the claim for a sign-in without an email and records nothing', async () => {
     const response = await runGate(signInEvent(undefined));
     expect(response.customClaims).toEqual({ appAccess: false, admin: false });
+  });
+
+  it('denies the claim for an allowlisted but unverified email (#21) and records a request', async () => {
+    const email = uniqueEmail('unverified');
+    await allowEmail(email);
+
+    const response = await runGate(signInEvent(email, undefined, false));
+    expect(response.customClaims).toEqual({ appAccess: false, admin: false });
+    expect((await requestDoc(email)).data()!.status).toBe('pending');
+  });
+
+  it('grants the claim for an allowlisted, verified email (#21 email-link sign-in)', async () => {
+    const email = uniqueEmail('verified-link');
+    await allowEmail(email);
+
+    const response = await runGate(signInEvent(email, undefined, true));
+    expect(response.customClaims).toEqual({ appAccess: true, admin: false });
+    expect((await requestDoc(email)).exists).toBe(false);
   });
 });
