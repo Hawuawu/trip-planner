@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { getAppVersion, DEV_PLACEHOLDER_VERSION } from './scripts/appVersion.mjs';
 
 // kuromoji's browser dictionary loader fetches these *.dat.gz files itself
 // and gunzips them manually (see @sglkc/kuromoji's BrowserDictionaryLoader).
@@ -40,73 +41,86 @@ function serveKuromojiDictRaw(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [
-    react(),
-    serveKuromojiDictRaw(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      manifest: {
-        id: '/',
-        name: "Maiyun's Trip Planner",
-        short_name: 'Trips',
-        description: 'Personal travel itinerary companion',
-        theme_color: '#1976d2',
-        background_color: '#ffffff',
-        display: 'standalone',
-        // 'portrait' would fight the synced mobile/tablet/desktop split-view layout (CLAUDE.md UI conventions)
-        orientation: 'any',
-        icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-        ],
-      },
-      workbox: {
-        runtimeCaching: [
-          {
-            // kuroshiro/kuromoji dictionary files (src/utils/kanjiReading.ts) —
-            // fetched lazily on first "show reading" use, then cached so the
-            // feature keeps working offline afterward.
-            urlPattern: /\/dict\/.*\.dat\.gz$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'kuroshiro-dict-cache',
-              expiration: {
-                maxEntries: 20,
-                maxAgeSeconds: 60 * 60 * 24 * 365,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
+export default defineConfig(({ command }) => {
+  // Only a real `vite build` pays for reading package.json + shelling out to
+  // git — `vite dev` (and anything else using this config) gets a fixed
+  // placeholder so a running dev server is visibly distinct from a deployed
+  // build (see AppShell.tsx's hamburger-menu version footer).
+  const { version: appVersion, commit: appCommit } =
+    command === 'build' ? getAppVersion() : DEV_PLACEHOLDER_VERSION;
+
+  return {
+    define: {
+      __APP_VERSION__: JSON.stringify(appVersion),
+      __APP_COMMIT__: JSON.stringify(appCommit),
+    },
+    plugins: [
+      react(),
+      serveKuromojiDictRaw(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        manifest: {
+          id: '/',
+          name: "Maiyun's Trip Planner",
+          short_name: 'Trips',
+          description: 'Personal travel itinerary companion',
+          theme_color: '#1976d2',
+          background_color: '#ffffff',
+          display: 'standalone',
+          // 'portrait' would fight the synced mobile/tablet/desktop split-view layout (CLAUDE.md UI conventions)
+          orientation: 'any',
+          icons: [
+            { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          ],
+        },
+        workbox: {
+          runtimeCaching: [
+            {
+              // kuroshiro/kuromoji dictionary files (src/utils/kanjiReading.ts) —
+              // fetched lazily on first "show reading" use, then cached so the
+              // feature keeps working offline afterward.
+              urlPattern: /\/dict\/.*\.dat\.gz$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'kuroshiro-dict-cache',
+                expiration: {
+                  maxEntries: 20,
+                  maxAgeSeconds: 60 * 60 * 24 * 365,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
               },
             },
-          },
-        ],
+          ],
+        },
+      }),
+    ],
+    server: {
+      host: '0.0.0.0',
+      port: 5173,
+      watch: {
+        usePolling: true, // required for file watching inside Docker on macOS
       },
-    }),
-  ],
-  server: {
-    host: '0.0.0.0',
-    port: 5173,
-    watch: {
-      usePolling: true, // required for file watching inside Docker on macOS
     },
-  },
-  preview: {
-    headers: {
-      'X-Frame-Options': 'DENY',
-      'X-Content-Type-Options': 'nosniff',
-      'Content-Security-Policy': [
-        "default-src 'self'",
-        "script-src 'self' https://apis.google.com", // apis.google.com: gapi loader for Firebase Auth's signInWithPopup (#117)
-        "style-src 'self' 'unsafe-inline'", // MUI/Emotion inject <style> tags at runtime
-        "img-src 'self' data: blob: https://tiles.openfreemap.org",
-        "font-src 'self'",
-        "connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://tiles.openfreemap.org",
-        "worker-src 'self' blob:", // maplibre-gl workers + the PWA service worker
-        'frame-src https://*.firebaseapp.com https://accounts.google.com', // Firebase Auth relay iframe + Google account chooser (#117)
-        "object-src 'none'",
-        "base-uri 'self'",
-      ].join('; '),
+    preview: {
+      headers: {
+        'X-Frame-Options': 'DENY',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': [
+          "default-src 'self'",
+          "script-src 'self' https://apis.google.com", // apis.google.com: gapi loader for Firebase Auth's signInWithPopup (#117)
+          "style-src 'self' 'unsafe-inline'", // MUI/Emotion inject <style> tags at runtime
+          "img-src 'self' data: blob: https://tiles.openfreemap.org",
+          "font-src 'self'",
+          "connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://tiles.openfreemap.org",
+          "worker-src 'self' blob:", // maplibre-gl workers + the PWA service worker
+          'frame-src https://*.firebaseapp.com https://accounts.google.com', // Firebase Auth relay iframe + Google account chooser (#117)
+          "object-src 'none'",
+          "base-uri 'self'",
+        ].join('; '),
+      },
     },
-  },
+  };
 });

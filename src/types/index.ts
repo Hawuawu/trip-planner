@@ -161,6 +161,7 @@ export interface AuthUser {
   uid: string;
   email: string | null;
   displayName: string | null;
+  photoURL?: string | null;
   // From the appAccess/admin custom claims (stamped at sign-in, see #35).
   // Absent in contexts where claims aren't available (e.g. getCurrentUser's
   // sync path). admin is data-driven — copied from the allowedUsers doc's
