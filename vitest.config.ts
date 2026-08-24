@@ -1,13 +1,11 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-import { getAppVersion } from './scripts/appVersion.mjs';
-
-const { version: appVersion, commit: appCommit } = getAppVersion();
+import { DEV_PLACEHOLDER_VERSION } from './scripts/appVersion.mjs';
 
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(appVersion),
-    __APP_COMMIT__: JSON.stringify(appCommit),
+    __APP_VERSION__: JSON.stringify(DEV_PLACEHOLDER_VERSION.version),
+    __APP_COMMIT__: JSON.stringify(DEV_PLACEHOLDER_VERSION.commit),
   },
   plugins: [react()],
   test: {

@@ -5,9 +5,12 @@ import { dirname, join } from 'node:path';
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// Shared by vite.config.ts (real builds) and vitest.config.ts (tests need
-// the same __APP_VERSION__/__APP_COMMIT__ globals defined or the app
-// throws a ReferenceError under jsdom) so the two configs can't drift.
+// Shown for `vite dev`/tests instead of computing the real version — keeps
+// a running dev server visibly distinct from a deployed build at a glance,
+// and avoids shelling out to git on every dev-server boot/test run.
+export const DEV_PLACEHOLDER_VERSION = { version: '0.0.0-dev', commit: 'local' };
+
+// Only `vite build` (command === 'build') pays for this — see vite.config.ts.
 export function getAppVersion() {
   const { version } = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'));
   let commit = 'unknown';

@@ -378,7 +378,11 @@ export function AppShell({ onBack }: Props) {
           <AccountMenu />
 
           <Drawer anchor="left" open={menuOpen} onClose={() => setMenuOpen(false)}>
-            <Box sx={{ width: 280 }} role="presentation" data-testid="app-menu">
+            <Box
+              sx={{ width: 280, height: '100%', display: 'flex', flexDirection: 'column' }}
+              role="presentation"
+              data-testid="app-menu"
+            >
               <List>
                 <ListItemButton
                   onClick={() => {
@@ -483,15 +487,17 @@ export function AppShell({ onBack }: Props) {
                   <ListItemText>Back to trips</ListItemText>
                 </ListItemButton>
               </List>
-              <Divider />
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                data-testid="app-version"
-                sx={{ display: 'block', px: 2, py: 1 }}
-              >
-                v{__APP_VERSION__} · {__APP_COMMIT__}
-              </Typography>
+              <Box sx={{ mt: 'auto' }}>
+                <Divider />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  data-testid="app-version"
+                  sx={{ display: 'block', px: 2, py: 1 }}
+                >
+                  v{__APP_VERSION__} · {__APP_COMMIT__}
+                </Typography>
+              </Box>
             </Box>
           </Drawer>
         </Toolbar>
