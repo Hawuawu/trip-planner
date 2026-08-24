@@ -5,6 +5,7 @@ import type { FeatureCollection, LineString } from 'geojson';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   Box,
+  CircularProgress,
   IconButton,
   Paper,
   RadioGroup,
@@ -172,6 +173,7 @@ interface Props {
 
 export function MapView({ onPoiSelected, onSaved, onError }: Props) {
   const [mapStyle, setMapStyle] = useState<string>(STYLES[0].url);
+  const [mapLoaded, setMapLoaded] = useState(false);
   const {
     checkpoints,
     alternatives,
@@ -264,79 +266,98 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
   ) : null;
 
   return (
-    <Map
-      mapStyle={mapStyle}
-      initialViewState={JAPAN_CENTER}
-      maxPitch={MAX_PITCH}
-      attributionControl={false}
-      onClick={(e) => {
-        const poi = getPoiAtPoint(e);
-        if (poi) onPoiSelected?.(poi);
-      }}
-      style={{ width: '100%', height: '100%' }}
-    >
-      <StyleSwitcher
-        current={mapStyle}
-        onChange={setMapStyle}
-        showAlternatives={showAlternativesOnMap}
-        onToggleAlternatives={setShowAlternativesOnMap}
-      />
-      <MapSync />
-      <AttributionControl position="top-right" compact />
-
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: 8,
-          right: 8,
-          zIndex: 1,
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 1,
+    <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+      <Map
+        mapStyle={mapStyle}
+        initialViewState={JAPAN_CENTER}
+        maxPitch={MAX_PITCH}
+        attributionControl={false}
+        onClick={(e) => {
+          const poi = getPoiAtPoint(e);
+          if (poi) onPoiSelected?.(poi);
         }}
+        onLoad={() => setMapLoaded(true)}
+        style={{ width: '100%', height: '100%' }}
       >
-        <MapOrientationBall />
-        <MapZoomControl />
-      </Box>
-
-      <Source id="route" type="geojson" data={routeGeoJSON}>
-        <Layer {...ROUTE_LAYER} />
-      </Source>
-
-      {withLocation.map((cp) => (
-        <CheckpointMarker
-          key={cp.id}
-          checkpoint={cp}
-          isSelected={cp.id === selectedId}
-          onSelect={() => selectCheckpoint(cp.id === selectedId ? null : cp.id)}
-          onEdit={() => {
-            // selectCheckpoint toggles — only call it if the tap that opened
-            // this popup didn't already select this checkpoint, otherwise
-            // it would immediately deselect it again.
-            if (selectedId !== cp.id) selectCheckpoint(cp.id);
-            setEditTarget({ kind: 'checkpoint', id: cp.id });
-          }}
+        <StyleSwitcher
+          current={mapStyle}
+          onChange={setMapStyle}
+          showAlternatives={showAlternativesOnMap}
+          onToggleAlternatives={setShowAlternativesOnMap}
         />
-      ))}
+        <MapSync />
+        <AttributionControl position="top-right" compact />
 
-      {showAlternativesOnMap &&
-        visibleAlternatives.map((alt) => (
-          <AlternativeMarker
-            key={alt.id}
-            alternative={alt}
-            isSelected={alt.id === selectedAlternativeId}
-            onSelect={() => selectAlternative(alt.id === selectedAlternativeId ? null : alt.id)}
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 8,
+            right: 8,
+            zIndex: 1,
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 1,
+          }}
+        >
+          <MapOrientationBall />
+          <MapZoomControl />
+        </Box>
+
+        <Source id="route" type="geojson" data={routeGeoJSON}>
+          <Layer {...ROUTE_LAYER} />
+        </Source>
+
+        {withLocation.map((cp) => (
+          <CheckpointMarker
+            key={cp.id}
+            checkpoint={cp}
+            isSelected={cp.id === selectedId}
+            onSelect={() => selectCheckpoint(cp.id === selectedId ? null : cp.id)}
             onEdit={() => {
-              if (selectedAlternativeId !== alt.id) selectAlternative(alt.id);
-              setEditTarget({ kind: 'alternative', id: alt.id });
+              // selectCheckpoint toggles — only call it if the tap that opened
+              // this popup didn't already select this checkpoint, otherwise
+              // it would immediately deselect it again.
+              if (selectedId !== cp.id) selectCheckpoint(cp.id);
+              setEditTarget({ kind: 'checkpoint', id: cp.id });
             }}
           />
         ))}
 
-      <ResponsiveEditDrawer open={!!editTarget} onClose={() => setEditTarget(null)}>
-        {drawerContent}
-      </ResponsiveEditDrawer>
-    </Map>
+        {showAlternativesOnMap &&
+          visibleAlternatives.map((alt) => (
+            <AlternativeMarker
+              key={alt.id}
+              alternative={alt}
+              isSelected={alt.id === selectedAlternativeId}
+              onSelect={() => selectAlternative(alt.id === selectedAlternativeId ? null : alt.id)}
+              onEdit={() => {
+                if (selectedAlternativeId !== alt.id) selectAlternative(alt.id);
+                setEditTarget({ kind: 'alternative', id: alt.id });
+              }}
+            />
+          ))}
+
+        <ResponsiveEditDrawer open={!!editTarget} onClose={() => setEditTarget(null)}>
+          {drawerContent}
+        </ResponsiveEditDrawer>
+      </Map>
+
+      {!mapLoaded && (
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <CircularProgress size={32} />
+        </Box>
+      )}
+    </Box>
   );
 }

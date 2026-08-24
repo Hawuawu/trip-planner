@@ -255,7 +255,7 @@ describe('AppShell — app bar', () => {
   it('shows a spinner instead of the fallback title while the trip is loading', () => {
     useTripStore.setState({ tripLoading: true });
     renderWithProviders(<AppShell onBack={vi.fn()} />);
-    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).getByRole('progressbar')).toBeInTheDocument();
     expect(screen.queryByText("Maiyun's Trip Planner")).not.toBeInTheDocument();
   });
 
