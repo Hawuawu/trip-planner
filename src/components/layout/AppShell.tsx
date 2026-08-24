@@ -483,6 +483,15 @@ export function AppShell({ onBack }: Props) {
                   <ListItemText>Back to trips</ListItemText>
                 </ListItemButton>
               </List>
+              <Divider />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                data-testid="app-version"
+                sx={{ display: 'block', px: 2, py: 1 }}
+              >
+                v{__APP_VERSION__} · {__APP_COMMIT__}
+              </Typography>
             </Box>
           </Drawer>
         </Toolbar>

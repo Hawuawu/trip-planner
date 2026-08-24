@@ -320,6 +320,17 @@ describe('AppShell — hamburger menu', () => {
     expect(menu.getByText('Import checkpoints…')).toBeInTheDocument();
   });
 
+  it('shows the build version at the bottom of the menu', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Menu'));
+
+    expect(screen.getByTestId('app-version')).toHaveTextContent(
+      `v${__APP_VERSION__} · ${__APP_COMMIT__}`
+    );
+  });
+
   it('groups Wiki and Budget in their own list, separated from Add checkpoint/Add alternative', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AppShell onBack={vi.fn()} />);
