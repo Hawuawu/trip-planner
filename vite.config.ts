@@ -97,12 +97,13 @@ export default defineConfig({
       'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy': [
         "default-src 'self'",
-        "script-src 'self'",
+        "script-src 'self' https://apis.google.com", // apis.google.com: gapi loader for Firebase Auth's signInWithPopup (#117)
         "style-src 'self' 'unsafe-inline'", // MUI/Emotion inject <style> tags at runtime
         "img-src 'self' data: blob: https://tiles.openfreemap.org",
         "font-src 'self'",
         "connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://tiles.openfreemap.org",
         "worker-src 'self' blob:", // maplibre-gl workers + the PWA service worker
+        'frame-src https://*.firebaseapp.com https://accounts.google.com', // Firebase Auth relay iframe + Google account chooser (#117)
         "object-src 'none'",
         "base-uri 'self'",
       ].join('; '),
