@@ -10,6 +10,9 @@ interface AuthState {
   authError: string | null;
   init(service: AuthService): void;
   signInWithGoogle(): Promise<void>;
+  sendSignInLinkToEmail(email: string): Promise<void>;
+  isSignInLink(url: string): boolean;
+  completeEmailLinkSignIn(email: string, url: string): Promise<void>;
   signOut(): Promise<void>;
   clearAuthError(): void;
   refreshAccess(): Promise<void>;
@@ -39,6 +42,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ authError: null });
     try {
       await get().service?.signInWithGoogle();
+    } catch (err) {
+      const message = extractSignInErrorMessage(err);
+      if (message) set({ authError: message });
+    }
+  },
+
+  async sendSignInLinkToEmail(email) {
+    set({ authError: null });
+    try {
+      await get().service?.sendSignInLinkToEmail(email);
+    } catch (err) {
+      const message = extractSignInErrorMessage(err);
+      if (message) set({ authError: message });
+    }
+  },
+
+  isSignInLink(url) {
+    return get().service?.isSignInLink(url) ?? false;
+  },
+
+  async completeEmailLinkSignIn(email, url) {
+    set({ authError: null });
+    try {
+      await get().service?.completeEmailLinkSignIn(email, url);
     } catch (err) {
       const message = extractSignInErrorMessage(err);
       if (message) set({ authError: message });

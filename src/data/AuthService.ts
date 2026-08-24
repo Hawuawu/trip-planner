@@ -6,6 +6,15 @@ export interface AuthService {
   signInWithGoogle(): Promise<void>;
   signOut(): Promise<void>;
 
+  // Passwordless email "magic link" sign-in (#21). sendSignInLinkToEmail
+  // emails the link and stashes the address locally so the same
+  // device/browser can auto-complete on return; isSignInLink checks whether
+  // a URL is a valid sign-in link; completeEmailLinkSignIn finishes the
+  // flow (email is re-collected from the user if opened cross-device).
+  sendSignInLinkToEmail(email: string): Promise<void>;
+  isSignInLink(url: string): boolean;
+  completeEmailLinkSignIn(email: string, url: string): Promise<void>;
+
   // Approval-based app access (#35). Sign-in always succeeds; the appAccess
   // custom claim (surfaced on AuthUser) gates everything. refreshAccess
   // force-refreshes the ID token so a just-approved user unlocks without

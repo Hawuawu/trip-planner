@@ -12,9 +12,11 @@ import { REGION } from './config';
 // automatically on the next sign-in or token refresh. A sign-in by a
 // not-yet-approved account records an access request for an admin to approve
 // (signing in IS the request).
-// When custom-email auth is added, this must additionally require
-// event.data.emailVerified for non-Google providers before granting the
-// claim — otherwise anyone could claim an approved address they don't own.
+// Requires event.data.emailVerified before granting the claim — otherwise
+// anyone could claim an approved address they don't own. Google sign-ins are
+// always verified; email-link sign-ins (#21) are verified automatically by
+// Firebase on link completion (proof of inbox access), so this doesn't need
+// to special-case by provider.
 export const stampAppAccess = beforeUserSignedIn(
   { region: REGION },
   async (event): Promise<{ customClaims: { appAccess: boolean; admin: boolean } }> => {
@@ -23,7 +25,7 @@ export const stampAppAccess = beforeUserSignedIn(
 
     const db = getDb();
     const allowed = await db.collection('allowedUsers').doc(email).get();
-    if (allowed.exists) {
+    if (allowed.exists && event.data?.emailVerified === true) {
       const admin = allowed.data()?.role === 'admin';
       return { customClaims: { appAccess: true, admin } };
     }

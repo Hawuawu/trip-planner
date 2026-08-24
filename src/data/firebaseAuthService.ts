@@ -5,6 +5,9 @@ import {
   signInWithPopup,
   signOut as fbSignOut,
   onAuthStateChanged as fbOnAuthStateChanged,
+  sendSignInLinkToEmail as fbSendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
   type User,
 } from 'firebase/auth';
 import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
@@ -18,6 +21,7 @@ import type { AuthUser, AllowedUser, AccessRequest, AppActivityEntry } from '../
 import { getDb } from './firebaseTripRepository';
 
 const FUNCTIONS_REGION = 'europe-west1';
+const EMAIL_FOR_SIGN_IN_KEY = 'trip-planner:emailForSignIn';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -80,6 +84,23 @@ export class FirebaseAuthService implements AuthService {
 
   async signOut(): Promise<void> {
     await fbSignOut(this.auth);
+  }
+
+  async sendSignInLinkToEmail(email: string): Promise<void> {
+    await fbSendSignInLinkToEmail(this.auth, email, {
+      url: window.location.origin,
+      handleCodeInApp: true,
+    });
+    localStorage.setItem(EMAIL_FOR_SIGN_IN_KEY, email);
+  }
+
+  isSignInLink(url: string): boolean {
+    return isSignInWithEmailLink(this.auth, url);
+  }
+
+  async completeEmailLinkSignIn(email: string, url: string): Promise<void> {
+    await signInWithEmailLink(this.auth, email, url);
+    localStorage.removeItem(EMAIL_FOR_SIGN_IN_KEY);
   }
 
   async refreshAccess(): Promise<AuthUser | null> {
