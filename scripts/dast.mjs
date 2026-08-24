@@ -51,6 +51,23 @@ try {
     }
   }
 
+  // 1b. CSP content check — a header can be *present* and still be wrong.
+  // #117: script-src lacked apis.google.com and there was no frame-src at
+  // all, silently blocking Google sign-in's popup flow while this same
+  // check only asserted presence. Keep firebase.json/vite.config.ts/
+  // nginx.conf mirrored — see CLAUDE.md.
+  const csp = headers['content-security-policy'] || '';
+  if (/script-src[^;]*\bapis\.google\.com\b/.test(csp)) {
+    pass('CSP script-src allows apis.google.com (Google sign-in popup)');
+  } else {
+    fail('CSP script-src missing apis.google.com — Google sign-in popup will be blocked (#117)');
+  }
+  if (/(^|;)\s*frame-src\s+\S/.test(csp)) {
+    pass('CSP frame-src directive present (Firebase Auth relay iframe)');
+  } else {
+    fail('CSP has no frame-src directive — Firebase Auth relay iframe will be blocked (#117)');
+  }
+
   // 2. Auth gate — app should show sign-in page before trip data
   const html = await page.content();
   if (html.includes('Sign in') || html.includes('sign-in') || html.includes('signin')) {

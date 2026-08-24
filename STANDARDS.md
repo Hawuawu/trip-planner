@@ -362,12 +362,14 @@ summary`, no trailing period. Types in use: `feat`, `fix`, `docs`,
   `TripSelectorScreen.tsx`) are UX routing only, never the actual
   security boundary — Firestore rules are. Any new feature must enforce
   access in `firestore.rules`, not just hide a button/route client-side.
-- Known gap, tracked separately (not fixed by this doc):
-  [#61](https://github.com/Hawuawu/Trip-Planner/issues/61) — CSP /
-  `X-Frame-Options` / `X-Content-Type-Options` headers exist in
-  `vite.config.ts`'s `preview.headers` and in `nginx.conf` (the Docker/
-  nginx deploy target) but aren't configured in `firebase.json`'s
-  `hosting` block, so a direct `firebase deploy` would skip them.
+- CSP / `X-Frame-Options` / `X-Content-Type-Options` headers are mirrored
+  across all three deploy targets — `firebase.json`'s `hosting.headers`,
+  `vite.config.ts`'s `preview.headers`, and `nginx.conf` (the Docker/nginx
+  target) — keep them in sync when editing any one of them (#61). The CSP
+  additionally allowlists `https://apis.google.com` in `script-src` and a
+  `frame-src` for `https://*.firebaseapp.com`/`https://accounts.google.com`,
+  required by Firebase Auth's `signInWithPopup` Google sign-in flow (#117);
+  `scripts/dast.mjs` asserts this content, not just header presence.
 - Every trip mutation must be auditable via the activity log — enforced
   structurally, not by convention. `functions/src/logTripEntityActivity.ts`
   and `logTripActivity.ts` are Firestore triggers on
