@@ -20,6 +20,14 @@ import { relative } from 'node:path';
 
 const PROJECT_ROOT = '/Users/maya/Repositories/trip-planner';
 
+// functions/ and mcp/ are independent Node sub-projects (own package.json,
+// own ESLint config extending eslint.node-subproject.cjs — see CLAUDE.md's
+// "Repo structure") and are listed in the root .eslintrc.cjs's
+// ignorePatterns. Linting one of their files against the root config always
+// reports "file ignored", which --max-warnings 0 turns into a false-positive
+// denial — so route each sub-project's files to its own config/cwd instead.
+const SUBPROJECTS = ['functions', 'mcp'];
+
 let input = '';
 process.stdin.setEncoding('utf8');
 for await (const chunk of process.stdin) input += chunk;
@@ -54,7 +62,12 @@ if (toolName === 'Write') {
   newContent = current.replace(oldString, newString);
 }
 
-const stdinFilename = relative(PROJECT_ROOT, filePath);
+const repoRelativePath = relative(PROJECT_ROOT, filePath);
+const subproject = SUBPROJECTS.find(
+  (name) => repoRelativePath === name || repoRelativePath.startsWith(`${name}/`),
+);
+const lintRoot = subproject ? `${PROJECT_ROOT}/${subproject}` : PROJECT_ROOT;
+const stdinFilename = relative(lintRoot, filePath);
 
 let result = '';
 let failed = false;
@@ -63,13 +76,13 @@ try {
     'npx',
     [
       'eslint',
-      '--config', `${PROJECT_ROOT}/.eslintrc.cjs`,
-      '--resolve-plugins-relative-to', PROJECT_ROOT,
+      '--config', `${lintRoot}/.eslintrc.cjs`,
+      '--resolve-plugins-relative-to', lintRoot,
       '--max-warnings', '0',
       '--stdin',
       '--stdin-filename', stdinFilename,
     ],
-    { cwd: PROJECT_ROOT, encoding: 'utf8', input: newContent },
+    { cwd: lintRoot, encoding: 'utf8', input: newContent },
   );
 } catch (err) {
   failed = true;

@@ -8,6 +8,9 @@ function makeMockAuthService(overrides: Partial<AuthService> = {}): AuthService 
     getCurrentUser: vi.fn().mockReturnValue(null),
     onAuthStateChanged: vi.fn(),
     signInWithGoogle: vi.fn().mockResolvedValue(undefined),
+    sendSignInLinkToEmail: vi.fn().mockResolvedValue(undefined),
+    isSignInLink: vi.fn().mockReturnValue(false),
+    completeEmailLinkSignIn: vi.fn().mockResolvedValue(undefined),
     signOut: vi.fn().mockResolvedValue(undefined),
     refreshAccess: vi.fn().mockResolvedValue(null),
     approveAccess: vi.fn().mockResolvedValue(undefined),
@@ -107,6 +110,83 @@ describe('authStore — sign-in error handling', () => {
     useAuthStore.setState({ authError: 'old error' });
     useAuthStore.getState().clearAuthError();
     expect(useAuthStore.getState().authError).toBeNull();
+  });
+});
+
+describe('authStore — email link sign-in', () => {
+  it('calls service.sendSignInLinkToEmail and clears authError on success', async () => {
+    const service = makeMockAuthService();
+    useAuthStore.getState().init(service);
+    useAuthStore.setState({ authError: 'old error' });
+
+    await useAuthStore.getState().sendSignInLinkToEmail('a@b.com');
+    expect(service.sendSignInLinkToEmail).toHaveBeenCalledWith('a@b.com');
+    expect(useAuthStore.getState().authError).toBeNull();
+  });
+
+  it('sets authError with the extracted message when sending the link fails', async () => {
+    const err = Object.assign(
+      new Error('Firebase: The email address is badly formatted. (auth/invalid-email).'),
+      { code: 'auth/invalid-email' }
+    );
+    const service = makeMockAuthService({
+      sendSignInLinkToEmail: vi.fn().mockRejectedValue(err),
+    });
+    useAuthStore.getState().init(service);
+
+    await useAuthStore.getState().sendSignInLinkToEmail('not-an-email');
+    expect(useAuthStore.getState().authError).toBe('The email address is badly formatted.');
+  });
+
+  it('does nothing when service is null', async () => {
+    await expect(useAuthStore.getState().sendSignInLinkToEmail('a@b.com')).resolves.toBeUndefined();
+  });
+
+  it('isSignInLink delegates to the service', () => {
+    const service = makeMockAuthService({ isSignInLink: vi.fn().mockReturnValue(true) });
+    useAuthStore.getState().init(service);
+
+    expect(useAuthStore.getState().isSignInLink('https://example.com/?apiKey=x')).toBe(true);
+    expect(service.isSignInLink).toHaveBeenCalledWith('https://example.com/?apiKey=x');
+  });
+
+  it('isSignInLink returns false when service is null', () => {
+    expect(useAuthStore.getState().isSignInLink('https://example.com')).toBe(false);
+  });
+
+  it('calls service.completeEmailLinkSignIn and clears authError on success', async () => {
+    const service = makeMockAuthService();
+    useAuthStore.getState().init(service);
+    useAuthStore.setState({ authError: 'old error' });
+
+    await useAuthStore.getState().completeEmailLinkSignIn('a@b.com', 'https://example.com/link');
+    expect(service.completeEmailLinkSignIn).toHaveBeenCalledWith(
+      'a@b.com',
+      'https://example.com/link'
+    );
+    expect(useAuthStore.getState().authError).toBeNull();
+  });
+
+  it('sets authError with the extracted message when completing the link fails', async () => {
+    const err = Object.assign(
+      new Error(
+        'Firebase: The sign-in link is invalid or has expired. (auth/invalid-action-code).'
+      ),
+      { code: 'auth/invalid-action-code' }
+    );
+    const service = makeMockAuthService({
+      completeEmailLinkSignIn: vi.fn().mockRejectedValue(err),
+    });
+    useAuthStore.getState().init(service);
+
+    await useAuthStore.getState().completeEmailLinkSignIn('a@b.com', 'https://example.com/link');
+    expect(useAuthStore.getState().authError).toBe('The sign-in link is invalid or has expired.');
+  });
+
+  it('completeEmailLinkSignIn does nothing when service is null', async () => {
+    await expect(
+      useAuthStore.getState().completeEmailLinkSignIn('a@b.com', 'https://example.com/link')
+    ).resolves.toBeUndefined();
   });
 });
 
