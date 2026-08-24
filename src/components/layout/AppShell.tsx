@@ -39,6 +39,7 @@ import { TimelineView } from '../timeline/TimelineView';
 import { MapView } from '../map/MapView';
 import { AlternativesShelf } from '../alternatives/AlternativesShelf';
 import { OfflineBanner } from './OfflineBanner';
+import { AccountMenu } from './AccountMenu';
 import { useTripStore } from '../../store/tripStore';
 import { useAuthStore } from '../../store/authStore';
 import { canManage } from '../../utils/tripPermissions';
@@ -374,6 +375,7 @@ export function AppShell({ onBack }: Props) {
               (trip?.name ?? "Maiyun's Trip Planner")
             )}
           </Typography>
+          <AccountMenu />
 
           <Drawer anchor="left" open={menuOpen} onClose={() => setMenuOpen(false)}>
             <Box sx={{ width: 280 }} role="presentation" data-testid="app-menu">

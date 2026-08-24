@@ -93,6 +93,24 @@ function withinMenu() {
   return within(screen.getByTestId('app-menu'));
 }
 
+const fakeAuthService: AuthService = {
+  getCurrentUser: () => null,
+  onAuthStateChanged: () => () => {},
+  signInWithGoogle: async () => {},
+  signOut: async () => {},
+  sendSignInLinkToEmail: async () => {},
+  isSignInLink: () => false,
+  completeEmailLinkSignIn: async () => {},
+  refreshAccess: async () => null,
+  approveAccess: async () => {},
+  denyAccess: async () => {},
+  revokeAccess: async () => {},
+  setAdminRole: async () => {},
+  subscribeToAllowedUsers: () => () => {},
+  subscribeToAccessRequests: () => () => {},
+  subscribeToAppActivity: () => () => {},
+};
+
 beforeEach(() => {
   resetStores();
   installMatchMedia({});
@@ -268,6 +286,21 @@ describe('AppShell — app bar', () => {
     renderWithProviders(<AppShell onBack={vi.fn()} />);
     expect(screen.getByLabelText('Menu')).toBeInTheDocument();
     expect(screen.queryByTitle('Back to trips')).not.toBeInTheDocument();
+  });
+
+  it('does not render the account menu trigger when there is no auth service', () => {
+    useAuthStore.setState({ user: { uid: 'u1', email: 'me@example.com', displayName: 'Me' } });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    expect(screen.queryByLabelText(/account menu for/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the account menu trigger in the toolbar when a service and user are present', () => {
+    useAuthStore.setState({
+      service: fakeAuthService,
+      user: { uid: 'u1', email: 'me@example.com', displayName: 'Me' },
+    });
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    expect(screen.getByLabelText('Account menu for Me')).toBeInTheDocument();
   });
 });
 
