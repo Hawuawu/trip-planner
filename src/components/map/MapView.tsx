@@ -20,7 +20,11 @@ import { CheckpointMarker } from './CheckpointMarker';
 import { AlternativeMarker } from './AlternativeMarker';
 import { MapZoomControl } from './MapZoomControl';
 import { MapOrientationBall } from './MapOrientationBall';
+import { MapLocateControl } from './MapLocateControl';
+import { UserLocationMarker } from './UserLocationMarker';
 import { MAX_PITCH, FOCUS_ZOOM } from './mapConstants';
+import { useGeolocation } from '../../hooks/useGeolocation';
+import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
 import type { Alternative } from '../../types';
 import { getPoiAtPoint, type Poi } from './poi';
 import { visibleCheckpoints } from '../../utils/checkpointVisibility';
@@ -132,7 +136,17 @@ function StyleSwitcher({
   );
 }
 
-function MapSync() {
+function MapSync({
+  locationTracking,
+  locationPosition,
+  pivoted,
+  onUserPan,
+}: {
+  locationTracking: boolean;
+  locationPosition: { lat: number; lng: number } | null;
+  pivoted: boolean;
+  onUserPan(): void;
+}) {
   const { current: map } = useMap();
   const { checkpoints, selectedId, alternatives, selectedAlternativeId } = useTripStore();
 
@@ -162,6 +176,25 @@ function MapSync() {
     }
   }, [selectedAlternativeId, alternatives, map]);
 
+  // While pivoted, keep the camera centered on the live position as fresh
+  // fixes arrive — this is also what makes MapZoomControl's position-anchored
+  // zoom feel continuous rather than drifting off-center between fixes.
+  useEffect(() => {
+    if (!map || !pivoted || !locationPosition) return;
+    map.easeTo({ center: [locationPosition.lng, locationPosition.lat], duration: 300 });
+  }, [pivoted, locationPosition, map]);
+
+  // A user-initiated drag breaks pivoted mode. MapLibre only fires
+  // 'dragstart' for real pointer/touch drags, never for our own programmatic
+  // easeTo calls above, so this can't immediately re-trigger itself.
+  useEffect(() => {
+    if (!map || !locationTracking) return;
+    map.on('dragstart', onUserPan);
+    return () => {
+      map.off('dragstart', onUserPan);
+    };
+  }, [map, locationTracking, onUserPan]);
+
   return null;
 }
 
@@ -174,6 +207,8 @@ interface Props {
 export function MapView({ onPoiSelected, onSaved, onError }: Props) {
   const [mapStyle, setMapStyle] = useState<string>(STYLES[0].url);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [locationTracking, setLocationTracking] = useState(false);
+  const [pivoted, setPivoted] = useState(false);
   const {
     checkpoints,
     alternatives,
@@ -191,6 +226,38 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
     selectedRouteId,
     routes,
   } = useTripStore();
+
+  const { position: locationPosition, error: locationError } = useGeolocation(locationTracking);
+  const { heading, permissionState, requestPermission } = useDeviceOrientation(locationTracking);
+
+  async function handleToggleLocate() {
+    if (locationTracking) {
+      if (!pivoted) {
+        // Panned away from the live position — re-center and resume
+        // following instead of stopping tracking outright.
+        setPivoted(true);
+        return;
+      }
+      setLocationTracking(false);
+      setPivoted(false);
+      return;
+    }
+    // Must call requestPermission() synchronously within this click handler
+    // (before any prior await) — iOS Safari only honors the device-orientation
+    // permission prompt when triggered directly by a user gesture.
+    await requestPermission();
+    setLocationTracking(true);
+    setPivoted(true);
+  }
+
+  useEffect(() => {
+    if (!locationTracking) return;
+    if (locationError) {
+      onError?.(locationError);
+    } else if (permissionState === 'denied') {
+      onError?.('Compass access was denied — your position will show without a facing direction.');
+    }
+  }, [locationTracking, locationError, permissionState, onError]);
 
   const [editTarget, setEditTarget] = useState<MapEditTarget | null>(null);
 
@@ -285,7 +352,12 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
           showAlternatives={showAlternativesOnMap}
           onToggleAlternatives={setShowAlternativesOnMap}
         />
-        <MapSync />
+        <MapSync
+          locationTracking={locationTracking}
+          locationPosition={locationPosition}
+          pivoted={pivoted}
+          onUserPan={() => setPivoted(false)}
+        />
         <AttributionControl position="top-right" compact />
 
         <Box
@@ -300,8 +372,13 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
             gap: 1,
           }}
         >
+          <MapLocateControl
+            tracking={locationTracking}
+            pivoted={pivoted}
+            onToggle={handleToggleLocate}
+          />
           <MapOrientationBall />
-          <MapZoomControl />
+          <MapZoomControl pivoted={pivoted} pivotPosition={locationPosition} />
         </Box>
 
         <Source id="route" type="geojson" data={routeGeoJSON}>
@@ -337,6 +414,8 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
               }}
             />
           ))}
+
+        <UserLocationMarker position={locationPosition} heading={heading} />
 
         <ResponsiveEditDrawer open={!!editTarget} onClose={() => setEditTarget(null)}>
           {drawerContent}
