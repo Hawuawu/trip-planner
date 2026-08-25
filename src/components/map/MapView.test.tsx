@@ -89,7 +89,19 @@ vi.mock('react-map-gl/maplibre', () => ({
     </button>
   ),
   Popup: ({ children }: { children: React.ReactNode }) => <div data-testid="popup">{children}</div>,
-  useMap: () => ({ current: { easeTo, jumpTo, zoomIn, zoomOut, getZoom, on, off, resize } }),
+  useMap: () => ({
+    current: {
+      easeTo,
+      jumpTo,
+      zoomIn,
+      zoomOut,
+      getZoom,
+      on,
+      off,
+      resize,
+      getContainer: () => document.createElement('div'),
+    },
+  }),
 }));
 
 function makeCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
@@ -206,6 +218,36 @@ describe('MapView', () => {
 
     renderWithProviders(<MapView />);
     expect(easeTo).toHaveBeenCalledWith({ center: [135.77, 34.9], zoom: 15, duration: 300 });
+  });
+
+  it('re-snaps to the selected checkpoint once the map container actually resizes', () => {
+    let resizeCallback: ResizeObserverCallback | undefined;
+    class FakeResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        resizeCallback = cb;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    useTripStore.setState({
+      checkpoints: [makeCheckpoint({ id: 'a', location: { lat: 34.9, lng: 135.77 } })],
+      selectedId: 'a',
+    });
+    renderWithProviders(<MapView />);
+    easeTo.mockClear();
+    resize.mockClear();
+
+    act(() => {
+      resizeCallback?.([] as unknown as ResizeObserverEntry[], {} as ResizeObserver);
+    });
+
+    expect(resize).toHaveBeenCalled();
+    expect(easeTo).toHaveBeenCalledWith({ center: [135.77, 34.9], zoom: 15, duration: 0 });
+
+    vi.unstubAllGlobals();
   });
 
   it('does not ease the map when no checkpoint is selected', () => {

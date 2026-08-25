@@ -186,6 +186,36 @@ function MapSync({
     }
   }, [selectedAlternativeId, alternatives, map]);
 
+  // Belt-and-suspenders for the two effects above: selecting a checkpoint/
+  // alternative can itself pop the side drawers back open (AppShell's
+  // layout effect), and even with that ordered ahead of these effects plus
+  // the explicit resize() calls above, MapLibre's own resize detection is
+  // throttled enough that the easeTo calls can still occasionally land
+  // against a stale container size. Re-snap once the browser confirms the
+  // container's real, settled size via its own ResizeObserver — this ties
+  // the correction to the actual physical signal instead of racing React's
+  // effect scheduling.
+  useEffect(() => {
+    if (!map) return;
+    const selectedCheckpoint = checkpoints.find((c) => c.id === selectedId && c.location);
+    const selectedAlt = alternatives.find(
+      (a: Alternative) => a.id === selectedAlternativeId && a.location
+    );
+    const target = selectedCheckpoint?.location ?? selectedAlt?.location;
+    if (!target) return;
+
+    const observer = new ResizeObserver(() => {
+      map.resize();
+      map.easeTo({
+        center: [target.lng, target.lat],
+        zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
+        duration: 0,
+      });
+    });
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [selectedId, selectedAlternativeId, checkpoints, alternatives, map]);
+
   // While pivoted, keep the camera centered on the live position as fresh
   // fixes arrive — this is also what makes MapZoomControl's position-anchored
   // zoom feel continuous rather than drifting off-center between fixes. The
