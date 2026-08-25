@@ -22,3 +22,20 @@ export const KEYBOARD_PITCH_STEP = 10; // degrees of pitch per arrow-key press
 // unselected/category color so selection reads as a state change, not a
 // shade of the same hue.
 export const SELECTED_MARKER_COLOR = '#e94560';
+
+// "You are here" blue for UserLocationMarker — distinct from both
+// SELECTED_MARKER_COLOR and checkpoint marker colors so it reads as a
+// different kind of thing (live device position), not a selected checkpoint.
+export const LOCATION_MARKER_COLOR = '#2563eb';
+
+// Field of view of the heading cone — narrow enough to read as "facing
+// direction" rather than a vague half-circle.
+export const VIEW_CONE_ANGLE_DEG = 70;
+export const VIEW_CONE_RADIUS_PX = 60;
+
+// A fill this light (~0.2) reads as invisible against colorful basemap
+// tiles (OpenFreeMap Liberty/Bright) — verified visually. A stroked edge at
+// higher opacity keeps the cone legible without the fill overpowering
+// what's underneath it.
+export const VIEW_CONE_FILL_OPACITY = 0.35;
+export const VIEW_CONE_STROKE_OPACITY = 0.7;

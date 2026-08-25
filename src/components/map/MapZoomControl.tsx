@@ -4,8 +4,30 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import { useMap } from 'react-map-gl/maplibre';
 import { ZOOM_DURATION_MS } from './mapConstants';
 
-export function MapZoomControl() {
+interface Props {
+  pivoted: boolean;
+  pivotPosition: { lat: number; lng: number } | null;
+}
+
+export function MapZoomControl({ pivoted, pivotPosition }: Props) {
   const { current: map } = useMap();
+
+  function zoomBy(delta: number) {
+    if (!map) return;
+    if (pivoted && pivotPosition) {
+      map.easeTo({
+        center: [pivotPosition.lng, pivotPosition.lat],
+        zoom: map.getZoom() + delta,
+        duration: ZOOM_DURATION_MS,
+      });
+      return;
+    }
+    if (delta > 0) {
+      map.zoomIn({ duration: ZOOM_DURATION_MS });
+    } else {
+      map.zoomOut({ duration: ZOOM_DURATION_MS });
+    }
+  }
 
   return (
     <Paper
@@ -15,7 +37,7 @@ export function MapZoomControl() {
       <IconButton
         size="small"
         aria-label="Zoom in"
-        onClick={() => map?.zoomIn({ duration: ZOOM_DURATION_MS })}
+        onClick={() => zoomBy(1)}
         sx={{ width: 30, height: 30, borderRadius: 0 }}
       >
         <AddIcon fontSize="small" />
@@ -24,7 +46,7 @@ export function MapZoomControl() {
       <IconButton
         size="small"
         aria-label="Zoom out"
-        onClick={() => map?.zoomOut({ duration: ZOOM_DURATION_MS })}
+        onClick={() => zoomBy(-1)}
         sx={{ width: 30, height: 30, borderRadius: 0 }}
       >
         <RemoveIcon fontSize="small" />
