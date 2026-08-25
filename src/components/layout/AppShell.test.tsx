@@ -49,7 +49,13 @@ vi.mock('react-map-gl/maplibre', () => ({
   ),
   Popup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   useMap: () => ({
-    current: { easeTo: vi.fn(), jumpTo: vi.fn(), zoomIn: vi.fn(), zoomOut: vi.fn() },
+    current: {
+      easeTo: vi.fn(),
+      jumpTo: vi.fn(),
+      zoomIn: vi.fn(),
+      zoomOut: vi.fn(),
+      resize: vi.fn(),
+    },
   }),
 }));
 vi.mock('maplibre-gl', () => ({ __esModule: true, default: {} }));

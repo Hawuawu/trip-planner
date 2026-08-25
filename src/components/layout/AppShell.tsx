@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   Box,
   BottomNavigation,
@@ -271,7 +271,13 @@ export function AppShell({ onBack }: Props) {
   // Selecting a checkpoint or alternative pin (tablet/desktop split view)
   // brings both side drawers back, mirroring handleMapClick below hiding
   // them — see that function's comment for why the two are split apart.
-  useEffect(() => {
+  // Deliberately useLayoutEffect, not useEffect: it must resize the map
+  // container and let the browser reflow *before* MapSync's centering
+  // effect (a plain useEffect, further down the tree so it'd otherwise fire
+  // first) reads the container size — otherwise MapLibre eases the camera
+  // against the stale, drawers-still-hidden width and the target ends up
+  // off-screen once the panels pop back and the canvas catches up.
+  useLayoutEffect(() => {
     if (selectedId || selectedAlternativeId) {
       setShowTimeline(true);
       setShowAlternatives(true);

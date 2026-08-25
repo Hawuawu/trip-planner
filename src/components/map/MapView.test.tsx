@@ -21,6 +21,7 @@ const zoomOut = vi.fn();
 const getZoom = vi.fn(() => 10);
 const on = vi.fn();
 const off = vi.fn();
+const resize = vi.fn();
 
 function triggerDragstart() {
   const handler = on.mock.calls.find(([event]) => event === 'dragstart')?.[1];
@@ -88,7 +89,7 @@ vi.mock('react-map-gl/maplibre', () => ({
     </button>
   ),
   Popup: ({ children }: { children: React.ReactNode }) => <div data-testid="popup">{children}</div>,
-  useMap: () => ({ current: { easeTo, jumpTo, zoomIn, zoomOut, getZoom, on, off } }),
+  useMap: () => ({ current: { easeTo, jumpTo, zoomIn, zoomOut, getZoom, on, off, resize } }),
 }));
 
 function makeCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
@@ -123,6 +124,7 @@ beforeEach(() => {
   getZoom.mockReset().mockReturnValue(10);
   on.mockClear();
   off.mockClear();
+  resize.mockClear();
   mockedGetPoiAtPoint.mockReset();
   mockedUseGeolocation.mockReset();
   mockedUseDeviceOrientation.mockReset();

@@ -157,6 +157,11 @@ function MapSync({
     if (!map) return;
     const selected = checkpoints.find((c) => c.id === selectedId && c.location);
     if (selected?.location) {
+      // Resize first: selecting a checkpoint can itself pop the side drawers
+      // back open (see AppShell's layout effect), and MapLibre's own resize
+      // detection is throttled — without this, easeTo can target the stale,
+      // pre-resize container width and end up visibly off-center.
+      map.resize();
       map.easeTo({
         center: [selected.location.lng, selected.location.lat],
         zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
@@ -171,6 +176,8 @@ function MapSync({
       (a: Alternative) => a.id === selectedAlternativeId && a.location
     );
     if (selected?.location) {
+      // See the checkpoint-centering effect above for why resize() runs first.
+      map.resize();
       map.easeTo({
         center: [selected.location.lng, selected.location.lat],
         zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
