@@ -74,7 +74,16 @@ vi.mock('react-map-gl/maplibre', () => ({
   ),
   Layer: () => <div data-testid="layer" />,
   Marker: ({ children, onClick }: { children: React.ReactNode; onClick: (e: unknown) => void }) => (
-    <button data-testid="marker" onClick={(e) => onClick({ originalEvent: e })}>
+    <button
+      data-testid="marker"
+      onClick={(e) => {
+        // Real MapLibre markers are DOM overlays outside the canvas, so a
+        // marker click never bubbles into the map's own click handler —
+        // stop propagation here so the mock matches that isolation.
+        e.stopPropagation();
+        onClick({ originalEvent: e });
+      }}
+    >
       {children}
     </button>
   ),
@@ -245,6 +254,25 @@ describe('MapView', () => {
     fireEvent.click(screen.getByTestId('map'));
 
     expect(onPoiSelected).not.toHaveBeenCalled();
+  });
+
+  it('calls onMapClick when the map background is clicked', () => {
+    const onMapClick = vi.fn();
+    renderWithProviders(<MapView onMapClick={onMapClick} />);
+
+    fireEvent.click(screen.getByTestId('map'));
+
+    expect(onMapClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onMapClick when a marker is clicked instead', () => {
+    const onMapClick = vi.fn();
+    useTripStore.setState({ checkpoints: [makeCheckpoint({ id: 'a' })] });
+    renderWithProviders(<MapView onMapClick={onMapClick} />);
+
+    fireEvent.click(screen.getByTestId('marker'));
+
+    expect(onMapClick).not.toHaveBeenCalled();
   });
 
   describe('day / route filtering', () => {

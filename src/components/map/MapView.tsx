@@ -214,9 +214,10 @@ interface Props {
   onPoiSelected?: (poi: Poi) => void;
   onSaved?: (message: string) => void;
   onError?: (message: string) => void;
+  onMapClick?: () => void;
 }
 
-export function MapView({ onPoiSelected, onSaved, onError }: Props) {
+export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) {
   const [initialViewState] = useState(() => loadPersistedMapViewState() ?? JAPAN_CENTER);
   const [mapStyle, setMapStyle] = useState<string>(STYLES[0].url);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -356,6 +357,7 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
         maxPitch={MAX_PITCH}
         attributionControl={false}
         onClick={(e) => {
+          onMapClick?.();
           const poi = getPoiAtPoint(e);
           if (poi) onPoiSelected?.(poi);
         }}
