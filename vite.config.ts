@@ -59,6 +59,11 @@ export default defineConfig(({ command }) => {
       serveKuromojiDictRaw(),
       VitePWA({
         registerType: 'autoUpdate',
+        // The plugin's own default ('auto') auto-injects a bare
+        // registerSW.js script tag with no update-check wiring. We
+        // register manually in main.tsx via `virtual:pwa-register` instead,
+        // so we can hook in the periodic/visibility update polling (#128).
+        injectRegister: false,
         manifest: {
           id: '/',
           name: "Maiyun's Trip Planner",
