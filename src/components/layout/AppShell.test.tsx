@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { screen, within, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
 import { renderWithProviders, resetStores } from '../../test/helpers';
@@ -13,18 +13,50 @@ vi.mock('../../utils/fileTransfer', async (importOriginal) => {
   return { ...actual, downloadTextFile: vi.fn() };
 });
 
+// MapView's real onClick handler runs a POI hit-test against the MapLibre
+// instance (e.target.getStyle()) — irrelevant to AppShell-level tests and
+// unsafe to call against the mocked <Map>'s plain DOM click event below.
+vi.mock('../map/poi', () => ({ getPoiAtPoint: vi.fn(() => null) }));
+
 vi.mock('react-map-gl/maplibre', () => ({
   __esModule: true,
-  default: ({ children }: { children: React.ReactNode }) => <div data-testid="map">{children}</div>,
+  default: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
+    <div data-testid="map" onClick={onClick}>
+      {children}
+    </div>
+  ),
   AttributionControl: () => null,
   Source: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   Layer: () => null,
-  Marker: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
-    <div onClick={onClick}>{children}</div>
+  Marker: ({
+    children,
+    onClick,
+  }: {
+    children: React.ReactNode;
+    onClick?: (e: unknown) => void;
+  }) => (
+    <div
+      data-testid="marker"
+      onClick={(e) => {
+        // Real MapLibre markers are DOM overlays outside the canvas, so a
+        // marker click never bubbles into the map's own click handler.
+        e.stopPropagation();
+        onClick?.({ originalEvent: e });
+      }}
+    >
+      {children}
+    </div>
   ),
   Popup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   useMap: () => ({
-    current: { easeTo: vi.fn(), jumpTo: vi.fn(), zoomIn: vi.fn(), zoomOut: vi.fn() },
+    current: {
+      easeTo: vi.fn(),
+      jumpTo: vi.fn(),
+      zoomIn: vi.fn(),
+      zoomOut: vi.fn(),
+      resize: vi.fn(),
+      getContainer: () => document.createElement('div'),
+    },
   }),
 }));
 vi.mock('maplibre-gl', () => ({ __esModule: true, default: {} }));
@@ -160,6 +192,43 @@ describe('AppShell — tablet split layout (neither phone nor wide)', () => {
 
     fireEvent.click(screen.getByLabelText('Expand alternatives'));
     expect(screen.getByText(/no alternatives/i)).toBeInTheDocument();
+  });
+
+  it('hides both drawers when the map is clicked', () => {
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId('map'));
+
+    expect(screen.queryByTestId('timeline-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('alternatives-panel')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Expand timeline')).toBeInTheDocument();
+    expect(screen.getByLabelText('Expand alternatives')).toBeInTheDocument();
+  });
+
+  it('brings both drawers back when a checkpoint becomes selected', () => {
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('map'));
+    expect(screen.queryByTestId('timeline-panel')).not.toBeInTheDocument();
+
+    act(() => {
+      useTripStore.setState({ selectedId: 'cp-1' });
+    });
+
+    expect(screen.getByTestId('timeline-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('alternatives-panel')).toBeInTheDocument();
+  });
+
+  it('brings both drawers back when an alternative becomes selected', () => {
+    renderWithProviders(<AppShell onBack={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('map'));
+    expect(screen.queryByTestId('alternatives-panel')).not.toBeInTheDocument();
+
+    act(() => {
+      useTripStore.setState({ selectedAlternativeId: 'alt-1' });
+    });
+
+    expect(screen.getByTestId('timeline-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('alternatives-panel')).toBeInTheDocument();
   });
 });
 
