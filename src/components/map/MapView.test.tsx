@@ -21,11 +21,14 @@ vi.mock('react-map-gl/maplibre', () => ({
   default: ({
     children,
     onClick,
+    onLoad,
   }: {
     children: React.ReactNode;
     onClick?: (e: unknown) => void;
+    onLoad?: () => void;
   }) => (
     <div data-testid="map" onClick={() => onClick?.({})}>
+      <button data-testid="trigger-load" onClick={() => onLoad?.()} />
       {children}
     </div>
   ),
@@ -80,6 +83,22 @@ beforeEach(() => {
 });
 
 describe('MapView', () => {
+  describe('loading overlay', () => {
+    it('shows a loading spinner over the map until onLoad fires, without unmounting map content', () => {
+      useTripStore.setState({ checkpoints: [makeCheckpoint({ id: 'a' })] });
+      renderWithProviders(<MapView />);
+
+      expect(screen.getByRole('progressbar')).toBeInTheDocument();
+      expect(screen.getByTestId('map')).toBeInTheDocument();
+      expect(screen.getByTestId('marker')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('trigger-load'));
+
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(screen.getByTestId('marker')).toBeInTheDocument();
+    });
+  });
+
   it('renders a marker only for checkpoints that have a location', () => {
     useTripStore.setState({
       checkpoints: [makeCheckpoint({ id: 'a' }), makeCheckpoint({ id: 'b', location: undefined })],
