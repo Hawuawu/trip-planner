@@ -394,6 +394,12 @@ export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) 
         maxPitch={MAX_PITCH}
         attributionControl={false}
         onClick={(e) => {
+          // A click that reaches here never landed on a marker — those stop
+          // propagation before it bubbles up to the map's own click handler
+          // — so this is always a genuine "clicked elsewhere" and should
+          // drop whatever checkpoint/alternative is currently selected.
+          if (selectedId) selectCheckpoint(null);
+          if (selectedAlternativeId) selectAlternative(null);
           onMapClick?.();
           const poi = getPoiAtPoint(e);
           if (poi) onPoiSelected?.(poi);

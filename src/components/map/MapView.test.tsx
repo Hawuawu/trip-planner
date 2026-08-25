@@ -319,6 +319,40 @@ describe('MapView', () => {
     expect(onMapClick).not.toHaveBeenCalled();
   });
 
+  it('deselects the selected checkpoint when the map background is clicked', () => {
+    useTripStore.setState({
+      checkpoints: [makeCheckpoint({ id: 'a' })],
+      selectedId: 'a',
+    });
+    renderWithProviders(<MapView />);
+
+    fireEvent.click(screen.getByTestId('map'));
+
+    expect(useTripStore.getState().selectedId).toBeNull();
+  });
+
+  it('deselects the selected alternative when the map background is clicked', () => {
+    useTripStore.setState({
+      alternatives: [makeAlternative({ id: 'alt-1' })],
+      selectedAlternativeId: 'alt-1',
+    });
+    renderWithProviders(<MapView />);
+
+    fireEvent.click(screen.getByTestId('map'));
+
+    expect(useTripStore.getState().selectedAlternativeId).toBeNull();
+  });
+
+  it('does not touch selection state on a background click when nothing is selected', () => {
+    useTripStore.setState({ checkpoints: [makeCheckpoint({ id: 'a' })], selectedId: null });
+    renderWithProviders(<MapView />);
+
+    fireEvent.click(screen.getByTestId('map'));
+
+    expect(useTripStore.getState().selectedId).toBeNull();
+    expect(useTripStore.getState().selectedAlternativeId).toBeNull();
+  });
+
   describe('day / route filtering', () => {
     it('renders markers only for checkpoints on the selected day', () => {
       useTripStore.setState({
