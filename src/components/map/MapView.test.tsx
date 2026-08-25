@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MapView } from './MapView';
@@ -8,6 +8,7 @@ import type { Checkpoint, Alternative } from '../../types';
 import { getPoiAtPoint } from './poi';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
+import { loadPersistedMapViewState, savePersistedMapViewState } from './mapViewStatePersistence';
 
 const mockedGetPoiAtPoint = vi.mocked(getPoiAtPoint);
 const mockedUseGeolocation = vi.mocked(useGeolocation);
@@ -32,18 +33,38 @@ vi.mock('./poi', () => ({ getPoiAtPoint: vi.fn() }));
 vi.mock('../../hooks/useGeolocation', () => ({ useGeolocation: vi.fn() }));
 vi.mock('../../hooks/useDeviceOrientation', () => ({ useDeviceOrientation: vi.fn() }));
 
+let lastMoveEndViewState: {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+  bearing: number;
+  pitch: number;
+} = { longitude: 1, latitude: 2, zoom: 3, bearing: 4, pitch: 5 };
+
 vi.mock('react-map-gl/maplibre', () => ({
   default: ({
     children,
     onClick,
     onLoad,
+    onMoveEnd,
+    initialViewState,
   }: {
     children: React.ReactNode;
     onClick?: (e: unknown) => void;
     onLoad?: () => void;
+    onMoveEnd?: (e: { viewState: unknown }) => void;
+    initialViewState?: unknown;
   }) => (
-    <div data-testid="map" onClick={() => onClick?.({})}>
+    <div
+      data-testid="map"
+      data-initial-view-state={JSON.stringify(initialViewState)}
+      onClick={() => onClick?.({})}
+    >
       <button data-testid="trigger-load" onClick={() => onLoad?.()} />
+      <button
+        data-testid="trigger-move-end"
+        onClick={() => onMoveEnd?.({ viewState: lastMoveEndViewState })}
+      />
       {children}
     </div>
   ),
@@ -85,6 +106,7 @@ function makeAlternative(overrides: Partial<Alternative> = {}): Alternative {
 
 beforeEach(() => {
   resetStores();
+  localStorage.clear();
   easeTo.mockClear();
   jumpTo.mockClear();
   zoomIn.mockClear();
@@ -105,6 +127,10 @@ beforeEach(() => {
   // references (see helpers.tsx) — vi.spyOn mutates those functions in
   // place, so a spy from one test otherwise leaks into the next.
   vi.restoreAllMocks();
+});
+
+afterEach(() => {
+  localStorage.clear();
 });
 
 describe('MapView', () => {
@@ -356,6 +382,49 @@ describe('MapView', () => {
     });
   });
 
+  describe('viewport persistence', () => {
+    it('falls back to the Japan-wide default when nothing is persisted', () => {
+      renderWithProviders(<MapView />);
+
+      const initialViewState = JSON.parse(
+        screen.getByTestId('map').getAttribute('data-initial-view-state')!
+      );
+      expect(initialViewState).toEqual({ longitude: 139.69, latitude: 35.68, zoom: 10 });
+    });
+
+    it('uses the persisted viewport when one exists before render', () => {
+      savePersistedMapViewState({
+        longitude: 135.75,
+        latitude: 35.0,
+        zoom: 12,
+        bearing: 20,
+        pitch: 10,
+      });
+
+      renderWithProviders(<MapView />);
+
+      const initialViewState = JSON.parse(
+        screen.getByTestId('map').getAttribute('data-initial-view-state')!
+      );
+      expect(initialViewState).toEqual({
+        longitude: 135.75,
+        latitude: 35.0,
+        zoom: 12,
+        bearing: 20,
+        pitch: 10,
+      });
+    });
+
+    it('saves the viewport to localStorage when a move ends', () => {
+      lastMoveEndViewState = { longitude: 140.1, latitude: 36.2, zoom: 8, bearing: 15, pitch: 5 };
+      renderWithProviders(<MapView />);
+
+      fireEvent.click(screen.getByTestId('trigger-move-end'));
+
+      expect(loadPersistedMapViewState()).toEqual(lastMoveEndViewState);
+    });
+  });
+
   describe('locate control', () => {
     it('calls requestPermission before enabling tracking', async () => {
       const requestPermission = vi.fn().mockResolvedValue(undefined);
@@ -404,7 +473,7 @@ describe('MapView', () => {
       expect(screen.getByRole('img', { name: 'Your location' })).toBeInTheDocument();
     });
 
-    it('recenters the map once when tracking turns on and a position becomes available', async () => {
+    it('recenters, zooms to the focus level, and levels the map once when tracking turns on and a position becomes available', async () => {
       mockedUseGeolocation.mockImplementation((enabled) =>
         enabled
           ? { position: { lat: 35.68, lng: 139.69, accuracy: 5 }, error: null }
@@ -419,7 +488,41 @@ describe('MapView', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Show my location' }));
 
-      expect(easeTo).toHaveBeenCalledWith({ center: [139.69, 35.68], duration: 300 });
+      expect(easeTo).toHaveBeenCalledWith({
+        center: [139.69, 35.68],
+        zoom: 15,
+        bearing: 0,
+        pitch: 0,
+        duration: 300,
+      });
+    });
+
+    it('does not re-snap zoom/bearing/pitch on later position updates while still pivoted', async () => {
+      let position = { lat: 35.68, lng: 139.69, accuracy: 5 };
+      mockedUseGeolocation.mockImplementation((enabled) =>
+        enabled ? { position, error: null } : { position: null, error: null }
+      );
+      mockedUseDeviceOrientation.mockReturnValue({
+        heading: null,
+        permissionState: 'granted',
+        requestPermission: vi.fn().mockResolvedValue(undefined),
+      });
+      renderWithProviders(<MapView />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Show my location' }));
+      easeTo.mockClear();
+
+      position = { lat: 35.69, lng: 139.7, accuracy: 5 };
+      // Force MapView/MapSync (both subscribed to the whole store) to
+      // re-render and re-read the mocked position, without unmounting —
+      // rerender(<MapView />) would swap out renderWithProviders' ThemeProvider
+      // wrapper and remount MapView fresh, losing the pivoted state we're
+      // testing against.
+      act(() => {
+        useTripStore.setState({});
+      });
+
+      expect(easeTo).toHaveBeenCalledWith({ center: [139.7, 35.69], duration: 300 });
     });
 
     it('surfaces a geolocation error via onError once tracking is enabled', async () => {
@@ -505,6 +608,23 @@ describe('MapView', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
         expect(easeTo).toHaveBeenCalledWith({ center: [139.69, 35.68], zoom: 11, duration: 220 });
+      });
+
+      it('clicking to recenter after a drag snaps zoom/bearing/pitch again', async () => {
+        renderWithProviders(<MapView />);
+        await userEvent.click(screen.getByRole('button', { name: 'Show my location' }));
+        triggerDragstart();
+        easeTo.mockClear();
+
+        await userEvent.click(screen.getByRole('button', { name: 'Recenter on my location' }));
+
+        expect(easeTo).toHaveBeenCalledWith({
+          center: [139.69, 35.68],
+          zoom: 15,
+          bearing: 0,
+          pitch: 0,
+          duration: 300,
+        });
       });
 
       it('the dragstart listener is torn down when tracking stops', async () => {

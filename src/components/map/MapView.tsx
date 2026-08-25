@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Map, { AttributionControl, Source, Layer, useMap } from 'react-map-gl/maplibre';
 import type { LineLayerSpecification } from 'maplibre-gl';
 import type { FeatureCollection, LineString } from 'geojson';
@@ -22,9 +22,10 @@ import { MapZoomControl } from './MapZoomControl';
 import { MapOrientationBall } from './MapOrientationBall';
 import { MapLocateControl } from './MapLocateControl';
 import { UserLocationMarker } from './UserLocationMarker';
-import { MAX_PITCH, FOCUS_ZOOM } from './mapConstants';
+import { MAX_PITCH, FOCUS_ZOOM, RESET_DURATION_MS } from './mapConstants';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
+import { loadPersistedMapViewState, savePersistedMapViewState } from './mapViewStatePersistence';
 import type { Alternative } from '../../types';
 import { getPoiAtPoint, type Poi } from './poi';
 import { visibleCheckpoints } from '../../utils/checkpointVisibility';
@@ -141,11 +142,13 @@ function MapSync({
   locationPosition,
   pivoted,
   onUserPan,
+  pendingRecenterSnapRef,
 }: {
   locationTracking: boolean;
   locationPosition: { lat: number; lng: number } | null;
   pivoted: boolean;
   onUserPan(): void;
+  pendingRecenterSnapRef: React.MutableRefObject<boolean>;
 }) {
   const { current: map } = useMap();
   const { checkpoints, selectedId, alternatives, selectedAlternativeId } = useTripStore();
@@ -178,11 +181,20 @@ function MapSync({
 
   // While pivoted, keep the camera centered on the live position as fresh
   // fixes arrive — this is also what makes MapZoomControl's position-anchored
-  // zoom feel continuous rather than drifting off-center between fixes.
+  // zoom feel continuous rather than drifting off-center between fixes. The
+  // very first fix after (re-)engaging pivot mode also snaps zoom/bearing/
+  // pitch back to a known "recentered" state — later fixes stay center-only
+  // so we don't fight the user's own zoom/rotate while following.
   useEffect(() => {
     if (!map || !pivoted || !locationPosition) return;
-    map.easeTo({ center: [locationPosition.lng, locationPosition.lat], duration: 300 });
-  }, [pivoted, locationPosition, map]);
+    const center: [number, number] = [locationPosition.lng, locationPosition.lat];
+    if (pendingRecenterSnapRef.current) {
+      pendingRecenterSnapRef.current = false;
+      map.easeTo({ center, zoom: FOCUS_ZOOM, bearing: 0, pitch: 0, duration: RESET_DURATION_MS });
+      return;
+    }
+    map.easeTo({ center, duration: 300 });
+  }, [pivoted, locationPosition, map, pendingRecenterSnapRef]);
 
   // A user-initiated drag breaks pivoted mode. MapLibre only fires
   // 'dragstart' for real pointer/touch drags, never for our own programmatic
@@ -205,10 +217,12 @@ interface Props {
 }
 
 export function MapView({ onPoiSelected, onSaved, onError }: Props) {
+  const [initialViewState] = useState(() => loadPersistedMapViewState() ?? JAPAN_CENTER);
   const [mapStyle, setMapStyle] = useState<string>(STYLES[0].url);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [locationTracking, setLocationTracking] = useState(false);
   const [pivoted, setPivoted] = useState(false);
+  const pendingRecenterSnapRef = useRef(false);
   const {
     checkpoints,
     alternatives,
@@ -235,6 +249,7 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
       if (!pivoted) {
         // Panned away from the live position — re-center and resume
         // following instead of stopping tracking outright.
+        pendingRecenterSnapRef.current = true;
         setPivoted(true);
         return;
       }
@@ -246,6 +261,7 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
     // (before any prior await) — iOS Safari only honors the device-orientation
     // permission prompt when triggered directly by a user gesture.
     await requestPermission();
+    pendingRecenterSnapRef.current = true;
     setLocationTracking(true);
     setPivoted(true);
   }
@@ -336,7 +352,7 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
     <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
       <Map
         mapStyle={mapStyle}
-        initialViewState={JAPAN_CENTER}
+        initialViewState={initialViewState}
         maxPitch={MAX_PITCH}
         attributionControl={false}
         onClick={(e) => {
@@ -344,6 +360,7 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
           if (poi) onPoiSelected?.(poi);
         }}
         onLoad={() => setMapLoaded(true)}
+        onMoveEnd={(evt) => savePersistedMapViewState(evt.viewState)}
         style={{ width: '100%', height: '100%' }}
       >
         <StyleSwitcher
@@ -357,6 +374,7 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
           locationPosition={locationPosition}
           pivoted={pivoted}
           onUserPan={() => setPivoted(false)}
+          pendingRecenterSnapRef={pendingRecenterSnapRef}
         />
         <AttributionControl position="top-right" compact />
 
