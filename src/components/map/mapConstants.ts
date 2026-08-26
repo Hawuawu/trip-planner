@@ -28,6 +28,11 @@ export const SELECTED_MARKER_COLOR = '#e94560';
 // different kind of thing (live device position), not a selected checkpoint.
 export const LOCATION_MARKER_COLOR = '#2563eb';
 
+// Drop-pin crosshair + its toggle control — a third distinct hue so
+// "you're about to create something here" doesn't read as a selection
+// state or the live-location marker.
+export const DROP_PIN_MARKER_COLOR = '#d97706';
+
 // Field of view of the heading cone — narrow enough to read as "facing
 // direction" rather than a vague half-circle.
 export const VIEW_CONE_ANGLE_DEG = 70;

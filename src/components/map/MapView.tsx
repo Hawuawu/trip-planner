@@ -15,14 +15,18 @@ import {
   Typography,
 } from '@mui/material';
 import LayersIcon from '@mui/icons-material/Layers';
+import RoomIcon from '@mui/icons-material/Room';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 import { useTripStore } from '../../store/tripStore';
 import { CheckpointMarker } from './CheckpointMarker';
 import { AlternativeMarker } from './AlternativeMarker';
 import { MapZoomControl } from './MapZoomControl';
 import { MapOrientationBall } from './MapOrientationBall';
 import { MapLocateControl } from './MapLocateControl';
+import { MapDropPinControl } from './MapDropPinControl';
 import { UserLocationMarker } from './UserLocationMarker';
-import { MAX_PITCH, FOCUS_ZOOM, RESET_DURATION_MS } from './mapConstants';
+import { MAX_PITCH, FOCUS_ZOOM, RESET_DURATION_MS, DROP_PIN_MARKER_COLOR } from './mapConstants';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
 import { loadPersistedMapViewState, savePersistedMapViewState } from './mapViewStatePersistence';
@@ -34,6 +38,8 @@ import { collectAllTags } from '../../utils/tags';
 import { CheckpointForm } from '../timeline/CheckpointForm';
 import { AlternativeForm } from '../alternatives/AlternativeForm';
 import { ResponsiveEditDrawer } from '../shared/ResponsiveEditDrawer';
+import { MapPinDetailView } from './MapPinDetailView';
+import { PoiPopup } from './PoiPopup';
 
 const JAPAN_CENTER = { longitude: 139.69, latitude: 35.68, zoom: 10 };
 
@@ -59,7 +65,10 @@ function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
 
-type MapEditTarget = { kind: 'checkpoint'; id: string } | { kind: 'alternative'; id: string };
+type MapEditTarget =
+  | { kind: 'checkpoint'; id: string; mode: 'view' | 'edit' }
+  | { kind: 'alternative'; id: string; mode: 'view' | 'edit' }
+  | { kind: 'add-alternative'; poi: Poi };
 
 function StyleSwitcher({
   current,
@@ -247,19 +256,83 @@ function MapSync({
   return null;
 }
 
+function DropPinOverlay({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm(location: { lat: number; lng: number }): void;
+  onCancel(): void;
+}) {
+  const { current: map } = useMap();
+
+  return (
+    <>
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -100%)',
+          zIndex: 1,
+          pointerEvents: 'none',
+        }}
+      >
+        <RoomIcon sx={{ color: DROP_PIN_MARKER_COLOR, fontSize: 40 }} />
+      </Box>
+      <Paper
+        elevation={2}
+        sx={{
+          position: 'absolute',
+          bottom: 8,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 1,
+          display: 'flex',
+        }}
+      >
+        <IconButton
+          size="small"
+          aria-label="Confirm point of interest location"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!map) return;
+            const center = map.getCenter();
+            onConfirm({ lat: center.lat, lng: center.lng });
+          }}
+          sx={{ width: 30, height: 30, borderRadius: 0 }}
+        >
+          <CheckIcon fontSize="small" />
+        </IconButton>
+        <IconButton
+          size="small"
+          aria-label="Discard point of interest"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCancel();
+          }}
+          sx={{ width: 30, height: 30, borderRadius: 0 }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Paper>
+    </>
+  );
+}
+
 interface Props {
-  onPoiSelected?: (poi: Poi) => void;
   onSaved?: (message: string) => void;
   onError?: (message: string) => void;
   onMapClick?: () => void;
 }
 
-export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) {
+export function MapView({ onSaved, onError, onMapClick }: Props) {
   const [initialViewState] = useState(() => loadPersistedMapViewState() ?? JAPAN_CENTER);
   const [mapStyle, setMapStyle] = useState<string>(STYLES[0].url);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [locationTracking, setLocationTracking] = useState(false);
   const [pivoted, setPivoted] = useState(false);
+  const [poiPin, setPoiPin] = useState<Poi | null>(null);
+  const [droppingPin, setDroppingPin] = useState(false);
   const pendingRecenterSnapRef = useRef(false);
   const {
     checkpoints,
@@ -274,6 +347,7 @@ export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) 
     selectAlternative,
     updateCheckpoint,
     updateAlternative,
+    addAlternative,
     selectedDay,
     selectedRouteId,
     routes,
@@ -352,39 +426,78 @@ export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) 
     [checkpoints, alternatives]
   );
 
-  const drawerContent = editingCheckpoint ? (
-    <CheckpointForm
-      title="Edit checkpoint"
-      initial={editingCheckpoint}
-      existingTags={allTags}
-      onSave={async (data) => {
-        try {
-          await updateCheckpoint(editingCheckpoint.id, data);
-          setEditTarget(null);
-          onSaved?.(`Checkpoint "${data.name}" updated.`);
-        } catch (err) {
-          onError?.(errorMessage(err, `Failed to update "${data.name}".`));
+  const drawerContent =
+    editTarget?.kind === 'add-alternative' ? (
+      <AlternativeForm
+        title="Add alternative"
+        initial={{ name: editTarget.poi.name, location: editTarget.poi.location }}
+        existingTags={allTags}
+        onSave={async (data) => {
+          try {
+            await addAlternative(data);
+            setEditTarget(null);
+            onSaved?.(`Alternative "${data.name}" added.`);
+          } catch (err) {
+            onError?.(errorMessage(err, `Failed to add "${data.name}".`));
+          }
+        }}
+        onCancel={() => setEditTarget(null)}
+      />
+    ) : editingCheckpoint && editTarget?.mode === 'view' ? (
+      <MapPinDetailView
+        name={editingCheckpoint.name}
+        type={editingCheckpoint.type}
+        location={editingCheckpoint.location}
+        notes={editingCheckpoint.notes}
+        websiteUrl={editingCheckpoint.websiteUrl}
+        onEdit={() => setEditTarget({ kind: 'checkpoint', id: editingCheckpoint.id, mode: 'edit' })}
+        onClose={() => setEditTarget(null)}
+      />
+    ) : editingCheckpoint ? (
+      <CheckpointForm
+        title="Edit checkpoint"
+        initial={editingCheckpoint}
+        existingTags={allTags}
+        onSave={async (data) => {
+          try {
+            await updateCheckpoint(editingCheckpoint.id, data);
+            setEditTarget(null);
+            onSaved?.(`Checkpoint "${data.name}" updated.`);
+          } catch (err) {
+            onError?.(errorMessage(err, `Failed to update "${data.name}".`));
+          }
+        }}
+        onCancel={() => setEditTarget(null)}
+      />
+    ) : editingAlternative && editTarget?.mode === 'view' ? (
+      <MapPinDetailView
+        name={editingAlternative.name}
+        type={editingAlternative.type}
+        location={editingAlternative.location}
+        notes={editingAlternative.notes}
+        websiteUrl={editingAlternative.websiteUrl}
+        onEdit={() =>
+          setEditTarget({ kind: 'alternative', id: editingAlternative.id, mode: 'edit' })
         }
-      }}
-      onCancel={() => setEditTarget(null)}
-    />
-  ) : editingAlternative ? (
-    <AlternativeForm
-      title="Edit alternative"
-      initial={editingAlternative}
-      existingTags={allTags}
-      onSave={async (data) => {
-        try {
-          await updateAlternative(editingAlternative.id, data);
-          setEditTarget(null);
-          onSaved?.(`Alternative "${data.name}" updated.`);
-        } catch (err) {
-          onError?.(errorMessage(err, `Failed to update "${data.name}".`));
-        }
-      }}
-      onCancel={() => setEditTarget(null)}
-    />
-  ) : null;
+        onClose={() => setEditTarget(null)}
+      />
+    ) : editingAlternative ? (
+      <AlternativeForm
+        title="Edit alternative"
+        initial={editingAlternative}
+        existingTags={allTags}
+        onSave={async (data) => {
+          try {
+            await updateAlternative(editingAlternative.id, data);
+            setEditTarget(null);
+            onSaved?.(`Alternative "${data.name}" updated.`);
+          } catch (err) {
+            onError?.(errorMessage(err, `Failed to update "${data.name}".`));
+          }
+        }}
+        onCancel={() => setEditTarget(null)}
+      />
+    ) : null;
 
   return (
     <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -394,6 +507,10 @@ export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) 
         maxPitch={MAX_PITCH}
         attributionControl={false}
         onClick={(e) => {
+          // While dropping a pin, the crosshair is positioned by panning —
+          // an incidental tap shouldn't deselect anything or surface an
+          // unrelated basemap POI popup underneath it.
+          if (droppingPin) return;
           // A click that reaches here never landed on a marker — those stop
           // propagation before it bubbles up to the map's own click handler
           // — so this is always a genuine "clicked elsewhere" and should
@@ -401,8 +518,7 @@ export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) 
           if (selectedId) selectCheckpoint(null);
           if (selectedAlternativeId) selectAlternative(null);
           onMapClick?.();
-          const poi = getPoiAtPoint(e);
-          if (poi) onPoiSelected?.(poi);
+          setPoiPin(getPoiAtPoint(e));
         }}
         onLoad={() => setMapLoaded(true)}
         onMoveEnd={(evt) => savePersistedMapViewState(evt.viewState)}
@@ -435,11 +551,14 @@ export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) 
             gap: 1,
           }}
         >
-          <MapLocateControl
-            tracking={locationTracking}
-            pivoted={pivoted}
-            onToggle={handleToggleLocate}
-          />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <MapLocateControl
+              tracking={locationTracking}
+              pivoted={pivoted}
+              onToggle={handleToggleLocate}
+            />
+            <MapDropPinControl active={droppingPin} onToggle={() => setDroppingPin((v) => !v)} />
+          </Box>
           <MapOrientationBall />
           <MapZoomControl pivoted={pivoted} pivotPosition={locationPosition} />
         </Box>
@@ -453,13 +572,20 @@ export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) 
             key={cp.id}
             checkpoint={cp}
             isSelected={cp.id === selectedId}
-            onSelect={() => selectCheckpoint(cp.id === selectedId ? null : cp.id)}
-            onEdit={() => {
+            onSelect={() => {
+              setPoiPin(null);
+              selectCheckpoint(cp.id === selectedId ? null : cp.id);
+            }}
+            onViewDetails={() => {
               // selectCheckpoint toggles — only call it if the tap that opened
               // this popup didn't already select this checkpoint, otherwise
               // it would immediately deselect it again.
               if (selectedId !== cp.id) selectCheckpoint(cp.id);
-              setEditTarget({ kind: 'checkpoint', id: cp.id });
+              setEditTarget({ kind: 'checkpoint', id: cp.id, mode: 'view' });
+            }}
+            onEdit={() => {
+              if (selectedId !== cp.id) selectCheckpoint(cp.id);
+              setEditTarget({ kind: 'checkpoint', id: cp.id, mode: 'edit' });
             }}
           />
         ))}
@@ -470,13 +596,42 @@ export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) 
               key={alt.id}
               alternative={alt}
               isSelected={alt.id === selectedAlternativeId}
-              onSelect={() => selectAlternative(alt.id === selectedAlternativeId ? null : alt.id)}
+              onSelect={() => {
+                setPoiPin(null);
+                selectAlternative(alt.id === selectedAlternativeId ? null : alt.id);
+              }}
+              onViewDetails={() => {
+                if (selectedAlternativeId !== alt.id) selectAlternative(alt.id);
+                setEditTarget({ kind: 'alternative', id: alt.id, mode: 'view' });
+              }}
               onEdit={() => {
                 if (selectedAlternativeId !== alt.id) selectAlternative(alt.id);
-                setEditTarget({ kind: 'alternative', id: alt.id });
+                setEditTarget({ kind: 'alternative', id: alt.id, mode: 'edit' });
               }}
             />
           ))}
+
+        {poiPin && (
+          <PoiPopup
+            key={`${poiPin.location.lat},${poiPin.location.lng}`}
+            poi={poiPin}
+            onAddAsAlternative={(name) => {
+              setEditTarget({ kind: 'add-alternative', poi: { ...poiPin, name } });
+              setPoiPin(null);
+            }}
+            onClose={() => setPoiPin(null)}
+          />
+        )}
+
+        {droppingPin && (
+          <DropPinOverlay
+            onConfirm={(location) => {
+              setEditTarget({ kind: 'add-alternative', poi: { name: '', location } });
+              setDroppingPin(false);
+            }}
+            onCancel={() => setDroppingPin(false)}
+          />
+        )}
 
         <UserLocationMarker position={locationPosition} heading={heading} />
 
