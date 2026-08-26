@@ -13,16 +13,14 @@ import {
   Chip,
 } from '@mui/material';
 import TranslateIcon from '@mui/icons-material/TranslateOutlined';
-import MapIcon from '@mui/icons-material/Map';
-import SearchIcon from '@mui/icons-material/Search';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { Alternative, CheckpointType } from '../../types';
 import { getTagColor } from '../../utils/tagColors';
 import { hasKanji } from '../../utils/kanjiReading';
 import { useRomanizeIntoField, romanizeStatusMessage } from '../../hooks/useRomanizeIntoField';
-import { buildGoogleMapsUrl, buildGoogleSearchUrl } from '../../utils/googleMapsLink';
 import { isHttpUrl } from '../../utils/url';
 import { MarkdownNotesField } from '../shared/MarkdownNotesField';
+import { LocationLinks } from '../shared/LocationLinks';
 
 const TYPES: { value: CheckpointType; label: string }[] = [
   { value: 'flight', label: 'Flight' },
@@ -70,7 +68,6 @@ export function AlternativeForm({ initial, existingTags, onSave, onCancel, title
       ? { lat, lng, label: locLabel || undefined }
       : undefined;
   const mapsFallbackQuery = locLabel.trim() || name.trim();
-  const showMapsLink = Boolean(location || mapsFallbackQuery);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -168,30 +165,7 @@ export function AlternativeForm({ initial, existingTags, onSave, onCancel, title
           />
         </Stack>
 
-        <Stack direction="row" spacing={2}>
-          {showMapsLink && (
-            <Link
-              href={buildGoogleMapsUrl(location, mapsFallbackQuery)}
-              target="_blank"
-              rel="noopener noreferrer"
-              variant="body2"
-              sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-            >
-              <MapIcon fontSize="small" /> Google Maps
-            </Link>
-          )}
-          {name.trim() && (
-            <Link
-              href={buildGoogleSearchUrl(name.trim())}
-              target="_blank"
-              rel="noopener noreferrer"
-              variant="body2"
-              sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-            >
-              <SearchIcon fontSize="small" /> Google Search
-            </Link>
-          )}
-        </Stack>
+        <LocationLinks location={location} mapsFallbackQuery={mapsFallbackQuery} name={name} />
 
         <Box>
           <TextField

@@ -38,6 +38,7 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint({ location: undefined })}
         isSelected={false}
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -51,6 +52,7 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint()}
         isSelected={false}
         onSelect={onSelect}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -65,6 +67,7 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint()}
         isSelected
         onSelect={onSelect}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -80,6 +83,7 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint()}
         isSelected
         onSelect={onSelect}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -95,6 +99,7 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint()}
         isSelected
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -107,6 +112,7 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint()}
         isSelected={false}
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -119,6 +125,7 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint({ location: { lat: 34.9, lng: 135.77 } })}
         isSelected
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -131,6 +138,7 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint()}
         isSelected={false}
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -142,6 +150,7 @@ describe('CheckpointMarker', () => {
         checkpoint={makeCheckpoint()}
         isSelected
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -149,20 +158,43 @@ describe('CheckpointMarker', () => {
     expect(selectedPin.style.width).not.toBe(unselectedWidth);
   });
 
-  it('calls onEdit when the popup edit button is clicked, without re-triggering onSelect', () => {
+  it('calls onEdit when the popup edit button is clicked, without calling onViewDetails or re-triggering onSelect', () => {
     const onSelect = vi.fn();
+    const onViewDetails = vi.fn();
     const onEdit = vi.fn();
     render(
       <CheckpointMarker
         checkpoint={makeCheckpoint()}
         isSelected
         onSelect={onSelect}
+        onViewDetails={onViewDetails}
         onEdit={onEdit}
       />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit checkpoint' }));
     expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onViewDetails).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('calls onViewDetails when the view details button is clicked, without calling onEdit or re-triggering onSelect', () => {
+    const onSelect = vi.fn();
+    const onViewDetails = vi.fn();
+    const onEdit = vi.fn();
+    render(
+      <CheckpointMarker
+        checkpoint={makeCheckpoint()}
+        isSelected
+        onSelect={onSelect}
+        onViewDetails={onViewDetails}
+        onEdit={onEdit}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'View details for Fushimi Inari' }));
+    expect(onViewDetails).toHaveBeenCalledTimes(1);
+    expect(onEdit).not.toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
   });
 });

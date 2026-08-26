@@ -37,6 +37,7 @@ describe('AlternativeMarker', () => {
         alternative={makeAlternative({ location: undefined })}
         isSelected={false}
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -50,6 +51,7 @@ describe('AlternativeMarker', () => {
         alternative={makeAlternative()}
         isSelected={false}
         onSelect={onSelect}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -64,6 +66,7 @@ describe('AlternativeMarker', () => {
         alternative={makeAlternative()}
         isSelected
         onSelect={onSelect}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -79,6 +82,7 @@ describe('AlternativeMarker', () => {
         alternative={makeAlternative()}
         isSelected
         onSelect={onSelect}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -94,6 +98,7 @@ describe('AlternativeMarker', () => {
         alternative={makeAlternative()}
         isSelected
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -106,6 +111,7 @@ describe('AlternativeMarker', () => {
         alternative={makeAlternative()}
         isSelected={false}
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -118,25 +124,51 @@ describe('AlternativeMarker', () => {
         alternative={makeAlternative({ location: { lat: 34.9, lng: 135.77 } })}
         isSelected
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
     expect(screen.queryByText('Kyoto')).not.toBeInTheDocument();
   });
 
-  it('calls onEdit when the popup edit button is clicked', () => {
+  it('calls onEdit when the popup edit button is clicked, without calling onViewDetails or re-triggering onSelect', () => {
+    const onSelect = vi.fn();
+    const onViewDetails = vi.fn();
     const onEdit = vi.fn();
     render(
       <AlternativeMarker
         alternative={makeAlternative()}
         isSelected
-        onSelect={() => {}}
+        onSelect={onSelect}
+        onViewDetails={onViewDetails}
         onEdit={onEdit}
       />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit alternative' }));
     expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onViewDetails).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('calls onViewDetails when the view details button is clicked, without calling onEdit or re-triggering onSelect', () => {
+    const onSelect = vi.fn();
+    const onViewDetails = vi.fn();
+    const onEdit = vi.fn();
+    render(
+      <AlternativeMarker
+        alternative={makeAlternative()}
+        isSelected
+        onSelect={onSelect}
+        onViewDetails={onViewDetails}
+        onEdit={onEdit}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'View details for Backup Shrine' }));
+    expect(onViewDetails).toHaveBeenCalledTimes(1);
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('gives the selected marker a non-color signal (larger size), not color alone', () => {
@@ -145,6 +177,7 @@ describe('AlternativeMarker', () => {
         alternative={makeAlternative()}
         isSelected={false}
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -156,6 +189,7 @@ describe('AlternativeMarker', () => {
         alternative={makeAlternative()}
         isSelected
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
@@ -169,6 +203,7 @@ describe('AlternativeMarker', () => {
         alternative={makeAlternative()}
         isSelected
         onSelect={() => {}}
+        onViewDetails={() => {}}
         onEdit={() => {}}
       />
     );
