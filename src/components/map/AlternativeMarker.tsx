@@ -1,6 +1,7 @@
 import { Marker, Popup } from 'react-map-gl/maplibre';
-import { Box, Button } from '@mui/material';
+import { Box, IconButton } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { CheckpointIcon } from '../timeline/CheckpointIcon';
 import type { Alternative } from '../../types';
 import { SELECTED_MARKER_COLOR } from './mapConstants';
@@ -15,10 +16,17 @@ interface Props {
   alternative: Alternative;
   isSelected: boolean;
   onSelect(): void;
+  onViewDetails(): void;
   onEdit(): void;
 }
 
-export function AlternativeMarker({ alternative, isSelected, onSelect, onEdit }: Props) {
+export function AlternativeMarker({
+  alternative,
+  isSelected,
+  onSelect,
+  onViewDetails,
+  onEdit,
+}: Props) {
   if (!alternative.location) return null;
 
   const color = isSelected ? SELECTED_MARKER_COLOR : ALTERNATIVE_MARKER_COLOR;
@@ -76,25 +84,34 @@ export function AlternativeMarker({ alternative, isSelected, onSelect, onEdit }:
             <Box
               sx={{
                 display: 'flex',
-                justifyContent: 'center',
+                justifyContent: 'flex-end',
+                gap: 0.5,
                 mt: 0.5,
                 pt: 0.5,
                 borderTop: '1px solid',
                 borderColor: 'divider',
               }}
             >
-              <Button
+              <IconButton
                 size="small"
-                variant="outlined"
+                aria-label={`View details for ${alternative.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewDetails();
+                }}
+              >
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
                 aria-label="Edit alternative"
-                startIcon={<EditIcon fontSize="small" />}
                 onClick={(e) => {
                   e.stopPropagation();
                   onEdit();
                 }}
               >
-                Edit
-              </Button>
+                <EditIcon fontSize="small" />
+              </IconButton>
             </Box>
           </Box>
         </Popup>

@@ -305,12 +305,6 @@ export function AppShell({ onBack }: Props) {
     setAddAlternativeSignal((n) => n + 1);
   }
 
-  function handlePoiSelected(poi: { name: string; location: { lat: number; lng: number } }) {
-    if (isPhone) setTab(2);
-    setAlternativePrefill(poi);
-    setAddAlternativeSignal((n) => n + 1);
-  }
-
   // Clicking into the map (tablet/desktop split view) hides both side
   // drawers to give it more room; selecting a checkpoint/alternative pin
   // brings them back via the selectedId/selectedAlternativeId effect above.
@@ -580,13 +574,7 @@ export function AppShell({ onBack }: Props) {
                 />
               </TexturedPanel>
             )}
-            {tab === 1 && (
-              <MapView
-                onPoiSelected={handlePoiSelected}
-                onSaved={setSnackbar}
-                onError={setErrorSnackbar}
-              />
-            )}
+            {tab === 1 && <MapView onSaved={setSnackbar} onError={setErrorSnackbar} />}
             {tab === 2 && (
               <TexturedPanel image={sakuraPattern} repeat="repeat" size="360px 360px">
                 <AlternativesShelf
@@ -639,12 +627,7 @@ export function AppShell({ onBack }: Props) {
 
           {/* Map with toggle buttons anchored to its edges */}
           <Box sx={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            <MapView
-              onPoiSelected={handlePoiSelected}
-              onSaved={setSnackbar}
-              onError={setErrorSnackbar}
-              onMapClick={handleMapClick}
-            />
+            <MapView onSaved={setSnackbar} onError={setErrorSnackbar} onMapClick={handleMapClick} />
 
             <PanelToggle
               side="left"
