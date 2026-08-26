@@ -19,6 +19,7 @@ const jumpTo = vi.fn();
 const zoomIn = vi.fn();
 const zoomOut = vi.fn();
 const getZoom = vi.fn(() => 10);
+const getCenter = vi.fn(() => ({ lat: 1, lng: 2 }));
 const on = vi.fn();
 const off = vi.fn();
 const resize = vi.fn();
@@ -96,6 +97,7 @@ vi.mock('react-map-gl/maplibre', () => ({
       zoomIn,
       zoomOut,
       getZoom,
+      getCenter,
       on,
       off,
       resize,
@@ -134,6 +136,7 @@ beforeEach(() => {
   zoomIn.mockClear();
   zoomOut.mockClear();
   getZoom.mockReset().mockReturnValue(10);
+  getCenter.mockReset().mockReturnValue({ lat: 1, lng: 2 });
   on.mockClear();
   off.mockClear();
   resize.mockClear();
@@ -360,6 +363,77 @@ describe('MapView', () => {
       );
       expect(onSaved).toHaveBeenCalledWith('Alternative "Sensō-ji" added.');
       expect(screen.queryByRole('heading', { name: /add alternative/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('drop a pin', () => {
+    function activateDropPin() {
+      fireEvent.click(screen.getByRole('button', { name: 'Add point of interest' }));
+    }
+
+    it('shows the confirm/cancel bar once activated and suppresses basemap POI taps', () => {
+      mockedGetPoiAtPoint.mockReturnValue({
+        name: 'Sensō-ji',
+        location: { lat: 35.71, lng: 139.79 },
+      });
+      renderWithProviders(<MapView />);
+
+      activateDropPin();
+
+      expect(
+        screen.getByRole('button', { name: 'Confirm point of interest location' })
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Discard point of interest' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('map'));
+
+      expect(mockedGetPoiAtPoint).not.toHaveBeenCalled();
+      expect(
+        screen.queryByRole('button', { name: 'Add Sensō-ji as alternative' })
+      ).not.toBeInTheDocument();
+    });
+
+    it('opens the add-alternative drawer prefilled with the map center and no name, and saves it', async () => {
+      getCenter.mockReturnValue({ lat: 35.0, lng: 139.5 });
+      const spy = vi.fn().mockResolvedValue(undefined);
+      useTripStore.setState({ addAlternative: spy });
+      const onSaved = vi.fn();
+      renderWithProviders(<MapView onSaved={onSaved} />);
+
+      activateDropPin();
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Confirm point of interest location' })
+      );
+
+      expect(screen.getByRole('heading', { name: /add alternative/i })).toBeInTheDocument();
+      const nameField = screen.getByRole('textbox', { name: /name/i });
+      expect(nameField).toHaveValue('');
+
+      await userEvent.type(nameField, 'Riverside bench');
+      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Riverside bench',
+          location: { lat: 35.0, lng: 139.5 },
+        })
+      );
+      expect(onSaved).toHaveBeenCalledWith(expect.stringContaining('added'));
+    });
+
+    it('discards the pin on cancel with no drawer opened', async () => {
+      const spy = vi.fn();
+      useTripStore.setState({ addAlternative: spy });
+      renderWithProviders(<MapView />);
+
+      activateDropPin();
+      await userEvent.click(screen.getByRole('button', { name: 'Discard point of interest' }));
+
+      expect(
+        screen.queryByRole('button', { name: 'Confirm point of interest location' })
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: /add alternative/i })).not.toBeInTheDocument();
+      expect(spy).not.toHaveBeenCalled();
     });
   });
 
