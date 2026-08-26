@@ -15,14 +15,18 @@ import {
   Typography,
 } from '@mui/material';
 import LayersIcon from '@mui/icons-material/Layers';
+import RoomIcon from '@mui/icons-material/Room';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 import { useTripStore } from '../../store/tripStore';
 import { CheckpointMarker } from './CheckpointMarker';
 import { AlternativeMarker } from './AlternativeMarker';
 import { MapZoomControl } from './MapZoomControl';
 import { MapOrientationBall } from './MapOrientationBall';
 import { MapLocateControl } from './MapLocateControl';
+import { MapDropPinControl } from './MapDropPinControl';
 import { UserLocationMarker } from './UserLocationMarker';
-import { MAX_PITCH, FOCUS_ZOOM, RESET_DURATION_MS } from './mapConstants';
+import { MAX_PITCH, FOCUS_ZOOM, RESET_DURATION_MS, DROP_PIN_MARKER_COLOR } from './mapConstants';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
 import { loadPersistedMapViewState, savePersistedMapViewState } from './mapViewStatePersistence';
@@ -252,6 +256,69 @@ function MapSync({
   return null;
 }
 
+function DropPinOverlay({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm(location: { lat: number; lng: number }): void;
+  onCancel(): void;
+}) {
+  const { current: map } = useMap();
+
+  return (
+    <>
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -100%)',
+          zIndex: 1,
+          pointerEvents: 'none',
+        }}
+      >
+        <RoomIcon sx={{ color: DROP_PIN_MARKER_COLOR, fontSize: 40 }} />
+      </Box>
+      <Paper
+        elevation={2}
+        sx={{
+          position: 'absolute',
+          bottom: 8,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 1,
+          display: 'flex',
+        }}
+      >
+        <IconButton
+          size="small"
+          aria-label="Confirm point of interest location"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!map) return;
+            const center = map.getCenter();
+            onConfirm({ lat: center.lat, lng: center.lng });
+          }}
+          sx={{ width: 30, height: 30, borderRadius: 0 }}
+        >
+          <CheckIcon fontSize="small" />
+        </IconButton>
+        <IconButton
+          size="small"
+          aria-label="Discard point of interest"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCancel();
+          }}
+          sx={{ width: 30, height: 30, borderRadius: 0 }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Paper>
+    </>
+  );
+}
+
 interface Props {
   onSaved?: (message: string) => void;
   onError?: (message: string) => void;
@@ -265,6 +332,7 @@ export function MapView({ onSaved, onError, onMapClick }: Props) {
   const [locationTracking, setLocationTracking] = useState(false);
   const [pivoted, setPivoted] = useState(false);
   const [poiPin, setPoiPin] = useState<Poi | null>(null);
+  const [droppingPin, setDroppingPin] = useState(false);
   const pendingRecenterSnapRef = useRef(false);
   const {
     checkpoints,
@@ -439,6 +507,10 @@ export function MapView({ onSaved, onError, onMapClick }: Props) {
         maxPitch={MAX_PITCH}
         attributionControl={false}
         onClick={(e) => {
+          // While dropping a pin, the crosshair is positioned by panning —
+          // an incidental tap shouldn't deselect anything or surface an
+          // unrelated basemap POI popup underneath it.
+          if (droppingPin) return;
           // A click that reaches here never landed on a marker — those stop
           // propagation before it bubbles up to the map's own click handler
           // — so this is always a genuine "clicked elsewhere" and should
@@ -479,11 +551,14 @@ export function MapView({ onSaved, onError, onMapClick }: Props) {
             gap: 1,
           }}
         >
-          <MapLocateControl
-            tracking={locationTracking}
-            pivoted={pivoted}
-            onToggle={handleToggleLocate}
-          />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <MapLocateControl
+              tracking={locationTracking}
+              pivoted={pivoted}
+              onToggle={handleToggleLocate}
+            />
+            <MapDropPinControl active={droppingPin} onToggle={() => setDroppingPin((v) => !v)} />
+          </Box>
           <MapOrientationBall />
           <MapZoomControl pivoted={pivoted} pivotPosition={locationPosition} />
         </Box>
@@ -545,6 +620,16 @@ export function MapView({ onSaved, onError, onMapClick }: Props) {
               setPoiPin(null);
             }}
             onClose={() => setPoiPin(null)}
+          />
+        )}
+
+        {droppingPin && (
+          <DropPinOverlay
+            onConfirm={(location) => {
+              setEditTarget({ kind: 'add-alternative', poi: { name: '', location } });
+              setDroppingPin(false);
+            }}
+            onCancel={() => setDroppingPin(false)}
           />
         )}
 
