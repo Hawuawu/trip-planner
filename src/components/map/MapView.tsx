@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Map, { AttributionControl, Source, Layer, useMap } from 'react-map-gl/maplibre';
 import type { LineLayerSpecification } from 'maplibre-gl';
 import type { FeatureCollection, LineString } from 'geojson';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   Box,
+  CircularProgress,
   IconButton,
   Paper,
   RadioGroup,
@@ -19,7 +20,12 @@ import { CheckpointMarker } from './CheckpointMarker';
 import { AlternativeMarker } from './AlternativeMarker';
 import { MapZoomControl } from './MapZoomControl';
 import { MapOrientationBall } from './MapOrientationBall';
-import { MAX_PITCH, FOCUS_ZOOM } from './mapConstants';
+import { MapLocateControl } from './MapLocateControl';
+import { UserLocationMarker } from './UserLocationMarker';
+import { MAX_PITCH, FOCUS_ZOOM, RESET_DURATION_MS } from './mapConstants';
+import { useGeolocation } from '../../hooks/useGeolocation';
+import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
+import { loadPersistedMapViewState, savePersistedMapViewState } from './mapViewStatePersistence';
 import type { Alternative } from '../../types';
 import { getPoiAtPoint, type Poi } from './poi';
 import { visibleCheckpoints } from '../../utils/checkpointVisibility';
@@ -131,7 +137,19 @@ function StyleSwitcher({
   );
 }
 
-function MapSync() {
+function MapSync({
+  locationTracking,
+  locationPosition,
+  pivoted,
+  onUserPan,
+  pendingRecenterSnapRef,
+}: {
+  locationTracking: boolean;
+  locationPosition: { lat: number; lng: number } | null;
+  pivoted: boolean;
+  onUserPan(): void;
+  pendingRecenterSnapRef: React.MutableRefObject<boolean>;
+}) {
   const { current: map } = useMap();
   const { checkpoints, selectedId, alternatives, selectedAlternativeId } = useTripStore();
 
@@ -139,6 +157,11 @@ function MapSync() {
     if (!map) return;
     const selected = checkpoints.find((c) => c.id === selectedId && c.location);
     if (selected?.location) {
+      // Resize first: selecting a checkpoint can itself pop the side drawers
+      // back open (see AppShell's layout effect), and MapLibre's own resize
+      // detection is throttled — without this, easeTo can target the stale,
+      // pre-resize container width and end up visibly off-center.
+      map.resize();
       map.easeTo({
         center: [selected.location.lng, selected.location.lat],
         zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
@@ -153,6 +176,8 @@ function MapSync() {
       (a: Alternative) => a.id === selectedAlternativeId && a.location
     );
     if (selected?.location) {
+      // See the checkpoint-centering effect above for why resize() runs first.
+      map.resize();
       map.easeTo({
         center: [selected.location.lng, selected.location.lat],
         zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
@@ -161,6 +186,64 @@ function MapSync() {
     }
   }, [selectedAlternativeId, alternatives, map]);
 
+  // Belt-and-suspenders for the two effects above: selecting a checkpoint/
+  // alternative can itself pop the side drawers back open (AppShell's
+  // layout effect), and even with that ordered ahead of these effects plus
+  // the explicit resize() calls above, MapLibre's own resize detection is
+  // throttled enough that the easeTo calls can still occasionally land
+  // against a stale container size. Re-snap once the browser confirms the
+  // container's real, settled size via its own ResizeObserver — this ties
+  // the correction to the actual physical signal instead of racing React's
+  // effect scheduling.
+  useEffect(() => {
+    if (!map) return;
+    const selectedCheckpoint = checkpoints.find((c) => c.id === selectedId && c.location);
+    const selectedAlt = alternatives.find(
+      (a: Alternative) => a.id === selectedAlternativeId && a.location
+    );
+    const target = selectedCheckpoint?.location ?? selectedAlt?.location;
+    if (!target) return;
+
+    const observer = new ResizeObserver(() => {
+      map.resize();
+      map.easeTo({
+        center: [target.lng, target.lat],
+        zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
+        duration: 0,
+      });
+    });
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [selectedId, selectedAlternativeId, checkpoints, alternatives, map]);
+
+  // While pivoted, keep the camera centered on the live position as fresh
+  // fixes arrive — this is also what makes MapZoomControl's position-anchored
+  // zoom feel continuous rather than drifting off-center between fixes. The
+  // very first fix after (re-)engaging pivot mode also snaps zoom/bearing/
+  // pitch back to a known "recentered" state — later fixes stay center-only
+  // so we don't fight the user's own zoom/rotate while following.
+  useEffect(() => {
+    if (!map || !pivoted || !locationPosition) return;
+    const center: [number, number] = [locationPosition.lng, locationPosition.lat];
+    if (pendingRecenterSnapRef.current) {
+      pendingRecenterSnapRef.current = false;
+      map.easeTo({ center, zoom: FOCUS_ZOOM, bearing: 0, pitch: 0, duration: RESET_DURATION_MS });
+      return;
+    }
+    map.easeTo({ center, duration: 300 });
+  }, [pivoted, locationPosition, map, pendingRecenterSnapRef]);
+
+  // A user-initiated drag breaks pivoted mode. MapLibre only fires
+  // 'dragstart' for real pointer/touch drags, never for our own programmatic
+  // easeTo calls above, so this can't immediately re-trigger itself.
+  useEffect(() => {
+    if (!map || !locationTracking) return;
+    map.on('dragstart', onUserPan);
+    return () => {
+      map.off('dragstart', onUserPan);
+    };
+  }, [map, locationTracking, onUserPan]);
+
   return null;
 }
 
@@ -168,10 +251,16 @@ interface Props {
   onPoiSelected?: (poi: Poi) => void;
   onSaved?: (message: string) => void;
   onError?: (message: string) => void;
+  onMapClick?: () => void;
 }
 
-export function MapView({ onPoiSelected, onSaved, onError }: Props) {
+export function MapView({ onPoiSelected, onSaved, onError, onMapClick }: Props) {
+  const [initialViewState] = useState(() => loadPersistedMapViewState() ?? JAPAN_CENTER);
   const [mapStyle, setMapStyle] = useState<string>(STYLES[0].url);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [locationTracking, setLocationTracking] = useState(false);
+  const [pivoted, setPivoted] = useState(false);
+  const pendingRecenterSnapRef = useRef(false);
   const {
     checkpoints,
     alternatives,
@@ -189,6 +278,40 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
     selectedRouteId,
     routes,
   } = useTripStore();
+
+  const { position: locationPosition, error: locationError } = useGeolocation(locationTracking);
+  const { heading, permissionState, requestPermission } = useDeviceOrientation(locationTracking);
+
+  async function handleToggleLocate() {
+    if (locationTracking) {
+      if (!pivoted) {
+        // Panned away from the live position — re-center and resume
+        // following instead of stopping tracking outright.
+        pendingRecenterSnapRef.current = true;
+        setPivoted(true);
+        return;
+      }
+      setLocationTracking(false);
+      setPivoted(false);
+      return;
+    }
+    // Must call requestPermission() synchronously within this click handler
+    // (before any prior await) — iOS Safari only honors the device-orientation
+    // permission prompt when triggered directly by a user gesture.
+    await requestPermission();
+    pendingRecenterSnapRef.current = true;
+    setLocationTracking(true);
+    setPivoted(true);
+  }
+
+  useEffect(() => {
+    if (!locationTracking) return;
+    if (locationError) {
+      onError?.(locationError);
+    } else if (permissionState === 'denied') {
+      onError?.('Compass access was denied — your position will show without a facing direction.');
+    }
+  }, [locationTracking, locationError, permissionState, onError]);
 
   const [editTarget, setEditTarget] = useState<MapEditTarget | null>(null);
 
@@ -264,79 +387,119 @@ export function MapView({ onPoiSelected, onSaved, onError }: Props) {
   ) : null;
 
   return (
-    <Map
-      mapStyle={mapStyle}
-      initialViewState={JAPAN_CENTER}
-      maxPitch={MAX_PITCH}
-      attributionControl={false}
-      onClick={(e) => {
-        const poi = getPoiAtPoint(e);
-        if (poi) onPoiSelected?.(poi);
-      }}
-      style={{ width: '100%', height: '100%' }}
-    >
-      <StyleSwitcher
-        current={mapStyle}
-        onChange={setMapStyle}
-        showAlternatives={showAlternativesOnMap}
-        onToggleAlternatives={setShowAlternativesOnMap}
-      />
-      <MapSync />
-      <AttributionControl position="top-right" compact />
-
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: 8,
-          right: 8,
-          zIndex: 1,
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 1,
+    <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+      <Map
+        mapStyle={mapStyle}
+        initialViewState={initialViewState}
+        maxPitch={MAX_PITCH}
+        attributionControl={false}
+        onClick={(e) => {
+          // A click that reaches here never landed on a marker — those stop
+          // propagation before it bubbles up to the map's own click handler
+          // — so this is always a genuine "clicked elsewhere" and should
+          // drop whatever checkpoint/alternative is currently selected.
+          if (selectedId) selectCheckpoint(null);
+          if (selectedAlternativeId) selectAlternative(null);
+          onMapClick?.();
+          const poi = getPoiAtPoint(e);
+          if (poi) onPoiSelected?.(poi);
         }}
+        onLoad={() => setMapLoaded(true)}
+        onMoveEnd={(evt) => savePersistedMapViewState(evt.viewState)}
+        style={{ width: '100%', height: '100%' }}
       >
-        <MapOrientationBall />
-        <MapZoomControl />
-      </Box>
-
-      <Source id="route" type="geojson" data={routeGeoJSON}>
-        <Layer {...ROUTE_LAYER} />
-      </Source>
-
-      {withLocation.map((cp) => (
-        <CheckpointMarker
-          key={cp.id}
-          checkpoint={cp}
-          isSelected={cp.id === selectedId}
-          onSelect={() => selectCheckpoint(cp.id === selectedId ? null : cp.id)}
-          onEdit={() => {
-            // selectCheckpoint toggles — only call it if the tap that opened
-            // this popup didn't already select this checkpoint, otherwise
-            // it would immediately deselect it again.
-            if (selectedId !== cp.id) selectCheckpoint(cp.id);
-            setEditTarget({ kind: 'checkpoint', id: cp.id });
-          }}
+        <StyleSwitcher
+          current={mapStyle}
+          onChange={setMapStyle}
+          showAlternatives={showAlternativesOnMap}
+          onToggleAlternatives={setShowAlternativesOnMap}
         />
-      ))}
+        <MapSync
+          locationTracking={locationTracking}
+          locationPosition={locationPosition}
+          pivoted={pivoted}
+          onUserPan={() => setPivoted(false)}
+          pendingRecenterSnapRef={pendingRecenterSnapRef}
+        />
+        <AttributionControl position="top-right" compact />
 
-      {showAlternativesOnMap &&
-        visibleAlternatives.map((alt) => (
-          <AlternativeMarker
-            key={alt.id}
-            alternative={alt}
-            isSelected={alt.id === selectedAlternativeId}
-            onSelect={() => selectAlternative(alt.id === selectedAlternativeId ? null : alt.id)}
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 8,
+            right: 8,
+            zIndex: 1,
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 1,
+          }}
+        >
+          <MapLocateControl
+            tracking={locationTracking}
+            pivoted={pivoted}
+            onToggle={handleToggleLocate}
+          />
+          <MapOrientationBall />
+          <MapZoomControl pivoted={pivoted} pivotPosition={locationPosition} />
+        </Box>
+
+        <Source id="route" type="geojson" data={routeGeoJSON}>
+          <Layer {...ROUTE_LAYER} />
+        </Source>
+
+        {withLocation.map((cp) => (
+          <CheckpointMarker
+            key={cp.id}
+            checkpoint={cp}
+            isSelected={cp.id === selectedId}
+            onSelect={() => selectCheckpoint(cp.id === selectedId ? null : cp.id)}
             onEdit={() => {
-              if (selectedAlternativeId !== alt.id) selectAlternative(alt.id);
-              setEditTarget({ kind: 'alternative', id: alt.id });
+              // selectCheckpoint toggles — only call it if the tap that opened
+              // this popup didn't already select this checkpoint, otherwise
+              // it would immediately deselect it again.
+              if (selectedId !== cp.id) selectCheckpoint(cp.id);
+              setEditTarget({ kind: 'checkpoint', id: cp.id });
             }}
           />
         ))}
 
-      <ResponsiveEditDrawer open={!!editTarget} onClose={() => setEditTarget(null)}>
-        {drawerContent}
-      </ResponsiveEditDrawer>
-    </Map>
+        {showAlternativesOnMap &&
+          visibleAlternatives.map((alt) => (
+            <AlternativeMarker
+              key={alt.id}
+              alternative={alt}
+              isSelected={alt.id === selectedAlternativeId}
+              onSelect={() => selectAlternative(alt.id === selectedAlternativeId ? null : alt.id)}
+              onEdit={() => {
+                if (selectedAlternativeId !== alt.id) selectAlternative(alt.id);
+                setEditTarget({ kind: 'alternative', id: alt.id });
+              }}
+            />
+          ))}
+
+        <UserLocationMarker position={locationPosition} heading={heading} />
+
+        <ResponsiveEditDrawer open={!!editTarget} onClose={() => setEditTarget(null)}>
+          {drawerContent}
+        </ResponsiveEditDrawer>
+      </Map>
+
+      {!mapLoaded && (
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <CircularProgress size={32} />
+        </Box>
+      )}
+    </Box>
   );
 }

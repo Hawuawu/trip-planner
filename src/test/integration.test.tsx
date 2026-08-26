@@ -46,6 +46,8 @@ vi.mock('react-map-gl/maplibre', () => ({
       jumpTo: vi.fn(),
       zoomIn: vi.fn(),
       zoomOut: vi.fn(),
+      resize: vi.fn(),
+      getContainer: () => document.createElement('div'),
     },
   }),
 }));

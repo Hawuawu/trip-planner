@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   Box,
   BottomNavigation,
@@ -207,6 +207,8 @@ export function AppShell({ onBack }: Props) {
   const routes = useTripStore((s) => s.routes);
   const selectedDay = useTripStore((s) => s.selectedDay);
   const selectedRouteId = useTripStore((s) => s.selectedRouteId);
+  const selectedId = useTripStore((s) => s.selectedId);
+  const selectedAlternativeId = useTripStore((s) => s.selectedAlternativeId);
   const currentUid = useAuthStore((s) => s.user?.uid);
   const isOwner = trip ? canManage(trip, currentUid) : false;
 
@@ -266,6 +268,22 @@ export function AppShell({ onBack }: Props) {
   const routeLabel = activeRoute ? activeRoute.name : 'Default route';
   const dayLabel = selectedDay ? formatDayLabel(selectedDay) : 'All days';
 
+  // Selecting a checkpoint or alternative pin (tablet/desktop split view)
+  // brings both side drawers back, mirroring handleMapClick below hiding
+  // them — see that function's comment for why the two are split apart.
+  // Deliberately useLayoutEffect, not useEffect: it must resize the map
+  // container and let the browser reflow *before* MapSync's centering
+  // effect (a plain useEffect, further down the tree so it'd otherwise fire
+  // first) reads the container size — otherwise MapLibre eases the camera
+  // against the stale, drawers-still-hidden width and the target ends up
+  // off-screen once the panels pop back and the canvas catches up.
+  useLayoutEffect(() => {
+    if (selectedId || selectedAlternativeId) {
+      setShowTimeline(true);
+      setShowAlternatives(true);
+    }
+  }, [selectedId, selectedAlternativeId]);
+
   function handleExportTrip() {
     setMenuOpen(false);
     if (!trip) return;
@@ -291,6 +309,14 @@ export function AppShell({ onBack }: Props) {
     if (isPhone) setTab(2);
     setAlternativePrefill(poi);
     setAddAlternativeSignal((n) => n + 1);
+  }
+
+  // Clicking into the map (tablet/desktop split view) hides both side
+  // drawers to give it more room; selecting a checkpoint/alternative pin
+  // brings them back via the selectedId/selectedAlternativeId effect above.
+  function handleMapClick() {
+    setShowTimeline(false);
+    setShowAlternatives(false);
   }
 
   function handleWikiNavigate(kind: InternalLinkKind, id: string) {
@@ -617,6 +643,7 @@ export function AppShell({ onBack }: Props) {
               onPoiSelected={handlePoiSelected}
               onSaved={setSnackbar}
               onError={setErrorSnackbar}
+              onMapClick={handleMapClick}
             />
 
             <PanelToggle
