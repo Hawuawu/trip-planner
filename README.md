@@ -4,7 +4,7 @@
 
 **Maiyun's Trip Planner** is a shared, offline-friendly travel itinerary PWA. You plan a trip as a checkpoint timeline next to a map before you leave, then keep editing it on your phone during the trip. An AI assistant (Claude) can read and edit the same itinerary through an MCP server.
 
-Live (approval-gated): https://maiyun-trip-planner.web.app
+Live (approval-gated): https://trip.maiyun.eu/
 
 ## The problem
 
